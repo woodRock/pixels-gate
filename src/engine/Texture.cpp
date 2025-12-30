@@ -50,4 +50,10 @@ namespace PixelsEngine {
         SDL_RenderCopyEx(m_Renderer, m_Texture, srcRect, &destRect, 0.0, NULL, flip);
     }
 
+    void Texture::SetColorMod(Uint8 r, Uint8 g, Uint8 b) {
+        if (m_Texture) {
+            SDL_SetTextureColorMod(m_Texture, r, g, b);
+        }
+    }
+
 }

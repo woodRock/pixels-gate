@@ -12,6 +12,12 @@ namespace PixelsEngine {
         Isometric
     };
 
+    enum class VisibilityState {
+        Hidden,   // Never seen (Black)
+        Explored, // Seen previously (Darkened)
+        Visible   // Currently seeing (Normal)
+    };
+
     class Tilemap {
     public:
         Tilemap(SDL_Renderer* renderer, const std::string& texturePath, int tileWidth, int tileHeight, int mapWidth, int mapHeight);
@@ -22,6 +28,11 @@ namespace PixelsEngine {
         int GetTile(int x, int y) const;
         bool IsWalkable(int x, int y) const;
         void SetProjection(Projection projection) { m_Projection = projection; }
+
+        // Fog of War
+        void UpdateVisibility(int centerX, int centerY, int radius);
+        bool IsVisible(int x, int y) const;
+        bool IsExplored(int x, int y) const;
 
         // Helper to convert Grid Coords to Screen Coords
         void GridToScreen(float gridX, float gridY, int& screenX, int& screenY) const;
@@ -35,6 +46,7 @@ namespace PixelsEngine {
         int m_MapWidth; 
         int m_MapHeight;
         std::vector<int> m_MapData;
+        std::vector<VisibilityState> m_VisibilityMap; // Stores fog state
         SDL_Renderer* m_Renderer;
         Projection m_Projection = Projection::TopDown;
     };

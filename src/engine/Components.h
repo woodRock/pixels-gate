@@ -37,6 +37,23 @@ namespace PixelsEngine {
         int currentHealth = 100;
         int damage = 10;
         bool isDead = false;
+        
+        int inspiration = 1; // Default 1 inspiration point
+
+        // D&D Stats
+        int strength = 10;
+        int dexterity = 10;
+        int constitution = 10;
+        int intelligence = 10;
+        int wisdom = 10;
+        int charisma = 10;
+
+        std::string characterClass = "Commoner";
+        std::string race = "Human";
+
+        int GetModifier(int score) const {
+            return (score - 10) / 2;
+        }
     };
 
     struct QuestComponent {

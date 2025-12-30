@@ -8,6 +8,52 @@ namespace PixelsEngine {
         
         m_Tileset = std::make_unique<Texture>(renderer, texturePath);
         m_MapData.resize(mapWidth * mapHeight, 0);
+        m_VisibilityMap.resize(mapWidth * mapHeight, VisibilityState::Hidden); // Default Hidden
+    }
+
+    void Tilemap::UpdateVisibility(int centerX, int centerY, int radius) {
+        // Reset Visible to Explored first?
+        // In standard RTS/RPG Fog, current vision is recalculated every frame.
+        // Previously Visible tiles become Explored.
+        // Hidden remain Hidden unless revealed.
+        
+        for (auto& state : m_VisibilityMap) {
+            if (state == VisibilityState::Visible) {
+                state = VisibilityState::Explored;
+            }
+        }
+
+        // Raycasting or simple radius check?
+        // Simple radius check for now (Circle).
+        int r2 = radius * radius;
+        
+        for (int y = -radius; y <= radius; ++y) {
+            for (int x = -radius; x <= radius; ++x) {
+                if (x*x + y*y <= r2) {
+                    int targetX = centerX + x;
+                    int targetY = centerY + y;
+                    
+                    if (targetX >= 0 && targetX < m_MapWidth && targetY >= 0 && targetY < m_MapHeight) {
+                        m_VisibilityMap[targetY * m_MapWidth + targetX] = VisibilityState::Visible;
+                    }
+                }
+            }
+        }
+    }
+
+    bool Tilemap::IsVisible(int x, int y) const {
+        if (x >= 0 && x < m_MapWidth && y >= 0 && y < m_MapHeight) {
+            return m_VisibilityMap[y * m_MapWidth + x] == VisibilityState::Visible;
+        }
+        return false;
+    }
+
+    bool Tilemap::IsExplored(int x, int y) const {
+        if (x >= 0 && x < m_MapWidth && y >= 0 && y < m_MapHeight) {
+            auto state = m_VisibilityMap[y * m_MapWidth + x];
+            return state == VisibilityState::Visible || state == VisibilityState::Explored;
+        }
+        return false;
     }
 
     void Tilemap::SetTile(int x, int y, int tileIndex) {
@@ -79,6 +125,13 @@ namespace PixelsEngine {
         
         for (int y = 0; y < m_MapHeight; ++y) {
             for (int x = 0; x < m_MapWidth; ++x) {
+                // Check Visibility
+                VisibilityState state = m_VisibilityMap[y * m_MapWidth + x];
+                
+                if (state == VisibilityState::Hidden) {
+                    continue; // Don't draw
+                }
+
                 int tileIndex = m_MapData[y * m_MapWidth + x];
                 
                 int srcX = (tileIndex % tilesetWidth) * m_TileWidth;
@@ -91,9 +144,18 @@ namespace PixelsEngine {
                 destX -= (int)camera.x;
                 destY -= (int)camera.y;
 
+                // Color Mod for Fog
+                if (state == VisibilityState::Explored) {
+                    m_Tileset->SetColorMod(100, 100, 100); // Darken
+                } else {
+                    m_Tileset->SetColorMod(255, 255, 255); // Normal
+                }
+                
                 m_Tileset->RenderRect(destX, destY, &srcRect);
             }
         }
+        // Reset color mod to normal just in case
+        m_Tileset->SetColorMod(255, 255, 255);
     }
 
 }

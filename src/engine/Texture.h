@@ -11,6 +11,7 @@ namespace PixelsEngine {
 
         void Render(int x, int y, int w = -1, int h = -1) const;
         void RenderRect(int x, int y, const SDL_Rect* srcRect, int w = -1, int h = -1, SDL_RendererFlip flip = SDL_FLIP_NONE) const;
+        void SetColorMod(Uint8 r, Uint8 g, Uint8 b);
 
         int GetWidth() const { return m_Width; }
         int GetHeight() const { return m_Height; }
