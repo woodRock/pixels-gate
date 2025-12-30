@@ -22,6 +22,8 @@ protected:
     void CheckUIInteraction(int mx, int my);
     void CheckWorldInteraction(int mx, int my);
     void PerformAttack();
+    
+    void CreateBoar(float x, float y);
 
 private:
     std::unique_ptr<PixelsEngine::Tilemap> m_Level;

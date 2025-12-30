@@ -18,32 +18,61 @@ void PixelsGateGame::OnStart() {
     // 1. Setup Level with New Isometric Tileset
     // Tiles are 32x32.
     std::string isoTileset = "assets/isometric tileset/spritesheet.png";
-    m_Level = std::make_unique<PixelsEngine::Tilemap>(GetRenderer(), isoTileset, 32, 32, 20, 20);
+    int mapW = 40;
+    int mapH = 40;
+    m_Level = std::make_unique<PixelsEngine::Tilemap>(GetRenderer(), isoTileset, 32, 32, mapW, mapH);
     m_Level->SetProjection(PixelsEngine::Projection::Isometric);
     
-    // Define some useful tile indices from the spritesheet
-    // (You'll need to visually verify these indices match your specific spritesheet layout)
-    const int GRASS_1 = 0;
-    const int GRASS_2 = 1;
-    const int DIRT = 2;
-    const int WALL = 10; // Assuming tile 10 looks like a block/wall
-    const int WATER = 11;
+    // Define Tile Indices based on user feedback and standard isometric sheets
+    // tile_061 is Stone/Wall.
+    // tile_000 is Grass.
+    // Let's assume standard layout.
+    const int GRASS = 0;  
+    const int GRASS_VAR = 1; // tile_001
+    const int DIRT = 2;   // tile_002
+    
+    // tile_010 was "Stone" but user says it's Grass. Let's use it as a grass variant.
+    const int GRASS_Dense = 10; 
+    
+    const int WATER = 28; // Keeping this for now
+    const int SAND = 100; // Might be out of range if sheet is small?
+    // User listed up to tile_114. So 100 is valid.
+    
+    const int STONE = 61; // User confirmed tile_061 is stone.
 
-    // Fill map primarily with grass
-    for (int y = 0; y < 20; ++y) {
-        for (int x = 0; x < 20; ++x) {
-            // Default to grass
-            int tile = GRASS_1;
+    // Generate Biomes using simple noise (Sin/Cos)
+    for (int y = 0; y < mapH; ++y) {
+        for (int x = 0; x < mapW; ++x) {
+            float nx = x / (float)mapW;
+            float ny = y / (float)mapH;
             
-            // Add some noise/variety
-            if ((x * y + x) % 7 == 0) tile = GRASS_2;
-            if ((x * y) % 13 == 0) tile = DIRT;
+            // Elevation / Type Noise
+            float noise = std::sin(nx * 10.0f) + std::cos(ny * 10.0f) + std::sin((nx + ny) * 5.0f);
+            
+            int tile = GRASS; // Default
 
-            // Create a wall border
-            if (x == 0 || x == 19 || y == 0 || y == 19) tile = WALL;
+            if (noise < -1.0f) {
+                tile = WATER;
+            } else if (noise < -0.6f) {
+                tile = SAND;
+            } else if (noise < 0.5f) {
+                tile = GRASS;
+                // Add vegitation variation
+                if ((x * y) % 10 == 0) tile = GRASS_VAR;
+                if ((x * y) % 17 == 0) tile = GRASS_Dense; 
+            } else if (noise < 1.2f) {
+                tile = DIRT;
+            } else {
+                tile = STONE; // Mountains/Walls
+            }
+            
+            // Force borders to be Walls
+            if (x == 0 || x == mapW-1 || y == 0 || y == mapH-1) tile = STONE;
 
-            // Create some random obstacles
-            if ((x * y) % 17 == 0 && x > 2 && y > 2) tile = WALL;
+            // Force Spawn Area (20,20) to be Grass
+            if (x >= 18 && x <= 22 && y >= 18 && y <= 22) {
+                tile = GRASS;
+            }
 
             m_Level->SetTile(x, y, tile); 
         }
@@ -51,70 +80,93 @@ void PixelsGateGame::OnStart() {
 
     // 2. Setup Player Entity
     m_Player = GetRegistry().CreateEntity();
-    GetRegistry().AddComponent(m_Player, PixelsEngine::TransformComponent{ 5.0f, 5.0f }); // Spawn inside the walls
+    GetRegistry().AddComponent(m_Player, PixelsEngine::TransformComponent{ 20.0f, 20.0f }); // Center
     GetRegistry().AddComponent(m_Player, PixelsEngine::PlayerComponent{ 5.0f }); 
-    GetRegistry().AddComponent(m_Player, PixelsEngine::PathMovementComponent{}); // Add Path Component
-    GetRegistry().AddComponent(m_Player, PixelsEngine::StatsComponent{100, 100, 15, false}); // 100 HP, 15 Dmg
+    GetRegistry().AddComponent(m_Player, PixelsEngine::PathMovementComponent{}); 
+    GetRegistry().AddComponent(m_Player, PixelsEngine::StatsComponent{100, 100, 15, false}); 
     
-    // Add Inventory
     auto& inv = GetRegistry().AddComponent(m_Player, PixelsEngine::InventoryComponent{});
     inv.AddItem("Potion", 3);
-    inv.AddItem("Sword", 1);
-    inv.AddItem("Map", 1);
     
-    // Load Player Texture
     std::string playerSheet = "assets/Pixel Art Top Down - Basic v1.2.2/Texture/TX Player.png";
     auto playerTexture = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), playerSheet);
     
-    // Use the player sprite
     auto& sprite = GetRegistry().AddComponent(m_Player, PixelsEngine::SpriteComponent{ 
-        playerTexture, 
-        {0, 0, 32, 32}, 
-        16, 30 // Pivot at feet
+        playerTexture, {0, 0, 32, 32}, 16, 30 
     });
 
     auto& anim = GetRegistry().AddComponent(m_Player, PixelsEngine::AnimationComponent{});
-    // The asset only has content in the first 64 pixels (2 rows).
-    // Row 0 (0-32): Likely Front/Side
-    // Row 1 (32-64): Likely Back/Side
-    
     anim.AddAnimation("Idle", 0, 0, 32, 32, 1);
-    
-    // Map Down and Right to Row 0
     anim.AddAnimation("WalkDown", 0, 0, 32, 32, 4);
     anim.AddAnimation("WalkRight", 0, 0, 32, 32, 4); 
-    
-    // Map Up and Left to Row 1
     anim.AddAnimation("WalkUp", 0, 32, 32, 32, 4);
     anim.AddAnimation("WalkLeft", 0, 32, 32, 32, 4);
 
-    // 3. Setup NPC Entity
-    auto npc = GetRegistry().CreateEntity();
-    GetRegistry().AddComponent(npc, PixelsEngine::TransformComponent{ 8.0f, 8.0f });
-    // Reuse player texture for now (or another if available)
-    GetRegistry().AddComponent(npc, PixelsEngine::SpriteComponent{ 
-        playerTexture, 
-        {0, 0, 32, 32}, 
-        16, 30
-    });
-    GetRegistry().AddComponent(npc, PixelsEngine::InteractionComponent{ "Hello Traveler!", false, 0.0f });
-    GetRegistry().AddComponent(npc, PixelsEngine::StatsComponent{50, 50, 5, false}); // 50 HP
-    // Add Quest Giver trait
-    GetRegistry().AddComponent(npc, PixelsEngine::QuestComponent{ "FetchOrb", 0, "Gold Orb" });
+    // 3. Spawn Boars
+    CreateBoar(18.0f, 18.0f);
+    CreateBoar(22.0f, 22.0f);
+    CreateBoar(15.0f, 25.0f);
 
-    // 4. Spawn Gold Orb (Item Pickup)
+    // 4. Quest NPC 1 (Fetch Gold Orb)
+    auto npc1 = GetRegistry().CreateEntity();
+    GetRegistry().AddComponent(npc1, PixelsEngine::TransformComponent{ 21.0f, 21.0f });
+    GetRegistry().AddComponent(npc1, PixelsEngine::SpriteComponent{ playerTexture, {0, 0, 32, 32}, 16, 30 });
+    GetRegistry().AddComponent(npc1, PixelsEngine::InteractionComponent{ "Hello Hunter!", false, 0.0f });
+    GetRegistry().AddComponent(npc1, PixelsEngine::StatsComponent{50, 50, 5, false}); 
+    GetRegistry().AddComponent(npc1, PixelsEngine::QuestComponent{ "FetchOrb", 0, "Gold Orb" });
+
+    // 5. Quest NPC 2 (Hunt Boars)
+    auto npc2 = GetRegistry().CreateEntity();
+    GetRegistry().AddComponent(npc2, PixelsEngine::TransformComponent{ 18.0f, 22.0f });
+    GetRegistry().AddComponent(npc2, PixelsEngine::SpriteComponent{ playerTexture, {0, 0, 32, 32}, 16, 30 });
+    GetRegistry().AddComponent(npc2, PixelsEngine::InteractionComponent{ "Hello Warrior!", false, 0.0f });
+    GetRegistry().AddComponent(npc2, PixelsEngine::StatsComponent{50, 50, 5, false}); 
+    GetRegistry().AddComponent(npc2, PixelsEngine::QuestComponent{ "HuntBoars", 0, "Boar Meat" });
+
+    // 6. Spawn Gold Orb (Item Pickup) at safe location
     auto orb = GetRegistry().CreateEntity();
-    GetRegistry().AddComponent(orb, PixelsEngine::TransformComponent{ 15.0f, 15.0f }); // Far away
+    GetRegistry().AddComponent(orb, PixelsEngine::TransformComponent{ 23.0f, 23.0f }); 
+    // Ensure ground is safe
+    m_Level->SetTile(23, 23, GRASS);
+
     auto orbTexture = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/gold_orb.png");
     GetRegistry().AddComponent(orb, PixelsEngine::SpriteComponent{ 
         orbTexture, 
         {0, 0, 32, 32}, 
         16, 16 
     });
-    // We can use a special name or tag in a component to identify it as pickup-able.
-    // Re-using Item struct logic inside InventoryComponent isn't right for world entities.
-    // Let's just use the Name/Interaction for now.
     GetRegistry().AddComponent(orb, PixelsEngine::InteractionComponent{ "Gold Orb", false, 0.0f }); 
+}
+
+void PixelsGateGame::CreateBoar(float x, float y) {
+    auto boar = GetRegistry().CreateEntity();
+    GetRegistry().AddComponent(boar, PixelsEngine::TransformComponent{ x, y });
+    GetRegistry().AddComponent(boar, PixelsEngine::StatsComponent{30, 30, 5, false}); // 30 HP
+    GetRegistry().AddComponent(boar, PixelsEngine::InteractionComponent{ "Boar", false, 0.0f }); // Name tag
+
+    // Load Boar Textures (Strips)
+    // We need a way to support multiple textures for one entity?
+    // Or just one texture sheet.
+    // The boar assets are split into multiple files (SE_run, NE_run, etc).
+    // The current AnimationComponent/SpriteComponent assumes 1 texture.
+    // We can pack them, OR update Animation to support changing textures.
+    // EASIER: Pick ONE strip (SE_run) and just flip it for now to save time, 
+    // or quickly use ImageMagick/Python to pack them?
+    // Let's use "boar_SE_run_strip.png" as the default texture.
+    
+    auto tex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/critters/boar/boar_SE_run_strip.png");
+    
+    // 164x25 -> 4 frames of 41x25.
+    GetRegistry().AddComponent(boar, PixelsEngine::SpriteComponent{ 
+        tex, {0, 0, 41, 25}, 20, 20 
+    });
+
+    auto& anim = GetRegistry().AddComponent(boar, PixelsEngine::AnimationComponent{});
+    anim.AddAnimation("Idle", 0, 0, 41, 25, 1);
+    anim.AddAnimation("Run", 0, 0, 41, 25, 4);
+    
+    // Start running
+    anim.Play("Run");
 }
 
 void PixelsGateGame::OnUpdate(float deltaTime) {
@@ -156,24 +208,32 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
                     if (quest) {
                         auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
                         
+                        // Start Quest
                         if (quest->state == 0) {
-                            interaction->dialogueText = "Please find my Gold Orb!";
-                            quest->state = 1; // Start Quest
+                            if (quest->questId == "FetchOrb") {
+                                interaction->dialogueText = "Please find my Gold Orb!";
+                            } else if (quest->questId == "HuntBoars") {
+                                interaction->dialogueText = "The boars are aggressive. Hunt them!";
+                            }
+                            quest->state = 1; 
                         } 
+                        // Check Completion
                         else if (quest->state == 1) {
-                            // Check if player has item
-                            bool hasOrb = false;
+                            // Check if player has target item
+                            bool hasItem = false;
                             for (auto& item : inv->items) {
-                                if (item.name == "Gold Orb") hasOrb = true;
+                                if (item.name == quest->targetItem && item.quantity > 0) hasItem = true;
                             }
                             
-                            if (hasOrb) {
+                            if (hasItem) {
                                 interaction->dialogueText = "You found it! Thank you.";
                                 quest->state = 2; // Complete
-                                // Give reward?
                                 inv->AddItem("Coins", 50);
+                                // Optional: Remove quest item?
+                                // for (auto& item : inv->items) if (item.name == quest->targetItem) item.quantity--;
                             } else {
-                                interaction->dialogueText = "Bring me the Orb...";
+                                if (quest->questId == "FetchOrb") interaction->dialogueText = "Bring me the Orb...";
+                                else if (quest->questId == "HuntBoars") interaction->dialogueText = "Bring me Boar Meat.";
                             }
                         }
                         else if (quest->state == 2) {
@@ -440,8 +500,17 @@ void PixelsGateGame::PerformAttack() {
                 eStats->isDead = true;
                 std::cout << "Entity " << entity << " Died!" << std::endl;
                 
-                // Visual feedback: remove sprite or change to dead sprite?
-                // For now, let's just make it disappear (remove SpriteComponent)
+                // Loot Logic
+                // If it's a boar (checked by name for now, simpler than checking texture)
+                auto* interact = GetRegistry().GetComponent<PixelsEngine::InteractionComponent>(entity);
+                if (interact && interact->dialogueText == "Boar") {
+                    auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+                    if (inv) {
+                        inv->AddItem("Boar Meat", 1);
+                        std::cout << "Looted Boar Meat!" << std::endl;
+                    }
+                }
+
                 GetRegistry().RemoveComponent<PixelsEngine::SpriteComponent>(entity);
             }
         }

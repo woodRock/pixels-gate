@@ -27,10 +27,11 @@ namespace PixelsEngine {
         int tile = GetTile(x, y);
         if (tile == -1) return false; // Cannot walk out of bounds
         
-        // Define Walkable Indices
-        // Grass (0, 1) and Dirt (2) are walkable. 
-        // Walls (10) and Water (11) are not.
-        return tile < 10; 
+        // Block Walls (61) and Water (28)
+        // Adjust these numbers if visual feedback changes
+        if (tile == 61 || tile == 28) return false;
+        
+        return true; 
     }
 
     void Tilemap::GridToScreen(float gridX, float gridY, int& screenX, int& screenY) const {
