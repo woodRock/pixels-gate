@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <typeindex>
 #include <memory>
 #include <algorithm>
@@ -48,13 +49,20 @@ namespace PixelsEngine {
     class Registry {
     public:
         Entity CreateEntity() {
-            return m_NextEntity++;
+            Entity entity = m_NextEntity++;
+            m_Entities.insert(entity);
+            return entity;
         }
 
         void DestroyEntity(Entity entity) {
+            m_Entities.erase(entity);
             for (auto& pair : m_ComponentPools) {
                 pair.second->Remove(entity);
             }
+        }
+
+        bool Valid(Entity entity) const {
+            return m_Entities.find(entity) != m_Entities.end();
         }
 
         template<typename T>
@@ -93,6 +101,7 @@ namespace PixelsEngine {
         }
 
         Entity m_NextEntity = 0;
+        std::unordered_set<Entity> m_Entities;
         std::unordered_map<std::type_index, std::unique_ptr<ComponentPool>> m_ComponentPools;
     };
 

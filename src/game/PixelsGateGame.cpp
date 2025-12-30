@@ -1,12 +1,16 @@
 #include "PixelsGateGame.h"
+#include <iostream>
+#include <cmath>
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 #include "../engine/Input.h"
-#include "../engine/Components.h"
-#include "../engine/AnimationSystem.h"
-#include "../engine/TextureManager.h"
-#include "../engine/Pathfinding.h"
-#include "../engine/Inventory.h"
 #include "../engine/Dice.h"
 #include "../engine/SaveSystem.h"
+#include "../engine/TextureManager.h"
+#include "../engine/Components.h"
+#include "../engine/Pathfinding.h"
+#include "../engine/AnimationSystem.h"
 #include <SDL2/SDL_ttf.h>
 #include <algorithm>
 #include <functional>
@@ -68,7 +72,10 @@ void PixelsGateGame::OnStart() {
     GetRegistry().AddComponent(m_Player, PixelsEngine::StatsComponent{100, 100, 15, false}); 
     
     auto& inv = GetRegistry().AddComponent(m_Player, PixelsEngine::InventoryComponent{});
-    inv.AddItem("Potion", 3);
+    inv.AddItem("Potion", 3, PixelsEngine::ItemType::Consumable);
+    inv.AddItem("Sword", 1, PixelsEngine::ItemType::WeaponMelee, 10, "assets/sword.png");
+    inv.AddItem("Leather Armor", 1, PixelsEngine::ItemType::Armor, 5, "assets/armor.png");
+    inv.AddItem("Shortbow", 1, PixelsEngine::ItemType::WeaponRanged, 8, "assets/bow.png");
     
     std::string playerSheet = "assets/Pixel Art Top Down - Basic v1.2.2/Texture/TX Player.png";
     auto playerTexture = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), playerSheet);
@@ -85,9 +92,9 @@ void PixelsGateGame::OnStart() {
     anim.AddAnimation("WalkLeft", 0, 32, 32, 32, 4);
 
     // 3. Spawn Boars
-    CreateBoar(18.0f, 18.0f);
-    CreateBoar(22.0f, 22.0f);
-    CreateBoar(15.0f, 25.0f);
+    CreateBoar(28.0f, 28.0f);
+    CreateBoar(32.0f, 32.0f);
+    CreateBoar(25.0f, 35.0f);
 
     // 4. NPCs
     auto npc1 = GetRegistry().CreateEntity();
@@ -207,24 +214,151 @@ void PixelsGateGame::HandleCreationInput() {
     }
 }
 
+void PixelsGateGame::PerformAttack(PixelsEngine::Entity forcedTarget) {
+    auto* playerStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+    auto* playerTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
+    if (!playerStats || !playerTrans) return;
+
+    if (m_State == GameState::Combat) {
+        if (!m_TurnOrder[m_CurrentTurnIndex].isPlayer) {
+             SpawnFloatingText(playerTrans->x, playerTrans->y - 1.0f, "Not Your Turn!", {200, 0, 0, 255});
+             return;
+        }
+        if (m_ActionsLeft <= 0) {
+             SpawnFloatingText(playerTrans->x, playerTrans->y - 1.0f, "No Actions Left!", {200, 0, 0, 255});
+             return;
+        }
+    }
+
+    PixelsEngine::Entity target = forcedTarget;
+
+    // 1. Try Context Menu Target
+    if (target == PixelsEngine::INVALID_ENTITY && m_ContextMenu.isOpen && m_ContextMenu.targetEntity != PixelsEngine::INVALID_ENTITY) {
+        target = m_ContextMenu.targetEntity;
+    }
+    
+    // 2. If no target, find closest enemy
+    if (target == PixelsEngine::INVALID_ENTITY) {
+        float minDistance = 3.0f; // Increased from 2.0f for better usability
+        auto& view = GetRegistry().View<PixelsEngine::StatsComponent>();
+        for (auto& [entity, stats] : view) {
+            if (entity == m_Player || stats.isDead) continue;
+            auto* targetTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(entity);
+            if (targetTrans) {
+                float dist = std::sqrt(std::pow(playerTrans->x - targetTrans->x, 2) + std::pow(playerTrans->y - targetTrans->y, 2));
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    target = entity;
+                }
+            }
+        }
+    }
+
+    if (target != PixelsEngine::INVALID_ENTITY) {
+        // If not in combat, start combat!
+        if (m_State == GameState::Playing) {
+            StartCombat(target);
+        }
+
+        auto* targetStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(target);
+        auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+        if (targetStats && inv) {
+            // Check range for forced target too
+            auto* targetTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(target);
+            float dist = targetTrans ? std::sqrt(std::pow(playerTrans->x - targetTrans->x, 2) + std::pow(playerTrans->y - targetTrans->y, 2)) : 100.0f;
+            
+            if (dist > 3.0f) { // Increased from 2.0f
+                SpawnFloatingText(playerTrans->x, playerTrans->y - 1.0f, "Too Far!", {200, 200, 200, 255});
+                return;
+            }
+
+            // Hit Roll against AC (Assuming NPCs have default 10 AC + Dex mod for now)
+            int targetAC = 10 + targetStats->GetModifier(targetStats->dexterity);
+            int roll = PixelsEngine::Dice::Roll(20);
+            int attackBonus = playerStats->GetModifier(playerStats->strength) + inv->equippedMelee.statBonus;
+
+            if (roll == 20 || (roll != 1 && roll + attackBonus >= targetAC)) {
+                // Hit!
+                int dmg = playerStats->damage + inv->equippedMelee.statBonus;
+                bool isCrit = (roll == 20);
+                if (isCrit) dmg *= 2;
+                
+                targetStats->currentHealth -= dmg;
+                
+                if (targetTrans) {
+                    std::string dmgText = std::to_string(dmg);
+                    if (isCrit) dmgText += "!";
+                    SpawnFloatingText(targetTrans->x, targetTrans->y, dmgText, isCrit ? SDL_Color{255, 0, 0, 255} : SDL_Color{255, 255, 255, 255});
+                }
+            } else {
+                // Miss
+                if (targetTrans) SpawnFloatingText(targetTrans->x, targetTrans->y, "Miss", {200, 200, 200, 255});
+            }
+
+            if (m_State == GameState::Combat) {
+                m_ActionsLeft--;
+            }
+
+            if (targetStats->currentHealth <= 0) {
+                targetStats->currentHealth = 0;
+                targetStats->isDead = true;
+                
+                // Drop Loot
+                auto* loot = GetRegistry().GetComponent<PixelsEngine::LootComponent>(target);
+                if (loot && targetTrans) {
+                    SpawnLootBag(targetTrans->x, targetTrans->y, loot->drops);
+                }
+                
+                // Destroy Entity
+                GetRegistry().DestroyEntity(target);
+            }
+        }
+    } else {
+        // Whiff
+         SpawnFloatingText(playerTrans->x, playerTrans->y - 1.0f, "No Target", {200, 200, 200, 255});
+    }
+}
+
 void PixelsGateGame::CreateBoar(float x, float y) {
     auto boar = GetRegistry().CreateEntity();
     GetRegistry().AddComponent(boar, PixelsEngine::TransformComponent{ x, y });
-    GetRegistry().AddComponent(boar, PixelsEngine::StatsComponent{30, 30, 5, false});
+    GetRegistry().AddComponent(boar, PixelsEngine::StatsComponent{30, 30, 2, false}); // Reduced damage from 5 to 2
     GetRegistry().AddComponent(boar, PixelsEngine::InteractionComponent{ "Boar", false, 0.0f });
+    // Add AI
+    GetRegistry().AddComponent(boar, PixelsEngine::AIComponent{ 8.0f, 1.2f, 2.0f, 0.0f, true });
+    // Add Loot
+    std::vector<PixelsEngine::Item> drops;
+    drops.push_back({"Boar Meat", "", 1, PixelsEngine::ItemType::Consumable, 0});
+    GetRegistry().AddComponent(boar, PixelsEngine::LootComponent{ drops });
+
     auto tex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/critters/boar/boar_SE_run_strip.png");
     GetRegistry().AddComponent(boar, PixelsEngine::SpriteComponent{ tex, {0, 0, 41, 25}, 20, 20 });
     auto& anim = GetRegistry().AddComponent(boar, PixelsEngine::AnimationComponent{});
     anim.AddAnimation("Idle", 0, 0, 41, 25, 1);
     anim.AddAnimation("Run", 0, 0, 41, 25, 4);
-    anim.Play("Run");
+    anim.Play("Idle");
 }
 
 void PixelsGateGame::OnUpdate(float deltaTime) {
-    // 1. Update Timers (Global)
+    if (m_State == GameState::Creation) { HandleCreationInput(); return; }
+
+    // Update Timers
     if (m_SaveMessageTimer > 0.0f) m_SaveMessageTimer -= deltaTime;
-    
-    // 2. Handle Fade Logic (Global)
+
+    // Update Day/Night
+    UpdateDayNight(deltaTime);
+
+    // Update Floating Texts
+    for (auto it = m_FloatingTexts.begin(); it != m_FloatingTexts.end(); ) {
+        it->y -= 20.0f * deltaTime; // Float up
+        it->life -= deltaTime;
+        if (it->life <= 0.0f) {
+            it = m_FloatingTexts.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
     if (m_FadeState != FadeState::None) {
         m_FadeTimer -= deltaTime;
         if (m_FadeState == FadeState::FadingOut) {
@@ -232,7 +366,6 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
                 PixelsEngine::SaveSystem::LoadGame(m_PendingLoadFile, GetRegistry(), m_Player, *m_Level);
                 m_FadeState = FadeState::FadingIn;
                 m_FadeTimer = m_FadeDuration;
-                // If we were in Main Menu, go to Playing
                 if (m_State == GameState::MainMenu) m_State = GameState::Playing;
             }
         } else if (m_FadeState == FadeState::FadingIn) {
@@ -240,10 +373,9 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
                 m_FadeState = FadeState::None;
             }
         }
-        return; // Block input during transitions
+        return; 
     }
 
-    // 3. State Machine
     switch (m_State) {
         case GameState::MainMenu:
             HandleMainMenuInput();
@@ -255,27 +387,63 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
             HandlePauseMenuInput();
             break;
         case GameState::Options:
-            // Back handled in Render for now, or add specific input here if complex
-            if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE)) m_State = GameState::MainMenu; // Default back
+            if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE)) m_State = GameState::MainMenu;
             break;
         case GameState::Credits:
         case GameState::Controls:
-            // Back logic is simple enough to stay in Render or here.
-            // Let's rely on the Render function's input check for these simple screens for now.
             break;
-        case GameState::Playing:
+        case GameState::Combat:
         {
-            // Toggle Pause
             static bool wasEsc = false;
+            static bool wasI = false;
             bool isEsc = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE);
+            bool isI = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_I);
+            
+            auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+            
             if (isEsc && !wasEsc) {
-                m_State = GameState::Paused;
-                m_MenuSelection = 0;
+                if (inv && inv->isOpen) {
+                    inv->isOpen = false;
+                } else {
+                    m_State = GameState::Paused;
+                    m_MenuSelection = 0;
+                }
+            }
+            if (isI && !wasI && inv) {
+                inv->isOpen = !inv->isOpen;
             }
             wasEsc = isEsc;
+            wasI = isI;
+            
+            UpdateCombat(deltaTime);
+            break;
+        }
+        case GameState::Playing:
+        {
+            static bool wasEsc = false;
+            static bool wasI = false;
+            bool isEsc = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE);
+            bool isI = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_I);
 
-            if (m_State == GameState::Playing) { // Only if not just paused
+            auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+
+            if (isEsc && !wasEsc) {
+                if (inv && inv->isOpen) {
+                    inv->isOpen = false;
+                } else {
+                    m_State = GameState::Paused;
+                    m_MenuSelection = 0;
+                }
+            }
+            if (isI && !wasI && inv) {
+                inv->isOpen = !inv->isOpen;
+            }
+            wasEsc = isEsc;
+            wasI = isI;
+
+            if (m_State == GameState::Playing) {
                 HandleInput();
+                UpdateAI(deltaTime); // Update AI
 
                 auto* transform = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
                 auto* playerComp = GetRegistry().GetComponent<PixelsEngine::PlayerComponent>(m_Player);
@@ -293,6 +461,17 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
                             if (interaction->dialogueText == "Gold Orb") {
                                 auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
                                 if (inv) { inv->AddItem("Gold Orb", 1); GetRegistry().RemoveComponent<PixelsEngine::SpriteComponent>(m_SelectedNPC); }
+                            } else if (interaction->dialogueText == "Loot") {
+                                // Loot Bag
+                                auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+                                auto* loot = GetRegistry().GetComponent<PixelsEngine::LootComponent>(m_SelectedNPC);
+                                if (inv && loot) {
+                                    for (const auto& item : loot->drops) {
+                                        inv->AddItemObject(item);
+                                        SpawnFloatingText(transform->x, transform->y, "+ " + item.name, {255, 255, 0, 255});
+                                    }
+                                    GetRegistry().DestroyEntity(m_SelectedNPC); // Destroy bag
+                                }
                             } else {
                                 auto* quest = GetRegistry().GetComponent<PixelsEngine::QuestComponent>(m_SelectedNPC);
                                 if (quest) {
@@ -402,12 +581,14 @@ void PixelsGateGame::OnRender() {
             break;
         case GameState::Paused:
         case GameState::Playing:
+        case GameState::Combat:
         {
             auto& camera = GetCamera();
-            if (m_Level) m_Level->Render(camera);
-
-            struct Renderable { int y; PixelsEngine::Entity entity; };
-            std::vector<Renderable> renderQueue;
+                if (m_Level) m_Level->Render(camera);
+            
+                RenderEnemyCones(camera);
+            
+                struct Renderable { int y; PixelsEngine::Entity entity; };            std::vector<Renderable> renderQueue;
             auto& sprites = GetRegistry().View<PixelsEngine::SpriteComponent>();
             for (auto& [entity, sprite] : sprites) {
                 auto* transform = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(entity);
@@ -433,10 +614,40 @@ void PixelsGateGame::OnRender() {
                 if (transform && sprite && sprite->texture) {
                     int screenX, screenY; m_Level->GridToScreen(transform->x, transform->y, screenX, screenY);
                     screenX -= (int)camera.x; screenY -= (int)camera.y;
-                    sprite->texture->RenderRect(screenX + 16 - sprite->pivotX, screenY + 16 - sprite->pivotY, &sprite->srcRect, -1, -1, sprite->flip);
-                }
+                            sprite->texture->RenderRect(screenX + 16 - sprite->pivotX, screenY + 16 - sprite->pivotY, &sprite->srcRect, -1, -1, sprite->flip);
+                    
+                            // --- Render Health Bar Above Entity (in Combat or if damaged) ---
+                            auto* entStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(item.entity);
+                            if (entStats && (m_State == GameState::Combat || entStats->currentHealth < entStats->maxHealth) && !entStats->isDead) {
+                                int barW = 32;
+                                int barH = 4;
+                                int barX = screenX;
+                                int barY = screenY - 8;
+                    
+                                SDL_Rect bg = {barX, barY, barW, barH};
+                                SDL_SetRenderDrawColor(GetRenderer(), 50, 50, 50, 255);
+                                SDL_RenderFillRect(GetRenderer(), &bg);
+                    
+                                float hpPercent = (float)entStats->currentHealth / (float)entStats->maxHealth;
+                                SDL_Rect fg = {barX, barY, (int)(barW * hpPercent), barH};
+                                SDL_SetRenderDrawColor(GetRenderer(), 255, 0, 0, 255);
+                                SDL_RenderFillRect(GetRenderer(), &fg);
+                            }
+                        }            }
+            // Render Floating Texts
+            for (const auto& ft : m_FloatingTexts) {
+                int screenX, screenY;
+                m_Level->GridToScreen(ft.x, ft.y, screenX, screenY);
+                screenX -= (int)camera.x;
+                screenY -= (int)camera.y;
+                m_TextRenderer->RenderTextCentered(ft.text, screenX + 16, screenY - 20, ft.color);
             }
-            RenderHUD(); RenderInventory(); RenderContextMenu(); RenderDiceRoll();
+
+            RenderHUD(); 
+            if (m_State == GameState::Combat) RenderCombatUI();
+            
+            RenderInventory(); RenderContextMenu(); RenderDiceRoll();
+            RenderDayNightCycle(); // Render tint on top
 
             // Render Save Alert
             if (m_SaveMessageTimer > 0.0f) {
@@ -535,39 +746,101 @@ void PixelsGateGame::RenderContextMenu() {
 void PixelsGateGame::RenderInventory() {
     auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
     if (!inv || !inv->isOpen) return;
+    
+    HandleInventoryInput(); // Handle clicks inside inventory
+
     SDL_Renderer* renderer = GetRenderer();
     int winW, winH; SDL_GetWindowSize(m_Window, &winW, &winH);
-    int w = 300, h = 400; SDL_Rect panel = { (winW - w) / 2, (winH - h) / 2, w, h };
+    int w = 400, h = 500; 
+    SDL_Rect panel = { (winW - w) / 2, (winH - h) / 2, w, h };
+    
     SDL_SetRenderDrawColor(renderer, 139, 69, 19, 255); SDL_RenderFillRect(renderer, &panel);
     SDL_SetRenderDrawColor(renderer, 218, 165, 32, 255); SDL_RenderDrawRect(renderer, &panel);
-    m_TextRenderer->RenderTextCentered("INVENTORY", panel.x + w/2, panel.y + 30, {255, 255, 255, 255});
-    int y = panel.y + 60;
-    for (const auto& item : inv->items) { m_TextRenderer->RenderText(item.name + " x" + std::to_string(item.quantity), panel.x + 30, y, {255, 255, 255, 255}); y += 30; }
-}
+    
+    m_TextRenderer->RenderTextCentered("INVENTORY", panel.x + w/2, panel.y + 20, {255, 255, 255, 255});
 
-void PixelsGateGame::PerformAttack() {
-    auto* pTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
-    auto* pStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
-    if (!pTrans || !pStats) return;
-    std::cout << "Player Attacking!" << std::endl;
-    auto& transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
-    for (auto& [entity, transform] : transforms) {
-        if (entity == m_Player) continue;
-        auto* eStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(entity);
-        if (!eStats || eStats->isDead) continue;
-        float dist = std::sqrt(std::pow(transform.x - pTrans->x, 2) + std::pow(transform.y - pTrans->y, 2));
-        if (dist < 1.5f) {
-            eStats->currentHealth -= pStats->damage;
-            if (eStats->currentHealth <= 0) { eStats->currentHealth = 0; eStats->isDead = true; 
-                auto* interact = GetRegistry().GetComponent<PixelsEngine::InteractionComponent>(entity);
-                if (interact && interact->dialogueText == "Boar") {
-                    auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
-                    if (inv) inv->AddItem("Boar Meat", 1);
-                }
-                GetRegistry().RemoveComponent<PixelsEngine::SpriteComponent>(entity);
+    // Close Button (X in top right)
+    SDL_Rect closeBtn = { panel.x + w - 30, panel.y + 10, 20, 20 };
+    SDL_SetRenderDrawColor(renderer, 200, 50, 50, 255); SDL_RenderFillRect(renderer, &closeBtn);
+    m_TextRenderer->RenderTextCentered("X", closeBtn.x + 10, closeBtn.y + 10, {255, 255, 255, 255});
+
+    // --- Equipment Slots (Top) ---
+    int slotSize = 40;
+    int startX = panel.x + 50;
+    int startY = panel.y + 60;
+    
+    auto DrawSlot = [&](const std::string& label, PixelsEngine::Item& item, int x, int y) {
+        SDL_Rect slotRect = {x, y, slotSize, slotSize};
+        SDL_SetRenderDrawColor(renderer, 50, 30, 10, 255); SDL_RenderFillRect(renderer, &slotRect);
+        SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255); SDL_RenderDrawRect(renderer, &slotRect);
+        
+        m_TextRenderer->RenderTextCentered(label, x + slotSize/2, y - 15, {200, 200, 200, 255});
+        if (!item.IsEmpty()) {
+            if (!item.iconPath.empty()) {
+                auto tex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), item.iconPath);
+                if (tex) tex->Render(x + 4, y + 4, 32, 32);
+            } else {
+                m_TextRenderer->RenderTextCentered(item.name.substr(0, 3), x + slotSize/2, y + slotSize/2, {255, 255, 0, 255});
             }
         }
+    };
+
+    DrawSlot("Melee", inv->equippedMelee, startX, startY);
+    DrawSlot("Range", inv->equippedRanged, startX + 100, startY);
+    DrawSlot("Armor", inv->equippedArmor, startX + 200, startY);
+
+    // --- Stats Summary ---
+    auto* stats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+    if (stats) {
+        int armorBonus = inv->equippedArmor.statBonus;
+        int damageBonus = inv->equippedMelee.statBonus + inv->equippedRanged.statBonus;
+        std::string statStr = "AC: " + std::to_string(10 + stats->GetModifier(stats->dexterity) + armorBonus) + 
+                              "  Dmg Bonus: " + std::to_string(damageBonus);
+        m_TextRenderer->RenderTextCentered(statStr, panel.x + w/2, startY + 60, {200, 255, 200, 255});
     }
+
+    // --- Item List ---
+    int listY = startY + 90;
+    SDL_Rect listArea = { panel.x + 20, listY, w - 40, h - (listY - panel.y) - 20 };
+    SDL_SetRenderDrawColor(renderer, 80, 40, 10, 255); SDL_RenderFillRect(renderer, &listArea);
+    
+    int itemY = listArea.y + 10;
+    for (int i = 0; i < inv->items.size(); ++i) {
+        auto& item = inv->items[i];
+        
+        // Simple Hover logic
+        int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
+        SDL_Rect rowRect = { listArea.x, itemY, listArea.w, 40 }; // Increased height for icons
+        bool hover = (mx >= rowRect.x && mx <= rowRect.x + rowRect.w && my >= rowRect.y && my <= rowRect.y + rowRect.h);
+        
+        if (hover) SDL_SetRenderDrawColor(renderer, 100, 100, 150, 255);
+        else SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0); 
+        if (hover) SDL_RenderFillRect(renderer, &rowRect);
+
+        RenderInventoryItem(item, listArea.x + 10, itemY + 4);
+        itemY += 45;
+    }
+
+    // --- Drag and Drop Visual ---
+    if (m_DraggingItemIndex != -1 && m_DraggingItemIndex < inv->items.size()) {
+        int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
+        RenderInventoryItem(inv->items[m_DraggingItemIndex], mx - 16, my - 16);
+    }
+}
+
+void PixelsGateGame::RenderInventoryItem(const PixelsEngine::Item& item, int x, int y) {
+    if (!item.iconPath.empty()) {
+        auto tex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), item.iconPath);
+        if (tex) tex->Render(x, y, 32, 32);
+    }
+    
+    std::string typeStr = "";
+    if (item.type == PixelsEngine::ItemType::WeaponMelee) typeStr = "[M]";
+    else if (item.type == PixelsEngine::ItemType::WeaponRanged) typeStr = "[R]";
+    else if (item.type == PixelsEngine::ItemType::Armor) typeStr = "[A]";
+    
+    std::string display = item.name + " x" + std::to_string(item.quantity) + " " + typeStr;
+    m_TextRenderer->RenderText(display, x + 40, y + 8, {255, 255, 255, 255});
 }
 
 void PixelsGateGame::HandleInput() {
@@ -575,11 +848,12 @@ void PixelsGateGame::HandleInput() {
     bool isCtrlDown = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_LCTRL) || PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_RCTRL);
     bool isDownLeftRaw = PixelsEngine::Input::IsMouseButtonDown(SDL_BUTTON_LEFT);
     bool isDownRightRaw = PixelsEngine::Input::IsMouseButtonDown(SDL_BUTTON_RIGHT);
-    bool isDownLeft = isDownLeftRaw && !isCtrlDown;
-    bool isDownRight = isDownRightRaw || (isDownLeftRaw && isCtrlDown);
-    bool isPressedLeft = isDownLeft && !wasDownLeft;
-    bool isPressedRight = isDownRight && !wasDownRight;
-    wasDownLeft = isDownLeft; wasDownRight = isDownRight;
+    
+    // Separate Left Click and Right Click (or Ctrl+LeftClick)
+    bool isPressedLeft = isDownLeftRaw && !wasDownLeft;
+    bool isPressedRight = isDownRightRaw && !wasDownRight;
+    
+    wasDownLeft = isDownLeftRaw; wasDownRight = isDownRightRaw;
     int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
 
     if (m_DiceRoll.active) {
@@ -629,7 +903,7 @@ void PixelsGateGame::HandleInput() {
                 if (index >= 0 && index < m_ContextMenu.actions.size()) {
                     auto& action = m_ContextMenu.actions[index];
                     if (action.type == PixelsEngine::ContextActionType::Talk) m_SelectedNPC = m_ContextMenu.targetEntity;
-                    else if (action.type == PixelsEngine::ContextActionType::Attack) PerformAttack();
+                    else if (action.type == PixelsEngine::ContextActionType::Attack) PerformAttack(m_ContextMenu.targetEntity);
                     else if (action.type == PixelsEngine::ContextActionType::Pickpocket) {
                         auto* stats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
                         StartDiceRoll(stats->GetModifier(stats->dexterity), 15, "Dexterity (Sleight of Hand)", m_ContextMenu.targetEntity, PixelsEngine::ContextActionType::Pickpocket);
@@ -644,7 +918,29 @@ void PixelsGateGame::HandleInput() {
     if (isPressedLeft) {
         int winW, winH; SDL_GetWindowSize(m_Window, &winW, &winH);
         if (my > winH - 60) CheckUIInteraction(mx, my);
-        else CheckWorldInteraction(mx, my);
+        else {
+            // Check for Ctrl + Click Attack
+            if (isCtrlDown) {
+                auto& camera = GetCamera(); auto& transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
+                bool found = false;
+                for (auto& [entity, transform] : transforms) {
+                    if (entity == m_Player) continue;
+                    auto* sprite = GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(entity);
+                    if (sprite) {
+                        int screenX, screenY; m_Level->GridToScreen(transform.x, transform.y, screenX, screenY);
+                        screenX -= (int)camera.x; screenY -= (int)camera.y;
+                        SDL_Rect drawRect = { screenX + 16 - sprite->pivotX, screenY + 16 - sprite->pivotY, sprite->srcRect.w, sprite->srcRect.h };
+                        if (mx >= drawRect.x && mx <= drawRect.x + drawRect.w && my >= drawRect.y && my <= drawRect.y + drawRect.h) {
+                            PerformAttack(entity);
+                            found = true; break;
+                        }
+                    }
+                }
+                if (!found) CheckWorldInteraction(mx, my); // Fallback to move
+            } else {
+                CheckWorldInteraction(mx, my);
+            }
+        }
     }
     
     if (isPressedRight) {
@@ -1104,4 +1400,595 @@ void PixelsGateGame::RenderControls() {
     bool isEsc = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE);
     if (isEsc && !wasEsc) m_State = GameState::Paused;
     wasEsc = isEsc;
+}
+
+// --- New Features Implementations ---
+
+void PixelsGateGame::UpdateAI(float deltaTime) {
+    if (m_State == GameState::Combat) return;
+
+    auto* pTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
+    auto* pStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+    if (!pTrans || !pStats || pStats->isDead) return;
+
+    auto& view = GetRegistry().View<PixelsEngine::AIComponent>();
+    for (auto& [entity, ai] : view) {
+        auto* transform = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(entity);
+        auto* anim = GetRegistry().GetComponent<PixelsEngine::AnimationComponent>(entity);
+        
+        if (!transform) continue;
+
+        float dist = std::sqrt(std::pow(pTrans->x - transform->x, 2) + std::pow(pTrans->y - transform->y, 2));
+
+        bool canSee = false;
+        if (ai.isAggressive && dist <= ai.sightRange) {
+            float dx = pTrans->x - transform->x;
+            float dy = pTrans->y - transform->y;
+            float angleToPlayer = std::atan2(dy, dx) * (180.0f / M_PI); // Degrees
+
+            // Normalize angles to -180 to 180
+            float angleDiff = angleToPlayer - ai.facingDir;
+            while (angleDiff > 180.0f) angleDiff -= 360.0f;
+            while (angleDiff < -180.0f) angleDiff += 360.0f;
+
+            if (std::abs(angleDiff) <= ai.coneAngle / 2.0f) {
+                canSee = true;
+            }
+        }
+
+        if (canSee) {
+            // Chase
+            if (dist > ai.attackRange) {
+                float dx = pTrans->x - transform->x;
+                float dy = pTrans->y - transform->y;
+                // Normalize
+                float len = std::sqrt(dx*dx + dy*dy);
+                if (len > 0) { dx /= len; dy /= len; }
+                
+                float speed = 2.0f; // Slower than player
+                transform->x += dx * speed * deltaTime;
+                transform->y += dy * speed * deltaTime;
+                
+                // Update facing direction when moving
+                ai.facingDir = std::atan2(dy, dx) * (180.0f / M_PI);
+
+                if (anim) anim->Play("Run");
+            } else {
+                // Attack
+                if (anim) anim->Play("Idle");
+                ai.attackTimer -= deltaTime;
+                if (ai.attackTimer <= 0.0f) {
+                    // Deal Damage
+                    pStats->currentHealth -= 2; // Reduced from 5 for balance
+                    if (pStats->currentHealth < 0) pStats->currentHealth = 0;
+                    SpawnFloatingText(pTrans->x, pTrans->y, "-2", {255, 0, 0, 255});
+                    ai.attackTimer = ai.attackCooldown;
+                }
+            }
+        } else {
+            if (anim) anim->Play("Idle");
+        }
+    }
+}
+
+void PixelsGateGame::UpdateDayNight(float deltaTime) {
+    m_TimeOfDay += deltaTime * m_TimeSpeed;
+    if (m_TimeOfDay >= 24.0f) m_TimeOfDay -= 24.0f;
+}
+
+void PixelsGateGame::RenderDayNightCycle() {
+    SDL_Renderer* renderer = GetRenderer();
+    int w, h;
+    SDL_GetWindowSize(m_Window, &w, &h);
+
+    SDL_Color tint = {0, 0, 0, 0};
+    
+    // Interpolation helpers
+    auto lerp = [](float a, float b, float t) { return a + (b - a) * t; };
+    auto lerpColor = [&](SDL_Color c1, SDL_Color c2, float t) {
+        return SDL_Color{
+            (Uint8)lerp(c1.r, c2.r, t),
+            (Uint8)lerp(c1.g, c2.g, t),
+            (Uint8)lerp(c1.b, c2.b, t),
+            (Uint8)lerp(c1.a, c2.a, t)
+        };
+    };
+
+    // Define cycle stages
+    if (m_TimeOfDay >= 5.0f && m_TimeOfDay < 8.0f) { // Sunrise to Early Day
+        float t = (m_TimeOfDay - 5.0f) / 3.0f;
+        tint = lerpColor({255, 200, 100, 40}, {20, 20, 40, 20}, t);
+    } else if (m_TimeOfDay >= 8.0f && m_TimeOfDay < 17.0f) { // Day
+        tint = {20, 20, 40, 20}; // Subtle ambient darkening during day
+    } else if (m_TimeOfDay >= 17.0f && m_TimeOfDay < 20.0f) { // Late Day to Sunset
+        float t = (m_TimeOfDay - 17.0f) / 3.0f;
+        tint = lerpColor({20, 20, 40, 20}, {255, 100, 50, 60}, t);
+    } else if (m_TimeOfDay >= 20.0f && m_TimeOfDay < 23.0f) { // Sunset to Night
+        float t = (m_TimeOfDay - 20.0f) / 3.0f;
+        tint = lerpColor({255, 100, 50, 60}, {10, 10, 50, 110}, t);
+    } else if (m_TimeOfDay >= 23.0f || m_TimeOfDay < 4.0f) { // Deep Night
+        tint = {10, 10, 50, 110}; // Reduced from 180 for better visibility
+    } else { // Night to Sunrise (4.0 to 5.0)
+        float t = (m_TimeOfDay - 4.0f) / 1.0f;
+        tint = lerpColor({10, 10, 50, 110}, {255, 200, 100, 40}, t);
+    }
+
+    if (tint.a > 0) {
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, tint.r, tint.g, tint.b, tint.a);
+        SDL_Rect screen = {0, 0, w, h};
+        SDL_RenderFillRect(renderer, &screen);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+    }
+    
+    // Render Clock UI
+    m_TextRenderer->RenderText("Time: " + std::to_string((int)m_TimeOfDay) + ":00", w - 120, 10, {255, 255, 255, 255});
+}
+
+void PixelsGateGame::SpawnFloatingText(float x, float y, const std::string& text, SDL_Color color) {
+    m_FloatingTexts.push_back({x, y, text, 1.5f, color});
+}
+
+void PixelsGateGame::SpawnLootBag(float x, float y, const std::vector<PixelsEngine::Item>& items) {
+    auto bag = GetRegistry().CreateEntity();
+    GetRegistry().AddComponent(bag, PixelsEngine::TransformComponent{ x, y });
+    auto tex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/gold_orb.png"); // Reuse orb sprite for now
+    GetRegistry().AddComponent(bag, PixelsEngine::SpriteComponent{ tex, {0, 0, 32, 32}, 16, 16 });
+    GetRegistry().AddComponent(bag, PixelsEngine::InteractionComponent{ "Loot", false, 0.0f });
+    
+    PixelsEngine::LootComponent loot;
+    loot.drops = items;
+    GetRegistry().AddComponent(bag, loot);
+}
+
+void PixelsGateGame::HandleInventoryInput() {
+    int winW, winH; SDL_GetWindowSize(m_Window, &winW, &winH);
+    int w = 400, h = 500; 
+    SDL_Rect panel = { (winW - w) / 2, (winH - h) / 2, w, h };
+    
+    int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
+    auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+    if (!inv) return;
+
+    static bool wasDown = false;
+    bool isDown = PixelsEngine::Input::IsMouseButtonDown(SDL_BUTTON_LEFT);
+    bool pressed = isDown && !wasDown;
+    bool released = !isDown && wasDown;
+    wasDown = isDown;
+
+    float currentTime = SDL_GetTicks() / 1000.0f;
+
+    if (pressed) {
+        // Check Close Button
+        SDL_Rect closeBtn = { panel.x + w - 30, panel.y + 10, 20, 20 };
+        if (mx >= closeBtn.x && mx <= closeBtn.x + closeBtn.w && my >= closeBtn.y && my <= closeBtn.y + closeBtn.h) {
+            inv->isOpen = false;
+            m_DraggingItemIndex = -1;
+            return;
+        }
+
+        // Check for double click or start drag
+        int listY = panel.y + 150;
+        int itemY = listY + 10;
+        for (int i = 0; i < inv->items.size(); ++i) {
+            SDL_Rect rowRect = { panel.x + 20, itemY, w - 40, 40 };
+            if (mx >= rowRect.x && mx <= rowRect.x + rowRect.w && my >= rowRect.y && my <= rowRect.y + rowRect.h) {
+                // Potential Double Click
+                if (i == m_LastClickedItemIndex && (currentTime - m_LastClickTime) < 0.5f) {
+                    // EQUIP via Double Click
+                    PixelsEngine::Item& item = inv->items[i];
+                    bool equipped = false;
+                    if (item.type == PixelsEngine::ItemType::WeaponMelee) {
+                        if (!inv->equippedMelee.IsEmpty()) inv->AddItemObject(inv->equippedMelee);
+                        inv->equippedMelee = item; inv->equippedMelee.quantity = 1; equipped = true;
+                    } else if (item.type == PixelsEngine::ItemType::WeaponRanged) {
+                        if (!inv->equippedRanged.IsEmpty()) inv->AddItemObject(inv->equippedRanged);
+                        inv->equippedRanged = item; inv->equippedRanged.quantity = 1; equipped = true;
+                    } else if (item.type == PixelsEngine::ItemType::Armor) {
+                        if (!inv->equippedArmor.IsEmpty()) inv->AddItemObject(inv->equippedArmor);
+                        inv->equippedArmor = item; inv->equippedArmor.quantity = 1; equipped = true;
+                    }
+                    if (equipped) {
+                        item.quantity--;
+                        if (item.quantity <= 0) inv->items.erase(inv->items.begin() + i);
+                        m_LastClickedItemIndex = -1;
+                        return;
+                    }
+                }
+                m_LastClickTime = currentTime;
+                m_LastClickedItemIndex = i;
+                m_DraggingItemIndex = i;
+            }
+            itemY += 45;
+        }
+
+        // Check Unequip
+        int startX = panel.x + 50;
+        int startY = panel.y + 60;
+        int slotSize = 40;
+        auto CheckUnequip = [&](PixelsEngine::Item& slotItem, int x, int y) {
+            SDL_Rect r = {x, y, slotSize, slotSize};
+            if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
+                if (!slotItem.IsEmpty()) { inv->AddItemObject(slotItem); slotItem = {"", "", 0, PixelsEngine::ItemType::Misc, 0}; }
+            }
+        };
+        CheckUnequip(inv->equippedMelee, startX, startY);
+        CheckUnequip(inv->equippedRanged, startX + 100, startY);
+        CheckUnequip(inv->equippedArmor, startX + 200, startY);
+    }
+
+    if (released && m_DraggingItemIndex != -1) {
+        // Handle Drop
+        int startX = panel.x + 50;
+        int startY = panel.y + 60;
+        int slotSize = 40;
+        
+        PixelsEngine::Item& dragItem = inv->items[m_DraggingItemIndex];
+        bool dropped = false;
+
+        auto CheckDrop = [&](PixelsEngine::Item& slotItem, int x, int y, PixelsEngine::ItemType allowed) {
+            SDL_Rect r = {x, y, slotSize, slotSize};
+            if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h && dragItem.type == allowed) {
+                if (!slotItem.IsEmpty()) inv->AddItemObject(slotItem);
+                slotItem = dragItem; slotItem.quantity = 1;
+                dropped = true;
+            }
+        };
+
+        CheckDrop(inv->equippedMelee, startX, startY, PixelsEngine::ItemType::WeaponMelee);
+        CheckDrop(inv->equippedRanged, startX + 100, startY, PixelsEngine::ItemType::WeaponRanged);
+        CheckDrop(inv->equippedArmor, startX + 200, startY, PixelsEngine::ItemType::Armor);
+
+        if (dropped) {
+            dragItem.quantity--;
+            if (dragItem.quantity <= 0) inv->items.erase(inv->items.begin() + m_DraggingItemIndex);
+        }
+        m_DraggingItemIndex = -1;
+    }
+}
+
+void PixelsGateGame::StartCombat(PixelsEngine::Entity enemy) {
+    if (m_State == GameState::Combat) return;
+
+    m_TurnOrder.clear();
+    
+    // Add Player
+    auto* pStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+    int pInit = PixelsEngine::Dice::Roll(20) + (pStats ? pStats->GetModifier(pStats->dexterity) : 0);
+    m_TurnOrder.push_back({m_Player, pInit, true});
+    SpawnFloatingText(20, 20, "Initiative!", {0, 255, 255, 255});
+
+    // Add Target Enemy
+    if (GetRegistry().Valid(enemy)) {
+        auto* eStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(enemy);
+        int eInit = PixelsEngine::Dice::Roll(20) + (eStats ? eStats->GetModifier(eStats->dexterity) : 0);
+        m_TurnOrder.push_back({enemy, eInit, false});
+    }
+
+    // Find nearby enemies
+    auto* pTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
+    auto& view = GetRegistry().View<PixelsEngine::AIComponent>();
+    for (auto& [ent, ai] : view) {
+        if (ent == enemy) continue; // Already added
+        auto* t = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(ent);
+        if (t && pTrans) {
+            float dist = std::sqrt(std::pow(t->x - pTrans->x, 2) + std::pow(t->y - pTrans->y, 2));
+            if (dist < 15.0f) { // Combat radius
+                 auto* eStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(ent);
+                 if (eStats && !eStats->isDead) {
+                     int eInit = PixelsEngine::Dice::Roll(20) + eStats->GetModifier(eStats->dexterity);
+                     m_TurnOrder.push_back({ent, eInit, false});
+                 }
+            }
+        }
+    }
+
+    // Sort
+    std::sort(m_TurnOrder.begin(), m_TurnOrder.end(), [](const CombatTurn& a, const CombatTurn& b) {
+        return a.initiative > b.initiative; // Descending
+    });
+
+    m_State = GameState::Combat;
+    m_CurrentTurnIndex = -1;
+    NextTurn();
+}
+
+void PixelsGateGame::EndCombat() {
+    m_State = GameState::Playing;
+    m_TurnOrder.clear();
+    SpawnFloatingText(0, 0, "Combat Ended", {0, 255, 0, 255});
+}
+
+void PixelsGateGame::NextTurn() {
+    // Check if combat is over
+    bool enemiesAlive = false;
+    for (const auto& turn : m_TurnOrder) {
+        if (!turn.isPlayer) {
+             auto* stats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(turn.entity);
+             if (stats && !stats->isDead) enemiesAlive = true;
+        }
+    }
+    
+    auto* pStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+    if (!pStats || pStats->isDead) {
+        EndCombat();
+        return;
+    }
+
+    if (!enemiesAlive) {
+        EndCombat();
+        return;
+    }
+
+    m_CurrentTurnIndex++;
+    if (m_CurrentTurnIndex >= m_TurnOrder.size()) m_CurrentTurnIndex = 0;
+
+    auto& current = m_TurnOrder[m_CurrentTurnIndex];
+    auto* cStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(current.entity);
+    
+    // Skip dead
+    if (!GetRegistry().HasComponent<PixelsEngine::StatsComponent>(current.entity) || (cStats && cStats->isDead)) {
+        // Infinite recursion protection needed ideally, but assumes at least player alive
+        NextTurn();
+        return;
+    }
+
+    // Restore Resources
+    m_ActionsLeft = 1;
+    m_BonusActionsLeft = 1;
+    m_MovementLeft = 5.0f; // Default
+    if (current.isPlayer) {
+        auto* pc = GetRegistry().GetComponent<PixelsEngine::PlayerComponent>(m_Player);
+        if (pc) m_MovementLeft = pc->speed; 
+        SpawnFloatingText(0, 0, "YOUR TURN", {0, 255, 0, 255});
+    } else {
+        m_CombatTurnTimer = 1.0f; // AI thinking time
+        auto* ai = GetRegistry().GetComponent<PixelsEngine::AIComponent>(current.entity);
+        if (ai) m_MovementLeft = ai->sightRange; 
+    }
+}
+
+void PixelsGateGame::UpdateCombat(float deltaTime) {
+    if (m_CurrentTurnIndex < 0 || m_CurrentTurnIndex >= m_TurnOrder.size()) return;
+
+    auto& turn = m_TurnOrder[m_CurrentTurnIndex];
+    
+    if (turn.isPlayer) {
+        HandleCombatInput();
+    } else {
+        // AI Logic
+        m_CombatTurnTimer -= deltaTime;
+        if (m_CombatTurnTimer <= 0.0f) {
+            auto* aiTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(turn.entity);
+            auto* pTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
+            auto* aiStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(turn.entity);
+            auto* aiComp = GetRegistry().GetComponent<PixelsEngine::AIComponent>(turn.entity);
+            
+            if (aiTrans && pTrans && aiStats && !aiStats->isDead && aiComp) {
+                 float dist = std::sqrt(std::pow(aiTrans->x - pTrans->x, 2) + std::pow(aiTrans->y - pTrans->y, 2));
+                 
+                 // Move
+                 if (dist > aiComp->attackRange && m_MovementLeft > 0) {
+                     float dx = pTrans->x - aiTrans->x;
+                     float dy = pTrans->y - aiTrans->y;
+                     float len = std::sqrt(dx*dx + dy*dy);
+                     if (len > 0) { dx/=len; dy/=len; }
+                     
+                     float moveDist = 1.0f; 
+                     if (m_MovementLeft >= moveDist) {
+                         aiTrans->x += dx * moveDist;
+                         aiTrans->y += dy * moveDist;
+                         m_MovementLeft -= moveDist;
+                     }
+                 }
+                 
+                 // Attack
+                 dist = std::sqrt(std::pow(aiTrans->x - pTrans->x, 2) + std::pow(aiTrans->y - pTrans->y, 2));
+                 if (dist <= aiComp->attackRange && m_ActionsLeft > 0) {
+                     auto* pTargetStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+                     auto* pInv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+                     if (pTargetStats && pInv) {
+                         int ac = 10 + pTargetStats->GetModifier(pTargetStats->dexterity) + pInv->equippedArmor.statBonus;
+                         int roll = PixelsEngine::Dice::Roll(20);
+                         
+                         if (roll == 20 || (roll != 1 && roll + aiStats->GetModifier(aiStats->strength) >= ac)) {
+                             // Hit!
+                             int dmg = aiStats->damage; 
+                             if (roll == 20) dmg *= 2;
+                             
+                             pTargetStats->currentHealth -= dmg;
+                             if (pTargetStats->currentHealth < 0) pTargetStats->currentHealth = 0;
+                             
+                             std::string txt = std::to_string(dmg);
+                             if (roll == 20) txt += "!";
+                             SpawnFloatingText(pTrans->x, pTrans->y, txt, {255, 0, 0, 255});
+                         } else {
+                             // Miss
+                             SpawnFloatingText(pTrans->x, pTrans->y, "Miss", {200, 200, 200, 255});
+                         }
+                         
+                         m_ActionsLeft--;
+                     }
+                 }
+            }
+            NextTurn();
+        }
+    }
+}
+
+void PixelsGateGame::HandleCombatInput() {
+    if (PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_SPACE)) {
+        NextTurn();
+        return;
+    }
+
+    float dx = 0, dy = 0;
+    if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_W)) dy -= 1;
+    if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_S)) dy += 1;
+    if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_A)) dx -= 1;
+    if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_D)) dx += 1;
+
+    if ((dx != 0 || dy != 0) && m_MovementLeft > 0) {
+        float speed = 5.0f; 
+        float moveCost = speed * 0.016f; 
+        if (m_MovementLeft >= moveCost) {
+             auto* transform = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
+             auto* anim = GetRegistry().GetComponent<PixelsEngine::AnimationComponent>(m_Player);
+             if (transform) {
+                 transform->x += dx * moveCost;
+                 transform->y += dy * moveCost;
+                 m_MovementLeft -= moveCost;
+                 if (anim) {
+                     if (dy < 0) anim->Play("WalkUp");
+                     else if (dy > 0) anim->Play("WalkDown");
+                     else if (dx < 0) anim->Play("WalkLeft");
+                     else anim->Play("WalkRight");
+                 }
+             }
+        }
+    }
+    
+    static bool wasDownLeft = false;
+    bool isDownLeftRaw = PixelsEngine::Input::IsMouseButtonDown(SDL_BUTTON_LEFT);
+    bool isPressedLeft = isDownLeftRaw && !wasDownLeft;
+    bool isCtrlDown = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_LCTRL) || PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_RCTRL);
+    wasDownLeft = isDownLeftRaw;
+
+    if (isPressedLeft) {
+        int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
+        int winW, winH; SDL_GetWindowSize(m_Window, &winW, &winH);
+        
+        if (my > winH - 60) {
+            CheckUIInteraction(mx, my);
+        } else {
+            if (isCtrlDown) {
+                auto& camera = GetCamera(); auto& transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
+                bool found = false;
+                for (auto& [entity, transform] : transforms) {
+                    if (entity == m_Player) continue;
+                    auto* sprite = GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(entity);
+                    if (sprite) {
+                        int screenX, screenY; m_Level->GridToScreen(transform.x, transform.y, screenX, screenY);
+                        screenX -= (int)camera.x; screenY -= (int)camera.y;
+                        SDL_Rect drawRect = { screenX + 16 - sprite->pivotX, screenY + 16 - sprite->pivotY, sprite->srcRect.w, sprite->srcRect.h };
+                        if (mx >= drawRect.x && mx <= drawRect.x + drawRect.w && my >= drawRect.y && my <= drawRect.y + drawRect.h) {
+                            PerformAttack(entity);
+                            found = true; break;
+                        }
+                    }
+                }
+                if (!found) CheckWorldInteraction(mx, my);
+            } else {
+                CheckWorldInteraction(mx, my);
+            }
+        }
+    }
+}
+
+void PixelsGateGame::RenderCombatUI() {
+    SDL_Renderer* renderer = GetRenderer();
+    int w, h; SDL_GetWindowSize(m_Window, &w, &h);
+
+    // Turn Order Bar
+    int count = m_TurnOrder.size();
+    int slotW = 50;
+    int startX = (w - (count * slotW)) / 2;
+    int startY = 10;
+
+    for (int i = 0; i < count; ++i) {
+        SDL_Rect slot = {startX + i * slotW, startY, slotW - 5, 30};
+        
+        SDL_Color bg = {100, 100, 100, 255};
+        if (i == m_CurrentTurnIndex) bg = {0, 200, 0, 255}; // Highlight current
+        else if (m_TurnOrder[i].isPlayer) bg = {50, 50, 200, 255}; // Player blue
+        
+        SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
+        SDL_RenderFillRect(renderer, &slot);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_RenderDrawRect(renderer, &slot);
+        
+        auto* entStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_TurnOrder[i].entity);
+        std::string label = "HP: ??%";
+        if (entStats) {
+            int hpPercent = (int)((float)entStats->currentHealth / (float)entStats->maxHealth * 100.0f);
+            label = std::to_string(hpPercent) + "%";
+        }
+        m_TextRenderer->RenderTextCentered(label, slot.x + slotW/2, slot.y + 15, {255, 255, 255, 255});
+    }
+
+    // Resources UI
+    std::string resStr = "Actions: " + std::to_string(m_ActionsLeft) + 
+                         " | Bonus: " + std::to_string(m_BonusActionsLeft) + 
+                         " | Move: " + std::to_string((int)m_MovementLeft);
+    
+    m_TextRenderer->RenderTextCentered(resStr, w/2, h - 80, {255, 255, 0, 255});
+    
+    if (m_TurnOrder[m_CurrentTurnIndex].isPlayer) {
+        m_TextRenderer->RenderTextCentered("Press SPACE to End Turn", w/2, h - 100, {200, 200, 200, 255});
+    } else {
+        m_TextRenderer->RenderTextCentered("Enemy Turn...", w/2, h - 100, {255, 100, 100, 255});
+    }
+}void PixelsGateGame::RenderEnemyCones(const PixelsEngine::Camera& camera) {
+    if (!PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_LSHIFT)) return;
+
+    SDL_Renderer* renderer = GetRenderer();
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    
+    int winW, winH;
+    SDL_GetWindowSize(m_Window, &winW, &winH);
+
+    auto& view = GetRegistry().View<PixelsEngine::AIComponent>();
+    for (auto& [entity, ai] : view) {
+        auto* transform = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(entity);
+        if (!transform) continue;
+
+        // Center of the entity (assuming 32x32 tiles and entity center is roughly center of tile)
+        // Transform->x/y are in tile coordinates
+        float cx = transform->x + 0.5f; 
+        float cy = transform->y + 0.5f;
+
+        // Calculate screen coordinates matching the sprite rendering logic
+        // screenX = (transform->x - camera.x) * 32 + winW/2 - 16;
+        // The -16 centers the 32x32 sprite. 
+        // For the cone origin, we want the center of the sprite.
+        // centerScreenX = ((transform->x - camera.x) * 32) + winW/2 - 16 + 16 = ((transform->x - camera.x) * 32) + winW/2
+        // Wait, transform->x is float tile coords.
+        // Let's use the exact center calculation.
+        
+        float screenX = (transform->x - camera.x) * 32.0f + winW / 2.0f;
+        float screenY = (transform->y - camera.y) * 32.0f + winH / 2.0f;
+
+        float radDir = ai.facingDir * (M_PI / 180.0f);
+        float radHalfCone = (ai.coneAngle / 2.0f) * (M_PI / 180.0f);
+        float rangePixels = ai.sightRange * 32.0f;
+
+        // We can approximate the cone with a triangle fan for better look, but a simple triangle is a start.
+        // Let's do a fan of 3 triangles for a smoother arc.
+        
+        int segments = 5;
+        float angleStep = (ai.coneAngle * (M_PI / 180.0f)) / segments;
+        float currentAngle = radDir - radHalfCone;
+
+        std::vector<SDL_Vertex> vertices;
+        // Center vertex
+        SDL_Vertex center = { {screenX, screenY}, {255, 0, 0, 100}, {0, 0} };
+
+        for (int i = 0; i <= segments; ++i) {
+            float x = screenX + std::cos(currentAngle) * rangePixels;
+            float y = screenY + std::sin(currentAngle) * rangePixels;
+            
+            vertices.push_back({ {x, y}, {255, 0, 0, 100}, {0, 0} });
+            currentAngle += angleStep;
+        }
+
+        // Draw triangles
+        for (size_t i = 0; i < vertices.size() - 1; ++i) {
+            SDL_Vertex tri[3];
+            tri[0] = center;
+            tri[1] = vertices[i];
+            tri[2] = vertices[i+1];
+            SDL_RenderGeometry(renderer, NULL, tri, 3, NULL, 0);
+        }
+    }
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
 }

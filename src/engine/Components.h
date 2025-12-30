@@ -3,6 +3,7 @@
 #include <memory>
 #include <SDL2/SDL.h>
 #include "Texture.h"
+#include "Inventory.h"
 
 namespace PixelsEngine {
 
@@ -64,6 +65,21 @@ namespace PixelsEngine {
 
     struct PlayerComponent {
         float speed = 5.0f;
+    };
+
+    struct AIComponent {
+        float sightRange = 10.0f;
+        float attackRange = 1.5f;
+        float attackCooldown = 2.0f;
+        float attackTimer = 0.0f;
+        bool isAggressive = true;
+        // Cone of vision
+        float facingDir = 0.0f; // in degrees, 0 = East? Standard math convention? Or screen coordinates? Let's say 0 is East, 90 South (screen coords)
+        float coneAngle = 60.0f; // Total angle of the cone
+    };
+
+    struct LootComponent {
+        std::vector<PixelsEngine::Item> drops;
     };
 
 }
