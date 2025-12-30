@@ -357,51 +357,66 @@ void PixelsGateGame::CheckUIInteraction(int mx, int my) {
 
 void PixelsGateGame::CheckWorldInteraction(int mx, int my) {
     auto& camera = GetCamera();
-    int worldX = mx + camera.x;
-    int worldY = my + camera.y;
-
-    int gridX, gridY;
-    m_Level->ScreenToGrid(worldX, worldY, gridX, gridY);
-
-    // 1. Check if clicked on an Entity (NPC)
-    // Iterate entities and see if their grid pos matches
-    // Or closer approximation
+    
+    // 1. Check if clicked on an Entity (NPC) - Using Screen Space Bounds for better UX
     auto& transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
     bool clickedEntity = false;
 
+    // We need to check entities in Z-order (roughly) to click the top-most one, 
+    // but just checking all is fine for now.
     for (auto& [entity, transform] : transforms) {
-        if (entity == m_Player) continue; // Don't click player
+        if (entity == m_Player) continue; 
 
-        // Simple distance check in Grid Coords (1.0 radius)
-        float dist = std::sqrt(std::pow(transform.x - gridX, 2) + std::pow(transform.y - gridY, 2));
-        if (dist < 1.0f) {
-            // Clicked an entity!
-            std::cout << "Clicked Entity " << entity << std::endl;
-            m_SelectedNPC = entity;
-            clickedEntity = true;
-            
-            // Set path to entity
-            auto* pathComp = GetRegistry().GetComponent<PixelsEngine::PathMovementComponent>(m_Player);
-            auto* pTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
-            
-            // Path to neighbor of NPC
-            auto path = PixelsEngine::Pathfinding::FindPath(*m_Level, (int)pTrans->x, (int)pTrans->y, (int)transform.x, (int)transform.y);
-            // We want to stop BEFORE the NPC, but A* goes to the target.
-            // Our Update loop checks distance < 1.5f and stops.
-            
-            if (!path.empty()) {
-                pathComp->path = path;
-                pathComp->currentPathIndex = 0;
-                pathComp->isMoving = true;
-                pathComp->targetX = (float)path[0].first;
-                pathComp->targetY = (float)path[0].second;
+        auto* sprite = GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(entity);
+        if (sprite) {
+            // Calculate Screen Position exactly as OnRender does
+            int screenX, screenY;
+            m_Level->GridToScreen(transform.x, transform.y, screenX, screenY);
+            screenX -= (int)camera.x;
+            screenY -= (int)camera.y;
+
+            // Apply pivot to get the actual rendered rectangle
+            SDL_Rect drawRect = {
+                screenX + 16 - sprite->pivotX,
+                screenY + 16 - sprite->pivotY,
+                sprite->srcRect.w,
+                sprite->srcRect.h
+            };
+
+            // Hit Test
+            if (mx >= drawRect.x && mx <= drawRect.x + drawRect.w &&
+                my >= drawRect.y && my <= drawRect.y + drawRect.h) {
+                
+                std::cout << "Clicked Entity " << entity << " (Visual Hit)" << std::endl;
+                m_SelectedNPC = entity;
+                clickedEntity = true;
+                
+                // Path to entity
+                auto* pathComp = GetRegistry().GetComponent<PixelsEngine::PathMovementComponent>(m_Player);
+                auto* pTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
+                
+                // Find path to the tile the NPC is standing on
+                auto path = PixelsEngine::Pathfinding::FindPath(*m_Level, (int)pTrans->x, (int)pTrans->y, (int)transform.x, (int)transform.y);
+                
+                if (!path.empty()) {
+                    pathComp->path = path;
+                    pathComp->currentPathIndex = 0;
+                    pathComp->isMoving = true;
+                    pathComp->targetX = (float)path[0].first;
+                    pathComp->targetY = (float)path[0].second;
+                }
+                break;
             }
-            break;
         }
     }
 
-    // 2. If not entity, just walk there
+    // 2. If not entity, just walk there (Ground Click)
     if (!clickedEntity) {
+        int worldX = mx + camera.x;
+        int worldY = my + camera.y;
+        int gridX, gridY;
+        m_Level->ScreenToGrid(worldX, worldY, gridX, gridY);
+
         m_SelectedNPC = PixelsEngine::INVALID_ENTITY; // Deselect
         auto* pathComp = GetRegistry().GetComponent<PixelsEngine::PathMovementComponent>(m_Player);
         auto* pTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
