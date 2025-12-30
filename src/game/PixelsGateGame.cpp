@@ -54,6 +54,7 @@ void PixelsGateGame::OnStart() {
     GetRegistry().AddComponent(m_Player, PixelsEngine::TransformComponent{ 5.0f, 5.0f }); // Spawn inside the walls
     GetRegistry().AddComponent(m_Player, PixelsEngine::PlayerComponent{ 5.0f }); 
     GetRegistry().AddComponent(m_Player, PixelsEngine::PathMovementComponent{}); // Add Path Component
+    GetRegistry().AddComponent(m_Player, PixelsEngine::StatsComponent{100, 100, 15, false}); // 100 HP, 15 Dmg
     
     // Add Inventory
     auto& inv = GetRegistry().AddComponent(m_Player, PixelsEngine::InventoryComponent{});
@@ -97,6 +98,23 @@ void PixelsGateGame::OnStart() {
         16, 30
     });
     GetRegistry().AddComponent(npc, PixelsEngine::InteractionComponent{ "Hello Traveler!", false, 0.0f });
+    GetRegistry().AddComponent(npc, PixelsEngine::StatsComponent{50, 50, 5, false}); // 50 HP
+    // Add Quest Giver trait
+    GetRegistry().AddComponent(npc, PixelsEngine::QuestComponent{ "FetchOrb", 0, "Gold Orb" });
+
+    // 4. Spawn Gold Orb (Item Pickup)
+    auto orb = GetRegistry().CreateEntity();
+    GetRegistry().AddComponent(orb, PixelsEngine::TransformComponent{ 15.0f, 15.0f }); // Far away
+    auto orbTexture = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/gold_orb.png");
+    GetRegistry().AddComponent(orb, PixelsEngine::SpriteComponent{ 
+        orbTexture, 
+        {0, 0, 32, 32}, 
+        16, 16 
+    });
+    // We can use a special name or tag in a component to identify it as pickup-able.
+    // Re-using Item struct logic inside InventoryComponent isn't right for world entities.
+    // Let's just use the Name/Interaction for now.
+    GetRegistry().AddComponent(orb, PixelsEngine::InteractionComponent{ "Gold Orb", false, 0.0f }); 
 }
 
 void PixelsGateGame::OnUpdate(float deltaTime) {
@@ -119,8 +137,54 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
                 // Stop and Interact
                 pathComp->isMoving = false;
                 anim->currentFrameIndex = 0; 
-                interaction->showDialogue = true;
-                interaction->dialogueTimer = 3.0f; // Show for 3 seconds
+                
+                // Check if this is an Item Pickup (Orb)
+                if (interaction->dialogueText == "Gold Orb") {
+                    auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+                    if (inv) {
+                        inv->AddItem("Gold Orb", 1);
+                        std::cout << "Picked up Gold Orb!" << std::endl;
+                        GetRegistry().RemoveComponent<PixelsEngine::SpriteComponent>(m_SelectedNPC); // Remove from world
+                        // Also disable collision/interaction? remove entity entirely?
+                        // For now just visually remove.
+                        // Ideally: GetRegistry().DestroyEntity(m_SelectedNPC);
+                    }
+                } 
+                // Check if this is the Quest Giver NPC
+                else {
+                    auto* quest = GetRegistry().GetComponent<PixelsEngine::QuestComponent>(m_SelectedNPC);
+                    if (quest) {
+                        auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+                        
+                        if (quest->state == 0) {
+                            interaction->dialogueText = "Please find my Gold Orb!";
+                            quest->state = 1; // Start Quest
+                        } 
+                        else if (quest->state == 1) {
+                            // Check if player has item
+                            bool hasOrb = false;
+                            for (auto& item : inv->items) {
+                                if (item.name == "Gold Orb") hasOrb = true;
+                            }
+                            
+                            if (hasOrb) {
+                                interaction->dialogueText = "You found it! Thank you.";
+                                quest->state = 2; // Complete
+                                // Give reward?
+                                inv->AddItem("Coins", 50);
+                            } else {
+                                interaction->dialogueText = "Bring me the Orb...";
+                            }
+                        }
+                        else if (quest->state == 2) {
+                            interaction->dialogueText = "Blessings upon you.";
+                        }
+                    }
+                    
+                    interaction->showDialogue = true;
+                    interaction->dialogueTimer = 3.0f;
+                }
+
                 m_SelectedNPC = PixelsEngine::INVALID_ENTITY; // Done
             }
         }
@@ -349,14 +413,41 @@ void PixelsGateGame::RenderInventory() {
     }
 }
 
+void PixelsGateGame::PerformAttack() {
+    auto* pTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
+    auto* pStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+
+    if (!pTrans || !pStats) return;
+
+    std::cout << "Player Attacking!" << std::endl;
+
+    // Check for enemies in range (1.5 blocks)
+    auto& transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
+    for (auto& [entity, transform] : transforms) {
+        if (entity == m_Player) continue;
+
+        auto* eStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(entity);
+        if (!eStats || eStats->isDead) continue;
+
+        float dist = std::sqrt(std::pow(transform.x - pTrans->x, 2) + std::pow(transform.y - pTrans->y, 2));
+        if (dist < 1.5f) {
+            // Hit!
+            eStats->currentHealth -= pStats->damage;
+            std::cout << "Hit Entity " << entity << " for " << pStats->damage << " damage! HP: " << eStats->currentHealth << std::endl;
+
+            if (eStats->currentHealth <= 0) {
+                eStats->currentHealth = 0;
+                eStats->isDead = true;
+                std::cout << "Entity " << entity << " Died!" << std::endl;
+                
+                // Visual feedback: remove sprite or change to dead sprite?
+                // For now, let's just make it disappear (remove SpriteComponent)
+                GetRegistry().RemoveComponent<PixelsEngine::SpriteComponent>(entity);
+            }
+        }
+    }
+}
 void PixelsGateGame::HandleInput() {
-    // Only process click ONCE per press (MouseDown vs Pressed)
-    // For now we check "IsMouseButtonDown". Ideally we want "IsMouseButtonPressed" (frame 1)
-    // But our Input class only exposes Down. Let's add a static "WasDown" check locally or just handle it.
-    // Simpler: Just check on Down for movement (it's continuous pathfinding recalculation which is fine)
-    // But for UI buttons, we want single click.
-    
-    // Quick "Pressed" check
     static bool wasDown = false;
     bool isDown = PixelsEngine::Input::IsMouseButtonDown(SDL_BUTTON_LEFT);
     bool isPressed = isDown && !wasDown;
@@ -388,9 +479,8 @@ void PixelsGateGame::CheckUIInteraction(int mx, int my) {
             my >= btnRect.y && my <= btnRect.y + btnRect.h) {
             
             std::cout << "Clicked UI Button " << i << std::endl;
-            // Example action
             if (i == 0) { // Attack
-                // Trigger attack anim?
+                PerformAttack();
             } else if (i == 2) { // Inventory
                 auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
                 if (inv) {

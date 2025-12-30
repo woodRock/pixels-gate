@@ -17,10 +17,11 @@ protected:
     void OnRender() override;
 
     void RenderHUD();
+    void RenderInventory();
     void HandleInput();
     void CheckUIInteraction(int mx, int my);
     void CheckWorldInteraction(int mx, int my);
-    void RenderInventory();
+    void PerformAttack();
 
 private:
     std::unique_ptr<PixelsEngine::Tilemap> m_Level;

@@ -73,6 +73,11 @@ namespace PixelsEngine {
         }
 
         template<typename T>
+        void RemoveComponent(Entity entity) {
+            GetPool<T>()->Remove(entity);
+        }
+
+        template<typename T>
         std::unordered_map<Entity, T>& View() {
             return GetPool<T>()->GetAll();
         }

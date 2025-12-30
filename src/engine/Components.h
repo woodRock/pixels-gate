@@ -32,6 +32,19 @@ namespace PixelsEngine {
         float dialogueTimer = 0.0f;
     };
 
+    struct StatsComponent {
+        int maxHealth = 100;
+        int currentHealth = 100;
+        int damage = 10;
+        bool isDead = false;
+    };
+
+    struct QuestComponent {
+        std::string questId;
+        int state = 0; // 0: None, 1: Active, 2: Completed
+        std::string targetItem;
+    };
+
     struct PlayerComponent {
         float speed = 5.0f;
     };
