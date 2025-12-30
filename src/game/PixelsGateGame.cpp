@@ -366,7 +366,17 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
                 PixelsEngine::SaveSystem::LoadGame(m_PendingLoadFile, GetRegistry(), m_Player, *m_Level);
                 m_FadeState = FadeState::FadingIn;
                 m_FadeTimer = m_FadeDuration;
-                if (m_State == GameState::MainMenu) m_State = GameState::Playing;
+                
+                // Transition state if loading from a menu or game over
+                if (m_State == GameState::MainMenu || m_State == GameState::GameOver) {
+                    m_State = GameState::Playing;
+                }
+
+                // Ensure player is not marked as dead after loading
+                auto* pStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+                if (pStats && pStats->currentHealth > 0) {
+                    pStats->isDead = false;
+                }
             }
         } else if (m_FadeState == FadeState::FadingIn) {
             if (m_FadeTimer <= 0.0f) {
@@ -392,8 +402,18 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
         case GameState::Credits:
         case GameState::Controls:
             break;
+        case GameState::GameOver:
+            HandleGameOverInput();
+            break;
         case GameState::Combat:
         {
+            auto* pStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+            if (pStats && pStats->currentHealth <= 0) {
+                m_State = GameState::GameOver;
+                m_MenuSelection = 0;
+                return;
+            }
+
             static bool wasEsc = false;
             static bool wasI = false;
             bool isEsc = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE);
@@ -420,6 +440,13 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
         }
         case GameState::Playing:
         {
+            auto* pStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+            if (pStats && pStats->currentHealth <= 0) {
+                m_State = GameState::GameOver;
+                m_MenuSelection = 0;
+                return;
+            }
+
             static bool wasEsc = false;
             static bool wasI = false;
             bool isEsc = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE);
@@ -582,6 +609,7 @@ void PixelsGateGame::OnRender() {
         case GameState::Paused:
         case GameState::Playing:
         case GameState::Combat:
+        case GameState::GameOver:
         {
             auto& camera = GetCamera();
                 if (m_Level) m_Level->Render(camera);
@@ -679,6 +707,9 @@ void PixelsGateGame::OnRender() {
             // If Paused, render Pause Menu on top
             if (m_State == GameState::Paused) {
                 RenderPauseMenu();
+            }
+            if (m_State == GameState::GameOver) {
+                RenderGameOver();
             }
         }
         break;
@@ -1890,7 +1921,17 @@ void PixelsGateGame::RenderCombatUI() {
     int w, h; SDL_GetWindowSize(m_Window, &w, &h);
 
     // Turn Order Bar
-    int count = m_TurnOrder.size();
+    std::vector<CombatTurn> aliveParticipants;
+    int currentActiveAliveIndex = -1;
+    for (int i = 0; i < m_TurnOrder.size(); ++i) {
+        auto* entStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_TurnOrder[i].entity);
+        if (m_TurnOrder[i].isPlayer || (entStats && !entStats->isDead)) {
+            if (i == m_CurrentTurnIndex) currentActiveAliveIndex = aliveParticipants.size();
+            aliveParticipants.push_back(m_TurnOrder[i]);
+        }
+    }
+
+    int count = aliveParticipants.size();
     int slotW = 50;
     int startX = (w - (count * slotW)) / 2;
     int startY = 10;
@@ -1899,15 +1940,15 @@ void PixelsGateGame::RenderCombatUI() {
         SDL_Rect slot = {startX + i * slotW, startY, slotW - 5, 30};
         
         SDL_Color bg = {100, 100, 100, 255};
-        if (i == m_CurrentTurnIndex) bg = {0, 200, 0, 255}; // Highlight current
-        else if (m_TurnOrder[i].isPlayer) bg = {50, 50, 200, 255}; // Player blue
+        if (i == currentActiveAliveIndex) bg = {0, 200, 0, 255}; // Highlight current
+        else if (aliveParticipants[i].isPlayer) bg = {50, 50, 200, 255}; // Player blue
         
         SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
         SDL_RenderFillRect(renderer, &slot);
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
         SDL_RenderDrawRect(renderer, &slot);
         
-        auto* entStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_TurnOrder[i].entity);
+        auto* entStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(aliveParticipants[i].entity);
         std::string label = "HP: ??%";
         if (entStats) {
             int hpPercent = (int)((float)entStats->currentHealth / (float)entStats->maxHealth * 100.0f);
@@ -1992,3 +2033,56 @@ void PixelsGateGame::RenderCombatUI() {
     }
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
 }
+
+void PixelsGateGame::RenderGameOver() {
+    SDL_Renderer* renderer = GetRenderer();
+    int w, h; SDL_GetWindowSize(m_Window, &w, &h);
+
+    // Dark Red Overlay
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 50, 0, 0, 200);
+    SDL_Rect overlay = {0, 0, w, h};
+    SDL_RenderFillRect(renderer, &overlay);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+
+    m_TextRenderer->RenderTextCentered("YOU DIED", w / 2, h / 3, {255, 0, 0, 255});
+
+    std::string options[] = { "Load Last Save", "Quit to Main Menu" };
+    int y = h / 2;
+    for (int i = 0; i < 2; ++i) {
+        SDL_Color color = (m_MenuSelection == i) ? SDL_Color{255, 255, 0, 255} : SDL_Color{255, 255, 255, 255};
+        m_TextRenderer->RenderTextCentered(options[i], w / 2, y, color);
+        y += 50;
+    }
+}
+
+void PixelsGateGame::HandleGameOverInput() {
+    int w, h; SDL_GetWindowSize(m_Window, &w, &h);
+    int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
+    
+    int hovered = -1;
+    int y = h / 2;
+    for (int i = 0; i < 2; ++i) {
+        SDL_Rect itemRect = { (w / 2) - 100, y - 15, 200, 30 };
+        if (mx >= itemRect.x && mx <= itemRect.x + itemRect.w && my >= itemRect.y && my <= itemRect.y + itemRect.h) {
+            hovered = i;
+        }
+        y += 50;
+    }
+
+    HandleMenuNavigation(2, [&](int selection) {
+        if (selection == 0) { // Load Last Save
+            if (std::filesystem::exists("quicksave.dat")) {
+                TriggerLoadTransition("quicksave.dat");
+            } else if (std::filesystem::exists("savegame.dat")) {
+                TriggerLoadTransition("savegame.dat");
+            } else {
+                // No save found, just restart to main menu
+                m_State = GameState::MainMenu;
+            }
+        } else { // Quit to Main Menu
+            m_State = GameState::MainMenu;
+        }
+    }, nullptr, hovered);
+}
+

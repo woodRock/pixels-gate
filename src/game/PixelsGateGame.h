@@ -47,7 +47,8 @@ private:
         Paused,
         Options,
         Credits,
-        Controls
+        Controls,
+        GameOver
     };
     GameState m_State = GameState::MainMenu;
 
@@ -102,10 +103,12 @@ private:
     void RenderOptions();
     void RenderCredits();
     void RenderControls();
+    void RenderGameOver();
 
     // Menu Input Handlers
     void HandleMainMenuInput();
     void HandlePauseMenuInput();
+    void HandleGameOverInput();
     void HandleMenuNavigation(int numOptions, std::function<void(int)> onSelect, std::function<void()> onCancel = nullptr, int forceSelection = -1);
 
     void ShowSaveMessage() { m_SaveMessageTimer = 2.0f; }
