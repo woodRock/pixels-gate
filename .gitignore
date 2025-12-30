@@ -1,0 +1,7 @@
+# Prerequisites
+build/
+.cache/
+.DS_Store
+*.o
+*.out
+compile_commands.json
