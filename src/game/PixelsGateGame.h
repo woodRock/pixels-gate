@@ -20,6 +20,7 @@ protected:
     void HandleInput();
     void CheckUIInteraction(int mx, int my);
     void CheckWorldInteraction(int mx, int my);
+    void RenderInventory();
 
 private:
     std::unique_ptr<PixelsEngine::Tilemap> m_Level;

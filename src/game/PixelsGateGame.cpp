@@ -4,6 +4,7 @@
 #include "../engine/AnimationSystem.h"
 #include "../engine/TextureManager.h"
 #include "../engine/Pathfinding.h"
+#include "../engine/Inventory.h"
 #include <SDL2/SDL_ttf.h>
 
 PixelsGateGame::PixelsGateGame() 
@@ -53,6 +54,12 @@ void PixelsGateGame::OnStart() {
     GetRegistry().AddComponent(m_Player, PixelsEngine::TransformComponent{ 5.0f, 5.0f }); // Spawn inside the walls
     GetRegistry().AddComponent(m_Player, PixelsEngine::PlayerComponent{ 5.0f }); 
     GetRegistry().AddComponent(m_Player, PixelsEngine::PathMovementComponent{}); // Add Path Component
+    
+    // Add Inventory
+    auto& inv = GetRegistry().AddComponent(m_Player, PixelsEngine::InventoryComponent{});
+    inv.AddItem("Potion", 3);
+    inv.AddItem("Sword", 1);
+    inv.AddItem("Map", 1);
     
     // Load Player Texture
     std::string playerSheet = "assets/Pixel Art Top Down - Basic v1.2.2/Texture/TX Player.png";
@@ -306,6 +313,40 @@ void PixelsGateGame::OnRender() {
 
     // 3. Render HUD (Last, so it's on top)
     RenderHUD();
+    RenderInventory();
+}
+
+void PixelsGateGame::RenderInventory() {
+    auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+    if (!inv || !inv->isOpen) return;
+
+    SDL_Renderer* renderer = GetRenderer();
+    int winW, winH;
+    SDL_GetWindowSize(m_Window, &winW, &winH);
+
+    // Background
+    int w = 300;
+    int h = 400;
+    SDL_Rect panel = { (winW - w) / 2, (winH - h) / 2, w, h };
+    
+    // Draw Panel (Wood color-ish)
+    SDL_SetRenderDrawColor(renderer, 139, 69, 19, 255);
+    SDL_RenderFillRect(renderer, &panel);
+    
+    // Border
+    SDL_SetRenderDrawColor(renderer, 218, 165, 32, 255); // Gold
+    SDL_RenderDrawRect(renderer, &panel);
+    
+    // Title
+    m_TextRenderer->RenderTextCentered("INVENTORY", panel.x + w/2, panel.y + 30, {255, 255, 255, 255});
+
+    // List Items
+    int y = panel.y + 60;
+    for (const auto& item : inv->items) {
+        std::string text = item.name + " x" + std::to_string(item.quantity);
+        m_TextRenderer->RenderText(text, panel.x + 30, y, {255, 255, 255, 255});
+        y += 30;
+    }
 }
 
 void PixelsGateGame::HandleInput() {
@@ -350,6 +391,11 @@ void PixelsGateGame::CheckUIInteraction(int mx, int my) {
             // Example action
             if (i == 0) { // Attack
                 // Trigger attack anim?
+            } else if (i == 2) { // Inventory
+                auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+                if (inv) {
+                    inv->isOpen = !inv->isOpen;
+                }
             }
         }
     }
