@@ -40,10 +40,18 @@ namespace PixelsEngine {
                 file << "[INVENTORY]\n";
                 file << inv->items.size() << "\n";
                 for (const auto& item : inv->items) {
-                    // Start of header, special char to allow spaces in names?
-                    // Let's assume names don't have newlines.
-                    file << item.name << "\n" << item.quantity << "\n";
+                    file << item.name << "\n";
+                    file << item.iconPath << "\n";
+                    file << item.quantity << " " << (int)item.type << " " << item.statBonus << "\n";
                 }
+                // Save Equipment too!
+                file << "[EQUIPMENT]\n";
+                auto saveEquip = [&](const Item& item) {
+                    file << item.name << "\n" << item.iconPath << "\n" << item.quantity << " " << (int)item.type << " " << item.statBonus << "\n";
+                };
+                saveEquip(inv->equippedMelee);
+                saveEquip(inv->equippedRanged);
+                saveEquip(inv->equippedArmor);
             }
 
             // 4. Quest States (Iterate all QuestComponents)
@@ -103,13 +111,29 @@ namespace PixelsEngine {
                         file >> count;
                         file.ignore(); // Consume newline
                         for (int i = 0; i < count; ++i) {
-                            std::string name;
-                            int qty;
+                            std::string name, icon;
+                            int qty, type, bonus;
                             std::getline(file, name);
-                            file >> qty;
+                            std::getline(file, icon);
+                            file >> qty >> type >> bonus;
                             file.ignore();
-                            inv->AddItem(name, qty);
+                            inv->AddItem(name, qty, (ItemType)type, bonus, icon);
                         }
+                    }
+                }
+                else if (line == "[EQUIPMENT]") {
+                    if (auto* inv = registry.GetComponent<InventoryComponent>(player)) {
+                        auto loadEquip = [&](Item& item) {
+                            std::getline(file, item.name);
+                            std::getline(file, item.iconPath);
+                            int qty, type, bonus;
+                            file >> qty >> type >> bonus;
+                            file.ignore();
+                            item.quantity = qty; item.type = (ItemType)type; item.statBonus = bonus;
+                        };
+                        loadEquip(inv->equippedMelee);
+                        loadEquip(inv->equippedRanged);
+                        loadEquip(inv->equippedArmor);
                     }
                 }
                 else if (line == "[QUESTS]") {

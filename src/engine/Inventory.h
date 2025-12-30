@@ -45,7 +45,7 @@ namespace PixelsEngine {
         }
         
         void AddItemObject(const Item& newItem) {
-            AddItem(newItem.name, newItem.quantity, newItem.type, newItem.statBonus);
+            AddItem(newItem.name, newItem.quantity, newItem.type, newItem.statBonus, newItem.iconPath);
         }
     };
 

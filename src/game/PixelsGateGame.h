@@ -48,9 +48,13 @@ private:
         Options,
         Credits,
         Controls,
-        GameOver
+        GameOver,
+        Map,
+        Character
     };
     GameState m_State = GameState::MainMenu;
+
+    int m_SelectedWeaponSlot = 0; // 0: Melee, 1: Ranged
 
     std::unique_ptr<PixelsEngine::Tilemap> m_Level;
     std::unique_ptr<PixelsEngine::TextRenderer> m_TextRenderer;
@@ -104,11 +108,15 @@ private:
     void RenderCredits();
     void RenderControls();
     void RenderGameOver();
+    void RenderMapScreen();
+    void RenderCharacterScreen();
 
     // Menu Input Handlers
     void HandleMainMenuInput();
     void HandlePauseMenuInput();
     void HandleGameOverInput();
+    void HandleMapInput();
+    void HandleCharacterInput();
     void HandleMenuNavigation(int numOptions, std::function<void(int)> onSelect, std::function<void()> onCancel = nullptr, int forceSelection = -1);
 
     void ShowSaveMessage() { m_SaveMessageTimer = 2.0f; }

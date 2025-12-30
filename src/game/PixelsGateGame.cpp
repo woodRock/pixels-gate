@@ -263,11 +263,15 @@ void PixelsGateGame::PerformAttack(PixelsEngine::Entity forcedTarget) {
         auto* targetStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(target);
         auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
         if (targetStats && inv) {
+            // Select active weapon
+            PixelsEngine::Item& activeWeapon = (m_SelectedWeaponSlot == 0) ? inv->equippedMelee : inv->equippedRanged;
+            float maxRange = (m_SelectedWeaponSlot == 0) ? 3.0f : 10.0f; // Bow has much higher range
+
             // Check range for forced target too
             auto* targetTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(target);
             float dist = targetTrans ? std::sqrt(std::pow(playerTrans->x - targetTrans->x, 2) + std::pow(playerTrans->y - targetTrans->y, 2)) : 100.0f;
             
-            if (dist > 3.0f) { // Increased from 2.0f
+            if (dist > maxRange) { 
                 SpawnFloatingText(playerTrans->x, playerTrans->y - 1.0f, "Too Far!", {200, 200, 200, 255});
                 return;
             }
@@ -275,11 +279,14 @@ void PixelsGateGame::PerformAttack(PixelsEngine::Entity forcedTarget) {
             // Hit Roll against AC (Assuming NPCs have default 10 AC + Dex mod for now)
             int targetAC = 10 + targetStats->GetModifier(targetStats->dexterity);
             int roll = PixelsEngine::Dice::Roll(20);
-            int attackBonus = playerStats->GetModifier(playerStats->strength) + inv->equippedMelee.statBonus;
+            
+            // Use Str for melee, Dex for ranged
+            int attackBonus = (m_SelectedWeaponSlot == 0) ? playerStats->GetModifier(playerStats->strength) : playerStats->GetModifier(playerStats->dexterity);
+            attackBonus += activeWeapon.statBonus;
 
             if (roll == 20 || (roll != 1 && roll + attackBonus >= targetAC)) {
                 // Hit!
-                int dmg = playerStats->damage + inv->equippedMelee.statBonus;
+                int dmg = playerStats->damage + activeWeapon.statBonus;
                 bool isCrit = (roll == 20);
                 if (isCrit) dmg *= 2;
                 
@@ -405,6 +412,13 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
         case GameState::GameOver:
             HandleGameOverInput();
             break;
+        case GameState::Map:
+            HandleMapInput();
+            break;
+        case GameState::Character:
+            HandleCharacterInput();
+            break;
+        case GameState::Playing:
         case GameState::Combat:
         {
             auto* pStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
@@ -416,8 +430,12 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
 
             static bool wasEsc = false;
             static bool wasI = false;
+            static bool wasM = false;
+            static bool wasC = false;
             bool isEsc = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE);
             bool isI = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_I);
+            bool isM = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_M);
+            bool isC = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_C);
             
             auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
             
@@ -432,43 +450,24 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
             if (isI && !wasI && inv) {
                 inv->isOpen = !inv->isOpen;
             }
+            if (isM && !wasM) {
+                m_State = (m_State == GameState::Map) ? GameState::Playing : GameState::Map;
+            }
+            if (isC && !wasC) {
+                m_State = (m_State == GameState::Character) ? GameState::Playing : GameState::Character;
+            }
             wasEsc = isEsc;
             wasI = isI;
+            wasM = isM;
+            wasC = isC;
             
-            UpdateCombat(deltaTime);
-            break;
-        }
-        case GameState::Playing:
-        {
-            auto* pStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
-            if (pStats && pStats->currentHealth <= 0) {
-                m_State = GameState::GameOver;
-                m_MenuSelection = 0;
-                return;
+            if (inv && inv->isOpen) {
+                HandleInventoryInput();
             }
 
-            static bool wasEsc = false;
-            static bool wasI = false;
-            bool isEsc = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE);
-            bool isI = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_I);
-
-            auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
-
-            if (isEsc && !wasEsc) {
-                if (inv && inv->isOpen) {
-                    inv->isOpen = false;
-                } else {
-                    m_State = GameState::Paused;
-                    m_MenuSelection = 0;
-                }
-            }
-            if (isI && !wasI && inv) {
-                inv->isOpen = !inv->isOpen;
-            }
-            wasEsc = isEsc;
-            wasI = isI;
-
-            if (m_State == GameState::Playing) {
+            if (m_State == GameState::Combat) {
+                UpdateCombat(deltaTime);
+            } else if (m_State == GameState::Playing) {
                 HandleInput();
                 UpdateAI(deltaTime); // Update AI
 
@@ -610,6 +609,8 @@ void PixelsGateGame::OnRender() {
         case GameState::Playing:
         case GameState::Combat:
         case GameState::GameOver:
+        case GameState::Map:
+        case GameState::Character:
         {
             auto& camera = GetCamera();
                 if (m_Level) m_Level->Render(camera);
@@ -711,6 +712,12 @@ void PixelsGateGame::OnRender() {
             if (m_State == GameState::GameOver) {
                 RenderGameOver();
             }
+            if (m_State == GameState::Map) {
+                RenderMapScreen();
+            }
+            if (m_State == GameState::Character) {
+                RenderCharacterScreen();
+            }
         }
         break;
     }
@@ -778,8 +785,6 @@ void PixelsGateGame::RenderInventory() {
     auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
     if (!inv || !inv->isOpen) return;
     
-    HandleInventoryInput(); // Handle clicks inside inventory
-
     SDL_Renderer* renderer = GetRenderer();
     int winW, winH; SDL_GetWindowSize(m_Window, &winW, &winH);
     int w = 400, h = 500; 
@@ -948,7 +953,15 @@ void PixelsGateGame::HandleInput() {
 
     if (isPressedLeft) {
         int winW, winH; SDL_GetWindowSize(m_Window, &winW, &winH);
-        if (my > winH - 60) CheckUIInteraction(mx, my);
+        
+        auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+        if (inv && inv->isOpen) {
+            int iw = 400, ih = 500;
+            SDL_Rect panel = { (winW - iw) / 2, (winH - ih) / 2, iw, ih };
+            if (mx >= panel.x && mx <= panel.x + iw && my >= panel.y && my <= panel.y + ih) return;
+        }
+
+        if (my > winH - 90) CheckUIInteraction(mx, my);
         else {
             // Check for Ctrl + Click Attack
             if (isCtrlDown) {
@@ -1001,9 +1014,24 @@ void PixelsGateGame::CheckUIInteraction(int mx, int my) {
     int winW, winH; SDL_GetWindowSize(m_Window, &winW, &winH);
     for (int i = 0; i < 6; ++i) {
         SDL_Rect btnRect = { 20 + (i * 55), winH - 50, 40, 40 };
+        
+        // Special: Check sub-buttons for weapon selection above Atk (i=0)
+        if (i == 0) {
+            SDL_Rect mRect = { btnRect.x, btnRect.y - 35, 20, 30 };
+            SDL_Rect rRect = { btnRect.x + 22, btnRect.y - 35, 20, 30 };
+            if (mx >= mRect.x && mx <= mRect.x + mRect.w && my >= mRect.y && my <= mRect.y + mRect.h) {
+                m_SelectedWeaponSlot = 0; return;
+            }
+            if (mx >= rRect.x && mx <= rRect.x + rRect.w && my >= rRect.y && my <= rRect.y + rRect.h) {
+                m_SelectedWeaponSlot = 1; return;
+            }
+        }
+
         if (mx >= btnRect.x && mx <= btnRect.x + btnRect.w && my >= btnRect.y && my <= btnRect.y + btnRect.h) {
             if (i == 0) PerformAttack();
             else if (i == 2) { auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player); if (inv) inv->isOpen = !inv->isOpen; }
+            else if (i == 3) { m_State = GameState::Map; }
+            else if (i == 4) { m_State = GameState::Character; }
             else if (i == 5) { // Opt -> Save/System
                 // For now, let's just SAVE on click.
                 // In a real game, this would open a menu.
@@ -1134,7 +1162,7 @@ void PixelsGateGame::RenderHUD() {
     }
 
     // --- 3. Bottom Action Bar (Existing) ---
-    SDL_Rect hudRect = { 0, winH - 60, winW, 60 };
+    SDL_Rect hudRect = { 0, winH - 90, winW, 90 };
     SDL_SetRenderDrawColor(renderer, 50, 50, 50, 255); SDL_RenderFillRect(renderer, &hudRect);
     SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255); SDL_RenderDrawRect(renderer, &hudRect);
     const char* labels[] = { "Atk", "Mag", "Inv", "Map", "Chr", "Opt" };
@@ -1143,6 +1171,23 @@ void PixelsGateGame::RenderHUD() {
         SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255); SDL_RenderFillRect(renderer, &btnRect);
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255); SDL_RenderDrawRect(renderer, &btnRect);
         m_TextRenderer->RenderTextCentered(labels[i], btnRect.x + 20, btnRect.y + 20, {255, 255, 255, 255});
+
+        // Special: Attack button has weapon toggles next to it
+        if (i == 0) {
+            // Melee Icon (Sword)
+            SDL_Rect mRect = { btnRect.x, btnRect.y - 35, 20, 30 };
+            SDL_SetRenderDrawColor(renderer, (m_SelectedWeaponSlot == 0) ? 200 : 50, (m_SelectedWeaponSlot == 0) ? 200 : 50, 50, 255);
+            SDL_RenderFillRect(renderer, &mRect);
+            auto swordTex = PixelsEngine::TextureManager::LoadTexture(renderer, "assets/sword.png");
+            if (swordTex) swordTex->Render(mRect.x + 2, mRect.y + 2, 16, 26);
+
+            // Ranged Icon (Bow)
+            SDL_Rect rRect = { btnRect.x + 22, btnRect.y - 35, 20, 30 };
+            SDL_SetRenderDrawColor(renderer, (m_SelectedWeaponSlot == 1) ? 200 : 50, (m_SelectedWeaponSlot == 1) ? 200 : 50, 50, 255);
+            SDL_RenderFillRect(renderer, &rRect);
+            auto bowTex = PixelsEngine::TextureManager::LoadTexture(renderer, "assets/bow.png");
+            if (bowTex) bowTex->Render(rRect.x + 2, rRect.y + 2, 16, 26);
+        }
     }
     auto& camera = GetCamera(); auto& interactions = GetRegistry().View<PixelsEngine::InteractionComponent>();
     for (auto& [entity, interact] : interactions) {
@@ -1623,6 +1668,7 @@ void PixelsGateGame::HandleInventoryInput() {
                         item.quantity--;
                         if (item.quantity <= 0) inv->items.erase(inv->items.begin() + i);
                         m_LastClickedItemIndex = -1;
+                        m_DraggingItemIndex = -1; // Reset dragging if equipped
                         return;
                     }
                 }
@@ -1889,7 +1935,14 @@ void PixelsGateGame::HandleCombatInput() {
         int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
         int winW, winH; SDL_GetWindowSize(m_Window, &winW, &winH);
         
-        if (my > winH - 60) {
+        auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+        if (inv && inv->isOpen) {
+            int iw = 400, ih = 500;
+            SDL_Rect panel = { (winW - iw) / 2, (winH - ih) / 2, iw, ih };
+            if (mx >= panel.x && mx <= panel.x + iw && my >= panel.y && my <= panel.y + ih) return;
+        }
+
+        if (my > winH - 90) {
             CheckUIInteraction(mx, my);
         } else {
             if (isCtrlDown) {
@@ -2085,4 +2138,106 @@ void PixelsGateGame::HandleGameOverInput() {
         }
     }, nullptr, hovered);
 }
+
+void PixelsGateGame::RenderMapScreen() {
+    SDL_Renderer* renderer = GetRenderer();
+    int w, h; SDL_GetWindowSize(m_Window, &w, &h);
+
+    // Semi-transparent Overlay
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 20, 20, 20, 230);
+    SDL_Rect screenRect = {0, 0, w, h};
+    SDL_RenderFillRect(renderer, &screenRect);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+
+    m_TextRenderer->RenderTextCentered("WORLD MAP", w / 2, 50, {255, 215, 0, 255});
+
+    if (m_Level) {
+        int mapW = m_Level->GetWidth();
+        int mapH = m_Level->GetHeight();
+        int tileSize = 10; 
+        int miniW = mapW * tileSize;
+        int miniH = mapH * tileSize;
+        int mx = (w - miniW) / 2;
+        int my = (h - miniH) / 2;
+
+        SDL_Rect miniRect = {mx - 5, my - 5, miniW + 10, miniH + 10};
+        SDL_SetRenderDrawColor(renderer, 50, 50, 50, 255);
+        SDL_RenderFillRect(renderer, &miniRect);
+
+        for (int ty = 0; ty < mapH; ++ty) {
+            for (int tx = 0; tx < mapW; ++tx) {
+                if (!m_Level->IsExplored(tx, ty)) continue;
+                int tileIdx = m_Level->GetTile(tx, ty);
+                SDL_Color c = {50, 200, 50, 255};
+                if (tileIdx == 28) c = {30, 144, 255, 255};
+                else if (tileIdx == 61) c = {128, 128, 128, 255};
+                
+                SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
+                SDL_Rect tileRect = {mx + tx * tileSize, my + ty * tileSize, tileSize, tileSize};
+                SDL_RenderFillRect(renderer, &tileRect);
+            }
+        }
+
+        auto* trans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
+        if (trans) {
+            SDL_Rect pDot = {mx + (int)trans->x * tileSize, my + (int)trans->y * tileSize, tileSize, tileSize};
+            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+            SDL_RenderFillRect(renderer, &pDot);
+        }
+    }
+
+    m_TextRenderer->RenderTextCentered("Press ESC or MAP to Close", w / 2, h - 50, {150, 150, 150, 255});
+}
+
+void PixelsGateGame::HandleMapInput() {
+    static bool wasEsc = false, wasM = false;
+    bool isEsc = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE);
+    bool isM = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_M);
+    if ((isEsc && !wasEsc) || (isM && !wasM)) {
+        m_State = GameState::Playing;
+    }
+    wasEsc = isEsc; wasM = isM;
+}
+
+void PixelsGateGame::RenderCharacterScreen() {
+    SDL_Renderer* renderer = GetRenderer();
+    int w, h; SDL_GetWindowSize(m_Window, &w, &h);
+
+    // Semi-transparent Overlay
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 30, 30, 40, 230);
+    SDL_Rect screenRect = {0, 0, w, h};
+    SDL_RenderFillRect(renderer, &screenRect);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+
+    m_TextRenderer->RenderTextCentered("CHARACTER SHEET", w / 2, 50, {0, 255, 255, 255});
+
+    auto* stats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+    if (stats) {
+        int x = w/4, y = 120;
+        m_TextRenderer->RenderText("Class: " + stats->characterClass, x, y, {255, 255, 255, 255}); y += 40;
+        m_TextRenderer->RenderText("Race: " + stats->race, x, y, {255, 255, 255, 255}); y += 60;
+
+        m_TextRenderer->RenderText("STR: " + std::to_string(stats->strength), x, y, {255, 200, 200, 255}); y += 35;
+        m_TextRenderer->RenderText("DEX: " + std::to_string(stats->dexterity), x, y, {200, 255, 200, 255}); y += 35;
+        m_TextRenderer->RenderText("CON: " + std::to_string(stats->constitution), x, y, {200, 200, 255, 255}); y += 35;
+        m_TextRenderer->RenderText("INT: " + std::to_string(stats->intelligence), x, y, {255, 200, 255, 255}); y += 35;
+        m_TextRenderer->RenderText("WIS: " + std::to_string(stats->wisdom), x, y, {255, 255, 200, 255}); y += 35;
+        m_TextRenderer->RenderText("CHA: " + std::to_string(stats->charisma), x, y, {200, 255, 255, 255}); y += 35;
+    }
+
+    m_TextRenderer->RenderTextCentered("Press ESC or C to Close", w / 2, h - 50, {150, 150, 150, 255});
+}
+
+void PixelsGateGame::HandleCharacterInput() {
+    static bool wasEsc = false, wasC = false;
+    bool isEsc = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE);
+    bool isC = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_C);
+    if ((isEsc && !wasEsc) || (isC && !wasC)) {
+        m_State = GameState::Playing;
+    }
+    wasEsc = isEsc; wasC = isC;
+}
+
 
