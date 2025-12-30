@@ -56,6 +56,16 @@ namespace PixelsEngine {
         return false;
     }
 
+    void Tilemap::LoadFog(const std::vector<int>& fogData) {
+        if (fogData.size() != m_VisibilityMap.size()) return;
+        
+        for (size_t i = 0; i < fogData.size(); ++i) {
+            if (fogData[i] == 2) m_VisibilityMap[i] = VisibilityState::Visible;
+            else if (fogData[i] == 1) m_VisibilityMap[i] = VisibilityState::Explored;
+            else m_VisibilityMap[i] = VisibilityState::Hidden;
+        }
+    }
+
     void Tilemap::SetTile(int x, int y, int tileIndex) {
         if (x >= 0 && x < m_MapWidth && y >= 0 && y < m_MapHeight) {
             m_MapData[y * m_MapWidth + x] = tileIndex;

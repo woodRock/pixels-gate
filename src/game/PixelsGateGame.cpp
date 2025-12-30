@@ -6,8 +6,11 @@
 #include "../engine/Pathfinding.h"
 #include "../engine/Inventory.h"
 #include "../engine/Dice.h"
+#include "../engine/SaveSystem.h"
 #include <SDL2/SDL_ttf.h>
 #include <algorithm>
+#include <functional>
+#include <filesystem>
 
 PixelsGateGame::PixelsGateGame() 
     : PixelsEngine::Application("Pixels Gate", 800, 600) {
@@ -218,149 +221,257 @@ void PixelsGateGame::CreateBoar(float x, float y) {
 }
 
 void PixelsGateGame::OnUpdate(float deltaTime) {
-    if (m_State == GameState::Creation) { HandleCreationInput(); return; }
-    HandleInput();
+    // 1. Update Timers (Global)
+    if (m_SaveMessageTimer > 0.0f) m_SaveMessageTimer -= deltaTime;
+    
+    // 2. Handle Fade Logic (Global)
+    if (m_FadeState != FadeState::None) {
+        m_FadeTimer -= deltaTime;
+        if (m_FadeState == FadeState::FadingOut) {
+            if (m_FadeTimer <= 0.0f) {
+                PixelsEngine::SaveSystem::LoadGame(m_PendingLoadFile, GetRegistry(), m_Player, *m_Level);
+                m_FadeState = FadeState::FadingIn;
+                m_FadeTimer = m_FadeDuration;
+                // If we were in Main Menu, go to Playing
+                if (m_State == GameState::MainMenu) m_State = GameState::Playing;
+            }
+        } else if (m_FadeState == FadeState::FadingIn) {
+            if (m_FadeTimer <= 0.0f) {
+                m_FadeState = FadeState::None;
+            }
+        }
+        return; // Block input during transitions
+    }
 
-    auto* transform = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
-    auto* playerComp = GetRegistry().GetComponent<PixelsEngine::PlayerComponent>(m_Player);
-    auto* anim = GetRegistry().GetComponent<PixelsEngine::AnimationComponent>(m_Player);
-    auto* sprite = GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(m_Player);
-    auto* pathComp = GetRegistry().GetComponent<PixelsEngine::PathMovementComponent>(m_Player);
+    // 3. State Machine
+    switch (m_State) {
+        case GameState::MainMenu:
+            HandleMainMenuInput();
+            break;
+        case GameState::Creation:
+            HandleCreationInput();
+            break;
+        case GameState::Paused:
+            HandlePauseMenuInput();
+            break;
+        case GameState::Options:
+            // Back handled in Render for now, or add specific input here if complex
+            if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE)) m_State = GameState::MainMenu; // Default back
+            break;
+        case GameState::Credits:
+        case GameState::Controls:
+            // Back logic is simple enough to stay in Render or here.
+            // Let's rely on the Render function's input check for these simple screens for now.
+            break;
+        case GameState::Playing:
+        {
+            // Toggle Pause
+            static bool wasEsc = false;
+            bool isEsc = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE);
+            if (isEsc && !wasEsc) {
+                m_State = GameState::Paused;
+                m_MenuSelection = 0;
+            }
+            wasEsc = isEsc;
 
-    if (m_SelectedNPC != PixelsEngine::INVALID_ENTITY) {
-        auto* npcTransform = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_SelectedNPC);
-        auto* interaction = GetRegistry().GetComponent<PixelsEngine::InteractionComponent>(m_SelectedNPC);
-        if (npcTransform && interaction) {
-            float dist = std::sqrt(std::pow(transform->x - npcTransform->x, 2) + std::pow(transform->y - npcTransform->y, 2));
-            if (dist < 1.5f) {
-                pathComp->isMoving = false; anim->currentFrameIndex = 0; 
-                if (interaction->dialogueText == "Gold Orb") {
-                    auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
-                    if (inv) { inv->AddItem("Gold Orb", 1); GetRegistry().RemoveComponent<PixelsEngine::SpriteComponent>(m_SelectedNPC); }
-                } else {
-                    auto* quest = GetRegistry().GetComponent<PixelsEngine::QuestComponent>(m_SelectedNPC);
-                    if (quest) {
-                        auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
-                        if (quest->state == 0) { 
-                            if (quest->questId == "FetchOrb") interaction->dialogueText = "Please find my Gold Orb!";
-                            else if (quest->questId == "HuntBoars") interaction->dialogueText = "The boars are aggressive. Hunt them!";
-                            quest->state = 1; 
-                        } else if (quest->state == 1) {
-                            bool hasItem = false;
-                            for (auto& item : inv->items) { if (item.name == quest->targetItem && item.quantity > 0) hasItem = true; }
-                            if (hasItem) { interaction->dialogueText = "You found it! Thank you."; quest->state = 2; inv->AddItem("Coins", 50); }
-                            else { if (quest->questId == "FetchOrb") interaction->dialogueText = "Bring me the Orb..."; else if (quest->questId == "HuntBoars") interaction->dialogueText = "Bring me Boar Meat."; }
-                        } else if (quest->state == 2) interaction->dialogueText = "Blessings upon you.";
+            if (m_State == GameState::Playing) { // Only if not just paused
+                HandleInput();
+
+                auto* transform = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
+                auto* playerComp = GetRegistry().GetComponent<PixelsEngine::PlayerComponent>(m_Player);
+                auto* anim = GetRegistry().GetComponent<PixelsEngine::AnimationComponent>(m_Player);
+                auto* sprite = GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(m_Player);
+                auto* pathComp = GetRegistry().GetComponent<PixelsEngine::PathMovementComponent>(m_Player);
+
+                if (m_SelectedNPC != PixelsEngine::INVALID_ENTITY) {
+                    auto* npcTransform = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_SelectedNPC);
+                    auto* interaction = GetRegistry().GetComponent<PixelsEngine::InteractionComponent>(m_SelectedNPC);
+                    if (npcTransform && interaction) {
+                        float dist = std::sqrt(std::pow(transform->x - npcTransform->x, 2) + std::pow(transform->y - npcTransform->y, 2));
+                        if (dist < 1.5f) {
+                            pathComp->isMoving = false; anim->currentFrameIndex = 0; 
+                            if (interaction->dialogueText == "Gold Orb") {
+                                auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+                                if (inv) { inv->AddItem("Gold Orb", 1); GetRegistry().RemoveComponent<PixelsEngine::SpriteComponent>(m_SelectedNPC); }
+                            } else {
+                                auto* quest = GetRegistry().GetComponent<PixelsEngine::QuestComponent>(m_SelectedNPC);
+                                if (quest) {
+                                    auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+                                    if (quest->state == 0) { 
+                                        if (quest->questId == "FetchOrb") interaction->dialogueText = "Please find my Gold Orb!";
+                                        else if (quest->questId == "HuntBoars") interaction->dialogueText = "The boars are aggressive. Hunt them!";
+                                        quest->state = 1; 
+                                    } else if (quest->state == 1) {
+                                        bool hasItem = false;
+                                        for (auto& item : inv->items) { if (item.name == quest->targetItem && item.quantity > 0) hasItem = true; }
+                                        if (hasItem) { interaction->dialogueText = "You found it! Thank you."; quest->state = 2; inv->AddItem("Coins", 50); }
+                                        else { if (quest->questId == "FetchOrb") interaction->dialogueText = "Bring me the Orb..."; else if (quest->questId == "HuntBoars") interaction->dialogueText = "Bring me Boar Meat."; }
+                                    } else if (quest->state == 2) interaction->dialogueText = "Blessings upon you.";
+                                }
+                                interaction->showDialogue = true; interaction->dialogueTimer = 3.0f;
+                            }
+                            m_SelectedNPC = PixelsEngine::INVALID_ENTITY;
+                        }
                     }
-                    interaction->showDialogue = true; interaction->dialogueTimer = 3.0f;
                 }
-                m_SelectedNPC = PixelsEngine::INVALID_ENTITY;
+
+                auto& interactions = GetRegistry().View<PixelsEngine::InteractionComponent>();
+                for (auto& [entity, interact] : interactions) {
+                    if (interact.showDialogue) { interact.dialogueTimer -= deltaTime; if (interact.dialogueTimer <= 0) interact.showDialogue = false; }
+                }
+
+                if (transform && playerComp && anim && sprite && pathComp) {
+                    
+                    // Update Fog of War based on Player Position
+                    m_Level->UpdateVisibility((int)transform->x, (int)transform->y, 5); // 5 tile radius
+
+                    bool wasdInput = false; 
+                    float dx = 0, dy = 0; 
+                    std::string newAnim = "Idle";
+
+                    if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_W)) { dx -= 1; dy -= 1; newAnim = "WalkUp"; wasdInput = true; }
+                    if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_S)) { dx += 1; dy += 1; newAnim = "WalkDown"; wasdInput = true; }
+                    if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_A)) { dx -= 1; dy += 1; newAnim = "WalkLeft"; wasdInput = true; }
+                    if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_D)) { dx += 1; dy -= 1; newAnim = "WalkRight"; wasdInput = true; }
+
+                    if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_A)) sprite->flip = SDL_FLIP_HORIZONTAL;
+                    else if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_D)) sprite->flip = SDL_FLIP_NONE;
+
+                    if (wasdInput) {
+                        pathComp->isMoving = false; m_SelectedNPC = PixelsEngine::INVALID_ENTITY;
+                        float newX = transform->x + dx * playerComp->speed * deltaTime;
+                        float newY = transform->y + dy * playerComp->speed * deltaTime;
+                        if (m_Level->IsWalkable((int)newX, (int)newY)) { transform->x = newX; transform->y = newY; }
+                        else { if (m_Level->IsWalkable((int)newX, (int)transform->y)) transform->x = newX; else if (m_Level->IsWalkable((int)transform->x, (int)newY)) transform->y = newY; }
+                        anim->Play(newAnim);
+                    } else if (pathComp->isMoving) {
+                        float targetX = pathComp->targetX, targetY = pathComp->targetY;
+                        float diffX = targetX - transform->x, diffY = targetY - transform->y;
+                        float dist = std::sqrt(diffX*diffX + diffY*diffY);
+                        if (dist < 0.1f) {
+                            transform->x = targetX; transform->y = targetY;
+                            pathComp->currentPathIndex++;
+                            if (pathComp->currentPathIndex >= pathComp->path.size()) { pathComp->isMoving = false; anim->currentFrameIndex = 0; }
+                            else { pathComp->targetX = (float)pathComp->path[pathComp->currentPathIndex].first; pathComp->targetY = (float)pathComp->path[pathComp->currentPathIndex].second; }
+                        } else {
+                            float moveX = (diffX / dist) * playerComp->speed * deltaTime;
+                            float moveY = (diffY / dist) * playerComp->speed * deltaTime;
+                            transform->x += moveX; transform->y += moveY;
+                            if (diffX < 0 && diffY < 0) anim->Play("WalkUp");
+                            else if (diffX > 0 && diffY > 0) anim->Play("WalkDown");
+                            else if (diffX < 0 && diffY > 0) { anim->Play("WalkLeft"); sprite->flip = SDL_FLIP_HORIZONTAL; }
+                            else if (diffX > 0 && diffY < 0) { anim->Play("WalkRight"); sprite->flip = SDL_FLIP_NONE; }
+                        }
+                    } else anim->currentFrameIndex = 0;
+
+                    if (wasdInput || pathComp->isMoving) {
+                        anim->timer += deltaTime;
+                        auto& currentAnim = anim->animations[anim->currentAnimationIndex];
+                        if (anim->timer >= currentAnim.frameDuration) { anim->timer = 0.0f; anim->currentFrameIndex = (anim->currentFrameIndex + 1) % currentAnim.frames.size(); }
+                        sprite->srcRect = currentAnim.frames[anim->currentFrameIndex];
+                    } else {
+                         auto& currentAnim = anim->animations[anim->currentAnimationIndex];
+                         sprite->srcRect = currentAnim.frames[0];
+                    }
+
+                    int screenX, screenY; m_Level->GridToScreen(transform->x, transform->y, screenX, screenY);
+                    auto& camera = GetCamera(); camera.x = screenX - camera.width / 2; camera.y = screenY - camera.height / 2;
+                }
             }
         }
-    }
-
-    auto& interactions = GetRegistry().View<PixelsEngine::InteractionComponent>();
-    for (auto& [entity, interact] : interactions) {
-        if (interact.showDialogue) { interact.dialogueTimer -= deltaTime; if (interact.dialogueTimer <= 0) interact.showDialogue = false; }
-    }
-
-    if (transform && playerComp && anim && sprite && pathComp) {
-        
-        // Update Fog of War based on Player Position
-        m_Level->UpdateVisibility((int)transform->x, (int)transform->y, 5); // 5 tile radius
-
-        bool wasdInput = false; 
-        float dx = 0, dy = 0; 
-        std::string newAnim = "Idle";
-
-        if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_W)) { dx -= 1; dy -= 1; newAnim = "WalkUp"; wasdInput = true; }
-        if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_S)) { dx += 1; dy += 1; newAnim = "WalkDown"; wasdInput = true; }
-        if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_A)) { dx -= 1; dy += 1; newAnim = "WalkLeft"; wasdInput = true; }
-        if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_D)) { dx += 1; dy -= 1; newAnim = "WalkRight"; wasdInput = true; }
-
-        if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_A)) sprite->flip = SDL_FLIP_HORIZONTAL;
-        else if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_D)) sprite->flip = SDL_FLIP_NONE;
-
-        if (wasdInput) {
-            pathComp->isMoving = false; m_SelectedNPC = PixelsEngine::INVALID_ENTITY;
-            float newX = transform->x + dx * playerComp->speed * deltaTime;
-            float newY = transform->y + dy * playerComp->speed * deltaTime;
-            if (m_Level->IsWalkable((int)newX, (int)newY)) { transform->x = newX; transform->y = newY; }
-            else { if (m_Level->IsWalkable((int)newX, (int)transform->y)) transform->x = newX; else if (m_Level->IsWalkable((int)transform->x, (int)newY)) transform->y = newY; }
-            anim->Play(newAnim);
-        } else if (pathComp->isMoving) {
-            float targetX = pathComp->targetX, targetY = pathComp->targetY;
-            float diffX = targetX - transform->x, diffY = targetY - transform->y;
-            float dist = std::sqrt(diffX*diffX + diffY*diffY);
-            if (dist < 0.1f) {
-                transform->x = targetX; transform->y = targetY;
-                pathComp->currentPathIndex++;
-                if (pathComp->currentPathIndex >= pathComp->path.size()) { pathComp->isMoving = false; anim->currentFrameIndex = 0; }
-                else { pathComp->targetX = (float)pathComp->path[pathComp->currentPathIndex].first; pathComp->targetY = (float)pathComp->path[pathComp->currentPathIndex].second; }
-            } else {
-                float moveX = (diffX / dist) * playerComp->speed * deltaTime;
-                float moveY = (diffY / dist) * playerComp->speed * deltaTime;
-                transform->x += moveX; transform->y += moveY;
-                if (diffX < 0 && diffY < 0) anim->Play("WalkUp");
-                else if (diffX > 0 && diffY > 0) anim->Play("WalkDown");
-                else if (diffX < 0 && diffY > 0) { anim->Play("WalkLeft"); sprite->flip = SDL_FLIP_HORIZONTAL; }
-                else if (diffX > 0 && diffY < 0) { anim->Play("WalkRight"); sprite->flip = SDL_FLIP_NONE; }
-            }
-        } else anim->currentFrameIndex = 0;
-
-        if (wasdInput || pathComp->isMoving) {
-            anim->timer += deltaTime;
-            auto& currentAnim = anim->animations[anim->currentAnimationIndex];
-            if (anim->timer >= currentAnim.frameDuration) { anim->timer = 0.0f; anim->currentFrameIndex = (anim->currentFrameIndex + 1) % currentAnim.frames.size(); }
-            sprite->srcRect = currentAnim.frames[anim->currentFrameIndex];
-        } else {
-             auto& currentAnim = anim->animations[anim->currentAnimationIndex];
-             sprite->srcRect = currentAnim.frames[0];
-        }
-
-        int screenX, screenY; m_Level->GridToScreen(transform->x, transform->y, screenX, screenY);
-        auto& camera = GetCamera(); camera.x = screenX - camera.width / 2; camera.y = screenY - camera.height / 2;
+        break;
     }
 }
 
 void PixelsGateGame::OnRender() {
-    if (m_State == GameState::Creation) { RenderCharacterCreation(); return; }
-    auto& camera = GetCamera();
-    if (m_Level) m_Level->Render(camera);
+    switch (m_State) {
+        case GameState::MainMenu:
+            RenderMainMenu();
+            break;
+        case GameState::Creation:
+            RenderCharacterCreation();
+            break;
+        case GameState::Options:
+            RenderOptions();
+            break;
+        case GameState::Credits:
+            RenderCredits();
+            break;
+        case GameState::Controls:
+            RenderControls();
+            break;
+        case GameState::Paused:
+        case GameState::Playing:
+        {
+            auto& camera = GetCamera();
+            if (m_Level) m_Level->Render(camera);
 
-    struct Renderable { int y; PixelsEngine::Entity entity; };
-    std::vector<Renderable> renderQueue;
-        auto& sprites = GetRegistry().View<PixelsEngine::SpriteComponent>();
-        for (auto& [entity, sprite] : sprites) {
-            auto* transform = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(entity);
-            if (transform && m_Level) {
-                // Check Fog of War
-                // If entity is player, always render.
-                // If NPC/Monster, only render if tile is Visible.
-                if (entity != m_Player) {
-                    if (!m_Level->IsVisible((int)transform->x, (int)transform->y)) {
-                        continue; // Skip rendering hidden entity
+            struct Renderable { int y; PixelsEngine::Entity entity; };
+            std::vector<Renderable> renderQueue;
+            auto& sprites = GetRegistry().View<PixelsEngine::SpriteComponent>();
+            for (auto& [entity, sprite] : sprites) {
+                auto* transform = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(entity);
+                if (transform && m_Level) {
+                    // Check Fog of War
+                    if (entity != m_Player) {
+                        if (!m_Level->IsVisible((int)transform->x, (int)transform->y)) {
+                            continue; // Skip rendering hidden entity
+                        }
                     }
+        
+                    int screenX, screenY;
+                    m_Level->GridToScreen(transform->x, transform->y, screenX, screenY);
+                    renderQueue.push_back({ screenY, entity });
                 }
-    
-                int screenX, screenY;
-                m_Level->GridToScreen(transform->x, transform->y, screenX, screenY);
-                renderQueue.push_back({ screenY, entity });
+            }
+        
+            std::sort(renderQueue.begin(), renderQueue.end(), [](const Renderable& a, const Renderable& b) { return a.y < b.y; });
+
+            for (const auto& item : renderQueue) {
+                auto* transform = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(item.entity);
+                auto* sprite = GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(item.entity);
+                if (transform && sprite && sprite->texture) {
+                    int screenX, screenY; m_Level->GridToScreen(transform->x, transform->y, screenX, screenY);
+                    screenX -= (int)camera.x; screenY -= (int)camera.y;
+                    sprite->texture->RenderRect(screenX + 16 - sprite->pivotX, screenY + 16 - sprite->pivotY, &sprite->srcRect, -1, -1, sprite->flip);
+                }
+            }
+            RenderHUD(); RenderInventory(); RenderContextMenu(); RenderDiceRoll();
+
+            // Render Save Alert
+            if (m_SaveMessageTimer > 0.0f) {
+                m_TextRenderer->RenderText("Saving...", 20, 80, {255, 255, 0, 255}); // Below HP bar
+            }
+
+            // Render Fade Overlay
+            if (m_FadeState != FadeState::None) {
+                SDL_Renderer* renderer = GetRenderer();
+                int w, h;
+                SDL_GetWindowSize(m_Window, &w, &h);
+                
+                float alpha = 0.0f;
+                if (m_FadeState == FadeState::FadingOut) {
+                    alpha = 1.0f - (m_FadeTimer / m_FadeDuration);
+                } else {
+                    alpha = (m_FadeTimer / m_FadeDuration);
+                }
+                if (alpha < 0.0f) alpha = 0.0f;
+                if (alpha > 1.0f) alpha = 1.0f;
+
+                SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderDrawColor(renderer, 0, 0, 0, (Uint8)(alpha * 255));
+                SDL_Rect screenRect = {0, 0, w, h};
+                SDL_RenderFillRect(renderer, &screenRect);
+                SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+            }
+            
+            // If Paused, render Pause Menu on top
+            if (m_State == GameState::Paused) {
+                RenderPauseMenu();
             }
         }
-    
-    std::sort(renderQueue.begin(), renderQueue.end(), [](const Renderable& a, const Renderable& b) { return a.y < b.y; });
-
-    for (const auto& item : renderQueue) {
-        auto* transform = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(item.entity);
-        auto* sprite = GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(item.entity);
-        if (transform && sprite && sprite->texture) {
-            int screenX, screenY; m_Level->GridToScreen(transform->x, transform->y, screenX, screenY);
-            screenX -= (int)camera.x; screenY -= (int)camera.y;
-            sprite->texture->RenderRect(screenX + 16 - sprite->pivotX, screenY + 16 - sprite->pivotY, &sprite->srcRect, -1, -1, sprite->flip);
-        }
+        break;
     }
-    RenderHUD(); RenderInventory(); RenderContextMenu(); RenderDiceRoll();
 }
 
 void PixelsGateGame::StartDiceRoll(int modifier, int dc, const std::string& skill, PixelsEngine::Entity target, PixelsEngine::ContextActionType type) {
@@ -473,14 +584,40 @@ void PixelsGateGame::HandleInput() {
 
     if (m_DiceRoll.active) {
         if (!m_DiceRoll.resultShown) {
-            m_DiceRoll.timer += 0.016f;
-            if (m_DiceRoll.timer > m_DiceRoll.duration) { m_DiceRoll.resultShown = true; ResolveDiceRoll(); }
+            m_DiceRoll.timer += 0.016f; // approx delta
+            if (m_DiceRoll.timer > m_DiceRoll.duration) {
+                m_DiceRoll.resultShown = true;
+                ResolveDiceRoll();
+            }
+            
+            // Handle Inspiration
             if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_SPACE)) {
                 auto* stats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
-                if (stats && stats->inspiration > 0) { stats->inspiration--; m_DiceRoll.finalValue = PixelsEngine::Dice::Roll(20); m_DiceRoll.success = (m_DiceRoll.finalValue + m_DiceRoll.modifier >= m_DiceRoll.dc) || (m_DiceRoll.finalValue == 20); m_DiceRoll.timer = 0.0f; }
+                if (stats && stats->inspiration > 0) {
+                    stats->inspiration--;
+                    // Reroll
+                    m_DiceRoll.finalValue = PixelsEngine::Dice::Roll(20);
+                    m_DiceRoll.success = (m_DiceRoll.finalValue + m_DiceRoll.modifier >= m_DiceRoll.dc) || (m_DiceRoll.finalValue == 20);
+                    m_DiceRoll.timer = 0.0f; // Restart anim
+                    std::cout << "Used Inspiration! Rerolling..." << std::endl;
+                }
             }
-        } else if (isPressedLeft) m_DiceRoll.active = false;
-        return;
+        } else {
+            // Click to close
+            if (isPressedLeft) {
+                m_DiceRoll.active = false;
+            }
+        }
+        return; // Block other input
+    }
+
+    // Quick Save/Load
+    if (PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_F5)) {
+        PixelsEngine::SaveSystem::SaveGame("quicksave.dat", GetRegistry(), m_Player, *m_Level);
+        ShowSaveMessage();
+    }
+    if (PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_F8)) {
+        TriggerLoadTransition("quicksave.dat");
     }
 
     if (m_ContextMenu.isOpen) {
@@ -540,7 +677,15 @@ void PixelsGateGame::CheckUIInteraction(int mx, int my) {
         if (mx >= btnRect.x && mx <= btnRect.x + btnRect.w && my >= btnRect.y && my <= btnRect.y + btnRect.h) {
             if (i == 0) PerformAttack();
             else if (i == 2) { auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player); if (inv) inv->isOpen = !inv->isOpen; }
-            else if (i == 5) { auto* stats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player); if (stats) { stats->currentHealth = stats->maxHealth; stats->inspiration = 1; } }
+            else if (i == 5) { // Opt -> Save/System
+                // For now, let's just SAVE on click.
+                // In a real game, this would open a menu.
+                PixelsEngine::SaveSystem::SaveGame("savegame.dat", GetRegistry(), m_Player, *m_Level);
+                ShowSaveMessage();
+                // Also restore HP/Inspiration as a bonus "Rest" (previous functionality)
+                auto* stats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player); 
+                if (stats) { stats->currentHealth = stats->maxHealth; stats->inspiration = 1; }
+            }
         }
     }
 }
@@ -576,7 +721,92 @@ void PixelsGateGame::CheckWorldInteraction(int mx, int my) {
 }
 
 void PixelsGateGame::RenderHUD() {
-    SDL_Renderer* renderer = GetRenderer(); int winW, winH; SDL_GetWindowSize(m_Window, &winW, &winH);
+    SDL_Renderer* renderer = GetRenderer();
+    int winW, winH;
+    SDL_GetWindowSize(m_Window, &winW, &winH);
+
+    // --- 1. Health Bar (Top Left) ---
+    auto* stats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+    if (stats) {
+        int barW = 200;
+        int barH = 20;
+        int x = 20;
+        int y = 20;
+
+        // Background (Grey)
+        SDL_Rect bgRect = {x, y, barW, barH};
+        SDL_SetRenderDrawColor(renderer, 50, 50, 50, 255);
+        SDL_RenderFillRect(renderer, &bgRect);
+
+        // Foreground (Red)
+        float hpPercent = (float)stats->currentHealth / (float)stats->maxHealth;
+        if (hpPercent < 0) hpPercent = 0;
+        SDL_Rect fgRect = {x, y, (int)(barW * hpPercent), barH};
+        SDL_SetRenderDrawColor(renderer, 200, 0, 0, 255);
+        SDL_RenderFillRect(renderer, &fgRect);
+
+        // Border (White)
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_RenderDrawRect(renderer, &bgRect);
+
+        // Text
+        std::string hpText = "HP: " + std::to_string(stats->currentHealth) + " / " + std::to_string(stats->maxHealth);
+        m_TextRenderer->RenderText(hpText, x + 10, y + 25, {255, 255, 255, 255});
+    }
+
+    // --- 2. Minimap (Top Right) ---
+    if (m_Level) {
+        int mapW = m_Level->GetWidth();
+        int mapH = m_Level->GetHeight();
+        int tileSize = 4; // Size of each tile on minimap
+        int miniW = mapW * tileSize;
+        int miniH = mapH * tileSize;
+        int mx = winW - miniW - 20;
+        int my = 20;
+
+        // Background / Border
+        SDL_Rect miniRect = {mx - 2, my - 2, miniW + 4, miniH + 4};
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderFillRect(renderer, &miniRect);
+        SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
+        SDL_RenderDrawRect(renderer, &miniRect);
+
+        // Draw Tiles
+        for (int ty = 0; ty < mapH; ++ty) {
+            for (int tx = 0; tx < mapW; ++tx) {
+                // Check Exploration
+                if (!m_Level->IsExplored(tx, ty)) continue;
+
+                int tileIdx = m_Level->GetTile(tx, ty);
+                SDL_Color c = {0, 0, 0, 255};
+
+                // Determine Color based on tile index
+                // 0, 1, 10 = Grass
+                if (tileIdx == 0 || tileIdx == 1 || tileIdx == 10) c = {34, 139, 34, 255}; // Green
+                else if (tileIdx == 2) c = {139, 69, 19, 255}; // Brown (Dirt)
+                else if (tileIdx == 28) c = {30, 144, 255, 255}; // Blue (Water)
+                else if (tileIdx == 100) c = {210, 180, 140, 255}; // Tan (Sand)
+                else if (tileIdx == 61) c = {128, 128, 128, 255}; // Grey (Stone)
+                else c = {50, 200, 50, 255}; // Default Greenish
+
+                SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
+                SDL_Rect tileRect = {mx + tx * tileSize, my + ty * tileSize, tileSize, tileSize};
+                SDL_RenderFillRect(renderer, &tileRect);
+            }
+        }
+
+        // Draw Player on Minimap
+        auto* trans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
+        if (trans) {
+            int px = (int)trans->x;
+            int py = (int)trans->y;
+            SDL_Rect playerDot = {mx + px * tileSize, my + py * tileSize, tileSize, tileSize};
+            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // Red Dot
+            SDL_RenderFillRect(renderer, &playerDot);
+        }
+    }
+
+    // --- 3. Bottom Action Bar (Existing) ---
     SDL_Rect hudRect = { 0, winH - 60, winW, 60 };
     SDL_SetRenderDrawColor(renderer, 50, 50, 50, 255); SDL_RenderFillRect(renderer, &hudRect);
     SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255); SDL_RenderDrawRect(renderer, &hudRect);
@@ -601,4 +831,277 @@ void PixelsGateGame::RenderHUD() {
             }
         }
     }
+}
+
+// --- Menu Implementations ---
+
+void PixelsGateGame::HandleMenuNavigation(int numOptions, std::function<void(int)> onSelect, std::function<void()> onCancel, int forceSelection) {
+    static bool wasUp = false, wasDown = false, wasEnter = false, wasEsc = false, wasMouseClick = false;
+    bool isUp = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_W) || PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_UP);
+    bool isDown = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_S) || PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_DOWN);
+    bool isEnter = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_RETURN) || PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_SPACE);
+    bool isEsc = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE);
+    bool isMouseClick = PixelsEngine::Input::IsMouseButtonDown(SDL_BUTTON_LEFT);
+
+    bool pressUp = isUp && !wasUp;
+    bool pressDown = isDown && !wasDown;
+    bool pressEnter = isEnter && !wasEnter;
+    bool pressEsc = isEsc && !wasEsc;
+    bool pressMouse = isMouseClick && !wasMouseClick;
+
+    wasUp = isUp; wasDown = isDown; wasEnter = isEnter; wasEsc = isEsc; wasMouseClick = isMouseClick;
+
+    if (forceSelection != -1) {
+        m_MenuSelection = forceSelection;
+    }
+
+    if (pressUp) {
+        m_MenuSelection--;
+        if (m_MenuSelection < 0) m_MenuSelection = numOptions - 1;
+    }
+    if (pressDown) {
+        m_MenuSelection++;
+        if (m_MenuSelection >= numOptions) m_MenuSelection = 0;
+    }
+    if ((pressEnter || (pressMouse && forceSelection != -1)) && onSelect) {
+        onSelect(m_MenuSelection);
+    }
+    if (pressEsc && onCancel) {
+        onCancel();
+    }
+}
+
+void PixelsGateGame::HandleMainMenuInput() {
+    int w, h; SDL_GetWindowSize(m_Window, &w, &h);
+    int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
+    
+    int hovered = -1;
+    // Layout MUST match RenderMainMenu
+    int y = 250;
+    int numOptions = 6;
+    for (int i = 0; i < numOptions; ++i) {
+        // Assume text height ~30px, allow some padding.
+        // Text is centered. Width is variable but let's assume a safe click area of 300px width.
+        SDL_Rect itemRect = { (w / 2) - 150, y - 5, 300, 30 };
+        if (mx >= itemRect.x && mx <= itemRect.x + itemRect.w && my >= itemRect.y && my <= itemRect.y + itemRect.h) {
+            hovered = i;
+        }
+        y += 40;
+    }
+
+    HandleMenuNavigation(6, [&](int selection) {
+        switch (selection) {
+            case 0: // Continue
+                if (std::filesystem::exists("savegame.dat")) {
+                    TriggerLoadTransition("savegame.dat");
+                } else if (std::filesystem::exists("quicksave.dat")) {
+                     TriggerLoadTransition("quicksave.dat");
+                }
+                break;
+            case 1: // New Game
+                m_State = GameState::Creation;
+                selectionIndex = 0; // Reset creation selection
+                break;
+            case 2: // Load Game
+                if (std::filesystem::exists("savegame.dat")) TriggerLoadTransition("savegame.dat");
+                break;
+            case 3: // Options
+                m_State = GameState::Options;
+                m_MenuSelection = 0;
+                break;
+            case 4: // Credits
+                m_State = GameState::Credits;
+                break;
+            case 5: // Quit
+                m_IsRunning = false;
+                break;
+        }
+    }, nullptr, hovered);
+}
+
+void PixelsGateGame::RenderMainMenu() {
+    // 1. Render Background (Level)
+    if (m_Level) {
+        // Auto-scroll camera for effect
+        static float scrollX = 0;
+        scrollX += 0.5f;
+        auto& camera = GetCamera();
+        camera.x = (int)scrollX % (m_Level->GetWidth() * 32); 
+        camera.y = 200; // Fixed Y
+        
+        m_Level->Render(camera);
+    }
+
+    // 2. Dark Overlay
+    SDL_Renderer* renderer = GetRenderer();
+    int w, h;
+    SDL_GetWindowSize(m_Window, &w, &h);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 150);
+    SDL_Rect overlay = {0, 0, w, h};
+    SDL_RenderFillRect(renderer, &overlay);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+
+    // 3. Title
+    m_TextRenderer->RenderTextCentered("PIXELS GATE", w / 2, 100, {255, 215, 0, 255});
+
+    // 4. Menu Options
+    std::vector<std::string> options = { "Continue", "New Game", "Load Game", "Options", "Credits", "Quit" };
+    int y = 250;
+    for (int i = 0; i < options.size(); ++i) {
+        SDL_Color color = (i == m_MenuSelection) ? SDL_Color{50, 255, 50, 255} : SDL_Color{200, 200, 200, 255};
+        m_TextRenderer->RenderTextCentered(options[i], w / 2, y, color);
+        if (i == m_MenuSelection) {
+             m_TextRenderer->RenderText(">", w / 2 - 100, y, color);
+             m_TextRenderer->RenderText("<", w / 2 + 100, y, color);
+        }
+        y += 40;
+    }
+    
+    m_TextRenderer->RenderTextCentered("v1.0.0", w - 50, h - 30, {100, 100, 100, 255});
+}
+
+
+void PixelsGateGame::RenderPauseMenu() {
+    // 1. Dark Overlay (on top of frozen game)
+    SDL_Renderer* renderer = GetRenderer();
+    int w, h;
+    SDL_GetWindowSize(m_Window, &w, &h);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 150);
+    SDL_Rect overlay = {0, 0, w, h};
+    SDL_RenderFillRect(renderer, &overlay);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+
+    // 2. Menu Box
+    int boxW = 300, boxH = 400;
+    SDL_Rect box = {(w - boxW)/2, (h - boxH)/2, boxW, boxH};
+    SDL_SetRenderDrawColor(renderer, 50, 50, 50, 255);
+    SDL_RenderFillRect(renderer, &box);
+    SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
+    SDL_RenderDrawRect(renderer, &box);
+
+    m_TextRenderer->RenderTextCentered("PAUSED", w / 2, box.y + 30, {255, 255, 255, 255});
+
+    std::vector<std::string> options = { "Resume", "Save Game", "Load Game", "Controls", "Options", "Main Menu" };
+    int y = box.y + 80;
+    for (int i = 0; i < options.size(); ++i) {
+        SDL_Color color = (i == m_MenuSelection) ? SDL_Color{50, 255, 50, 255} : SDL_Color{200, 200, 200, 255};
+        m_TextRenderer->RenderTextCentered(options[i], w / 2, y, color);
+        y += 40;
+    }
+}
+
+void PixelsGateGame::HandlePauseMenuInput() {
+    int w, h; SDL_GetWindowSize(m_Window, &w, &h);
+    int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
+
+    int boxW = 300, boxH = 400;
+    SDL_Rect box = {(w - boxW)/2, (h - boxH)/2, boxW, boxH};
+    
+    int hovered = -1;
+    // Layout MUST match RenderPauseMenu
+    int y = box.y + 80;
+    int numOptions = 6;
+    for (int i = 0; i < numOptions; ++i) {
+        SDL_Rect itemRect = { (w / 2) - 100, y - 5, 200, 30 }; // Smaller click area for pause menu items?
+        if (mx >= itemRect.x && mx <= itemRect.x + itemRect.w && my >= itemRect.y && my <= itemRect.y + itemRect.h) {
+            hovered = i;
+        }
+        y += 40;
+    }
+
+    HandleMenuNavigation(6, [&](int selection) {
+        switch (selection) {
+            case 0: // Resume
+                m_State = GameState::Playing;
+                break;
+            case 1: // Save
+                PixelsEngine::SaveSystem::SaveGame("savegame.dat", GetRegistry(), m_Player, *m_Level);
+                ShowSaveMessage();
+                break;
+            case 2: // Load
+                TriggerLoadTransition("savegame.dat");
+                m_State = GameState::Playing; // Will happen after fade
+                break;
+            case 3: // Controls
+                m_State = GameState::Controls;
+                break;
+            case 4: // Options
+                m_State = GameState::Options;
+                m_MenuSelection = 0;
+                break;
+            case 5: // Main Menu
+                m_State = GameState::MainMenu;
+                m_MenuSelection = 0;
+                break;
+        }
+    }, [&]() {
+        // On Cancel (ESC)
+        m_State = GameState::Playing;
+    }, hovered);
+}
+
+void PixelsGateGame::RenderOptions() {
+    SDL_Renderer* renderer = GetRenderer();
+    SDL_SetRenderDrawColor(renderer, 20, 20, 20, 255);
+    SDL_RenderClear(renderer);
+    
+    int w, h; SDL_GetWindowSize(m_Window, &w, &h);
+    m_TextRenderer->RenderTextCentered("OPTIONS", w/2, 50, {255, 255, 255, 255});
+    m_TextRenderer->RenderTextCentered("No options available yet.", w/2, h/2, {150, 150, 150, 255});
+    m_TextRenderer->RenderTextCentered("Press ESC to Back", w/2, h - 50, {100, 100, 100, 255});
+    
+    static bool wasEsc = false;
+    bool isEsc = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE);
+    if (isEsc && !wasEsc) {
+        // Go back to previous state? simplified: go to MainMenu if valid, else Paused?
+        // Actually we don't track previous state easily here. 
+        // Let's assume if we came from Pause we want to go back to Pause.
+        // A simple hack: We can check if m_Player is set up? No.
+        // Let's just default to MainMenu for now, or add a 'Back' button.
+        m_State = GameState::MainMenu; 
+    }
+    wasEsc = isEsc;
+}
+
+void PixelsGateGame::RenderCredits() {
+    SDL_Renderer* renderer = GetRenderer();
+    SDL_SetRenderDrawColor(renderer, 10, 10, 30, 255);
+    SDL_RenderClear(renderer);
+
+    int w, h; SDL_GetWindowSize(m_Window, &w, &h);
+    m_TextRenderer->RenderTextCentered("CREDITS", w/2, 50, {255, 255, 255, 255});
+    
+    m_TextRenderer->RenderTextCentered("Created by Jesse Wood", w/2, 200, {200, 200, 255, 255});
+    m_TextRenderer->RenderTextCentered("Engine: PixelsEngine (Custom)", w/2, 240, {200, 200, 255, 255});
+    m_TextRenderer->RenderTextCentered("Assets: scrabling.itch.io/pixel-isometric-tiles", w/2, 280, {200, 200, 255, 255});
+    
+    m_TextRenderer->RenderTextCentered("Press ESC to Back", w/2, h - 50, {100, 100, 100, 255});
+
+    if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE)) m_State = GameState::MainMenu;
+}
+
+void PixelsGateGame::RenderControls() {
+    SDL_Renderer* renderer = GetRenderer();
+    SDL_SetRenderDrawColor(renderer, 20, 20, 20, 255);
+    SDL_RenderClear(renderer);
+    
+    int w, h; SDL_GetWindowSize(m_Window, &w, &h);
+    m_TextRenderer->RenderTextCentered("CONTROLS", w/2, 50, {255, 255, 255, 255});
+    
+    int y = 150;
+    m_TextRenderer->RenderTextCentered("W/A/S/D - Move", w/2, y, {200, 200, 200, 255}); y += 40;
+    m_TextRenderer->RenderTextCentered("Left Click - Move / Interact", w/2, y, {200, 200, 200, 255}); y += 40;
+    m_TextRenderer->RenderTextCentered("Right Click - Context Menu", w/2, y, {200, 200, 200, 255}); y += 40;
+    m_TextRenderer->RenderTextCentered("F5 - Quick Save", w/2, y, {200, 200, 200, 255}); y += 40;
+    m_TextRenderer->RenderTextCentered("F8 - Quick Load", w/2, y, {200, 200, 200, 255}); y += 40;
+    m_TextRenderer->RenderTextCentered("ESC - Pause Menu", w/2, y, {200, 200, 200, 255}); y += 40;
+
+    m_TextRenderer->RenderTextCentered("Press ESC to Back", w/2, h - 50, {100, 100, 100, 255});
+
+    static bool wasEsc = false;
+    bool isEsc = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE);
+    if (isEsc && !wasEsc) m_State = GameState::Paused;
+    wasEsc = isEsc;
 }

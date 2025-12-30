@@ -39,10 +39,15 @@ protected:
 
 private:
     enum class GameState {
+        MainMenu,
         Creation,
-        Playing
+        Playing,
+        Paused,
+        Options,
+        Credits,
+        Controls
     };
-    GameState m_State = GameState::Creation;
+    GameState m_State = GameState::MainMenu;
 
     std::unique_ptr<PixelsEngine::Tilemap> m_Level;
     std::unique_ptr<PixelsEngine::TextRenderer> m_TextRenderer;
@@ -51,4 +56,40 @@ private:
     
     PixelsEngine::ContextMenu m_ContextMenu;
     PixelsEngine::DiceRollAnimation m_DiceRoll;
+
+    // Menu Navigation
+    int m_MenuSelection = 0;
+    float m_MenuTimer = 0.0f; // for debouncing or animations
+
+    // Visual Feedback
+    float m_SaveMessageTimer = 0.0f;
+    float m_FadeTimer = 0.0f;
+    const float m_FadeDuration = 0.5f;
+
+    enum class FadeState {
+        None,
+        FadingOut, // Screen going black
+        FadingIn   // Screen revealing game
+    };
+    FadeState m_FadeState = FadeState::None;
+    std::string m_PendingLoadFile;
+
+    // Menu Renderers
+    void RenderMainMenu();
+    void RenderPauseMenu();
+    void RenderOptions();
+    void RenderCredits();
+    void RenderControls();
+
+    // Menu Input Handlers
+    void HandleMainMenuInput();
+    void HandlePauseMenuInput();
+    void HandleMenuNavigation(int numOptions, std::function<void(int)> onSelect, std::function<void()> onCancel = nullptr, int forceSelection = -1);
+
+    void ShowSaveMessage() { m_SaveMessageTimer = 2.0f; }
+    void TriggerLoadTransition(const std::string& filename) { 
+        m_PendingLoadFile = filename; 
+        m_FadeState = FadeState::FadingOut; 
+        m_FadeTimer = m_FadeDuration; 
+    }
 };

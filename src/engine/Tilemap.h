@@ -33,6 +33,10 @@ namespace PixelsEngine {
         void UpdateVisibility(int centerX, int centerY, int radius);
         bool IsVisible(int x, int y) const;
         bool IsExplored(int x, int y) const;
+        void LoadFog(const std::vector<int>& fogData); // 0: Hidden, 1: Explored, 2: Visible
+
+        int GetWidth() const { return m_MapWidth; }
+        int GetHeight() const { return m_MapHeight; }
 
         // Helper to convert Grid Coords to Screen Coords
         void GridToScreen(float gridX, float gridY, int& screenX, int& screenY) const;
