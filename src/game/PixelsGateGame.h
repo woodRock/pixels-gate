@@ -6,6 +6,7 @@
 #include "../engine/TextRenderer.h"
 #include "../engine/UIComponents.h"
 #include "../engine/Inventory.h"
+#include "../engine/Config.h"
 #include <memory>
 
 class PixelsGateGame : public PixelsEngine::Application {
@@ -50,9 +51,20 @@ private:
         Controls,
         GameOver,
         Map,
-        Character
+        Character,
+        Magic,
+        Targeting,
+        Trading,
+        KeybindSettings
     };
     GameState m_State = GameState::MainMenu;
+    GameState m_ReturnState = GameState::Playing; 
+
+    PixelsEngine::Entity m_TradingWith = PixelsEngine::INVALID_ENTITY;
+    PixelsEngine::GameAction m_BindingAction = PixelsEngine::GameAction::Pause;
+    bool m_IsWaitingForKey = false;
+
+    std::string m_PendingSpellName = "";
 
     int m_SelectedWeaponSlot = 0; // 0: Melee, 1: Ranged
 
@@ -110,6 +122,9 @@ private:
     void RenderGameOver();
     void RenderMapScreen();
     void RenderCharacterScreen();
+    void RenderMagicScreen();
+    void RenderTradeScreen();
+    void RenderKeybindSettings();
 
     // Menu Input Handlers
     void HandleMainMenuInput();
@@ -117,6 +132,11 @@ private:
     void HandleGameOverInput();
     void HandleMapInput();
     void HandleCharacterInput();
+    void HandleMagicInput();
+    void HandleTargetingInput();
+    void HandleTradeInput();
+    void HandleKeybindInput();
+    void CastSpell(const std::string& spellName, PixelsEngine::Entity target);
     void HandleMenuNavigation(int numOptions, std::function<void(int)> onSelect, std::function<void()> onCancel = nullptr, int forceSelection = -1);
 
     void ShowSaveMessage() { m_SaveMessageTimer = 2.0f; }

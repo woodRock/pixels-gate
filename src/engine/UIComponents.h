@@ -7,9 +7,10 @@
 namespace PixelsEngine {
 
     enum class ContextActionType {
+        Attack,
         Talk,
         Pickpocket,
-        Attack
+        Trade
     };
 
     struct ContextAction {

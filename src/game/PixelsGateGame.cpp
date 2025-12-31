@@ -22,6 +22,7 @@ PixelsGateGame::PixelsGateGame()
 }
 
 void PixelsGateGame::OnStart() {
+    PixelsEngine::Config::Init();
     // Init Font
     m_TextRenderer = std::make_unique<PixelsEngine::TextRenderer>(GetRenderer(), "assets/font.ttf", 16);
 
@@ -160,23 +161,32 @@ void PixelsGateGame::RenderCharacterCreation() {
     for (int i = 0; i < 6; ++i) {
         std::string text = std::string(statNames[i]) + ": " + std::to_string(tempStats[i]);
         SDL_Color c = (selectionIndex == i) ? selectedColor : normalColor;
-        m_TextRenderer->RenderText(text, 300, y, c);
-        if (selectionIndex == i) m_TextRenderer->RenderText("<   >", 500, y, selectedColor);
+        m_TextRenderer->RenderTextCentered(text, 400, y, c);
+        if (selectionIndex == i) {
+            m_TextRenderer->RenderTextCentered(">", 400 - 120, y, selectedColor);
+            m_TextRenderer->RenderTextCentered("<", 400 + 120, y, selectedColor);
+        }
         y += 35;
     }
     y += 20;
     {
         std::string text = "Class: " + tempClasses[classIndex];
         SDL_Color c = (selectionIndex == 6) ? selectedColor : normalColor;
-        m_TextRenderer->RenderText(text, 300, y, c);
-        if (selectionIndex == 6) m_TextRenderer->RenderText("<   >", 550, y, selectedColor);
+        m_TextRenderer->RenderTextCentered(text, 400, y, c);
+        if (selectionIndex == 6) {
+            m_TextRenderer->RenderTextCentered(">", 400 - 150, y, selectedColor);
+            m_TextRenderer->RenderTextCentered("<", 400 + 150, y, selectedColor);
+        }
     }
     y += 35;
     {
         std::string text = "Race: " + tempRaces[raceIndex];
         SDL_Color c = (selectionIndex == 7) ? selectedColor : normalColor;
-        m_TextRenderer->RenderText(text, 300, y, c);
-        if (selectionIndex == 7) m_TextRenderer->RenderText("<   >", 550, y, selectedColor);
+        m_TextRenderer->RenderTextCentered(text, 400, y, c);
+        if (selectionIndex == 7) {
+            m_TextRenderer->RenderTextCentered(">", 400 - 150, y, selectedColor);
+            m_TextRenderer->RenderTextCentered("<", 400 + 150, y, selectedColor);
+        }
     }
     y += 50;
     SDL_Rect btnRect = { 300, y, 200, 50 };
@@ -334,6 +344,20 @@ void PixelsGateGame::PerformAttack(PixelsEngine::Entity forcedTarget) {
                 
                 // Destroy Entity
                 GetRegistry().DestroyEntity(target);
+
+                // Immediate Victory Check
+                if (m_State == GameState::Combat) {
+                    bool enemiesAlive = false;
+                    for (const auto& turn : m_TurnOrder) {
+                        if (!turn.isPlayer) {
+                            auto* s = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(turn.entity);
+                            if (s && !s->isDead) enemiesAlive = true;
+                        }
+                    }
+                    if (!enemiesAlive) {
+                        EndCombat();
+                    }
+                }
             }
         }
     } else {
@@ -435,6 +459,18 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
         case GameState::Character:
             HandleCharacterInput();
             break;
+        case GameState::Magic:
+            HandleMagicInput();
+            break;
+        case GameState::Trading:
+            HandleTradeInput();
+            break;
+        case GameState::KeybindSettings:
+            HandleKeybindInput();
+            break;
+        case GameState::Targeting:
+            HandleTargetingInput();
+            break;
         case GameState::Playing:
         case GameState::Combat:
         {
@@ -449,16 +485,20 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
             static bool wasI = false;
             static bool wasM = false;
             static bool wasC = false;
-            bool isEsc = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE);
-            bool isI = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_I);
-            bool isM = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_M);
-            bool isC = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_C);
+            static bool wasK = false;
+            bool isEsc = PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Pause));
+            bool isI = PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Inventory));
+            bool isM = PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Map));
+            bool isC = PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Character));
+            bool isK = PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Magic));
             
             auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
             
             if (isEsc && !wasEsc) {
                 if (inv && inv->isOpen) {
                     inv->isOpen = false;
+                } else if (m_State == GameState::Magic || m_State == GameState::Map || m_State == GameState::Character) {
+                    m_State = m_ReturnState;
                 } else {
                     m_State = GameState::Paused;
                     m_MenuSelection = 0;
@@ -468,15 +508,34 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
                 inv->isOpen = !inv->isOpen;
             }
             if (isM && !wasM) {
-                m_State = (m_State == GameState::Map) ? GameState::Playing : GameState::Map;
+                if (m_State == GameState::Map) {
+                    m_State = m_ReturnState;
+                } else {
+                    m_ReturnState = m_State;
+                    m_State = GameState::Map;
+                }
             }
             if (isC && !wasC) {
-                m_State = (m_State == GameState::Character) ? GameState::Playing : GameState::Character;
+                if (m_State == GameState::Character) {
+                    m_State = m_ReturnState;
+                } else {
+                    m_ReturnState = m_State;
+                    m_State = GameState::Character;
+                }
+            }
+            if (isK && !wasK) {
+                if (m_State == GameState::Magic) {
+                    m_State = m_ReturnState;
+                } else {
+                    m_ReturnState = m_State;
+                    m_State = GameState::Magic;
+                }
             }
             wasEsc = isEsc;
             wasI = isI;
             wasM = isM;
             wasC = isC;
+            wasK = isK;
             
             if (inv && inv->isOpen) {
                 HandleInventoryInput();
@@ -628,6 +687,10 @@ void PixelsGateGame::OnRender() {
         case GameState::GameOver:
         case GameState::Map:
         case GameState::Character:
+        case GameState::Magic:
+        case GameState::Targeting:
+        case GameState::Trading:
+        case GameState::KeybindSettings:
         {
             auto& camera = GetCamera();
                 if (m_Level) m_Level->Render(camera);
@@ -734,6 +797,15 @@ void PixelsGateGame::OnRender() {
             }
             if (m_State == GameState::Character) {
                 RenderCharacterScreen();
+            }
+            if (m_State == GameState::Magic) {
+                RenderMagicScreen();
+            }
+            if (m_State == GameState::Trading) {
+                RenderTradeScreen();
+            }
+            if (m_State == GameState::KeybindSettings) {
+                RenderKeybindSettings();
             }
         }
         break;
@@ -898,13 +970,18 @@ void PixelsGateGame::RenderInventoryItem(const PixelsEngine::Item& item, int x, 
 
 void PixelsGateGame::HandleInput() {
     static bool wasDownLeft = false, wasDownRight = false;
+    bool isAttackModifierDown = PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::AttackModifier));
     bool isCtrlDown = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_LCTRL) || PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_RCTRL);
+    
     bool isDownLeftRaw = PixelsEngine::Input::IsMouseButtonDown(SDL_BUTTON_LEFT);
     bool isDownRightRaw = PixelsEngine::Input::IsMouseButtonDown(SDL_BUTTON_RIGHT);
     
-    // Separate Left Click and Right Click (or Ctrl+LeftClick)
-    bool isPressedLeft = isDownLeftRaw && !wasDownLeft;
-    bool isPressedRight = isDownRightRaw && !wasDownRight;
+    bool isPressedLeftRaw = isDownLeftRaw && !wasDownLeft;
+    bool isPressedRightRaw = isDownRightRaw && !wasDownRight;
+    
+    // CTRL + CLICK = Right Click (equivalent to isPressedRight)
+    bool isPressedLeft = isPressedLeftRaw && !isCtrlDown;
+    bool isPressedRight = isPressedRightRaw || (isPressedLeftRaw && isCtrlDown);
     
     wasDownLeft = isDownLeftRaw; wasDownRight = isDownRightRaw;
     int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
@@ -918,7 +995,7 @@ void PixelsGateGame::HandleInput() {
             }
             
             // Handle Inspiration
-            if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_SPACE)) {
+            if (PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::EndTurn))) { // Default Space
                 auto* stats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
                 if (stats && stats->inspiration > 0) {
                     stats->inspiration--;
@@ -957,6 +1034,11 @@ void PixelsGateGame::HandleInput() {
                     auto& action = m_ContextMenu.actions[index];
                     if (action.type == PixelsEngine::ContextActionType::Talk) m_SelectedNPC = m_ContextMenu.targetEntity;
                     else if (action.type == PixelsEngine::ContextActionType::Attack) PerformAttack(m_ContextMenu.targetEntity);
+                    else if (action.type == PixelsEngine::ContextActionType::Trade) {
+                        m_TradingWith = m_ContextMenu.targetEntity;
+                        m_ReturnState = m_State;
+                        m_State = GameState::Trading;
+                    }
                     else if (action.type == PixelsEngine::ContextActionType::Pickpocket) {
                         auto* stats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
                         StartDiceRoll(stats->GetModifier(stats->dexterity), 15, "Dexterity (Sleight of Hand)", m_ContextMenu.targetEntity, PixelsEngine::ContextActionType::Pickpocket);
@@ -1018,7 +1100,11 @@ void PixelsGateGame::HandleInput() {
                     m_ContextMenu.isOpen = true; m_ContextMenu.x = mx; m_ContextMenu.y = my; m_ContextMenu.targetEntity = entity;
                     m_ContextMenu.actions.clear();
                     m_ContextMenu.actions.push_back({"Attack", PixelsEngine::ContextActionType::Attack});
-                    if (GetRegistry().HasComponent<PixelsEngine::InteractionComponent>(entity)) { m_ContextMenu.actions.push_back({"Talk", PixelsEngine::ContextActionType::Talk}); m_ContextMenu.actions.push_back({"Pickpocket", PixelsEngine::ContextActionType::Pickpocket}); }
+                    if (GetRegistry().HasComponent<PixelsEngine::InteractionComponent>(entity)) { 
+                        m_ContextMenu.actions.push_back({"Talk", PixelsEngine::ContextActionType::Talk}); 
+                        m_ContextMenu.actions.push_back({"Pickpocket", PixelsEngine::ContextActionType::Pickpocket}); 
+                        m_ContextMenu.actions.push_back({"Trade", PixelsEngine::ContextActionType::Trade});
+                    }
                     found = true; break; 
                 }
             }
@@ -1046,9 +1132,19 @@ void PixelsGateGame::CheckUIInteraction(int mx, int my) {
 
         if (mx >= btnRect.x && mx <= btnRect.x + btnRect.w && my >= btnRect.y && my <= btnRect.y + btnRect.h) {
             if (i == 0) PerformAttack();
+            else if (i == 1) { 
+                if (m_State != GameState::Magic) { m_ReturnState = m_State; m_State = GameState::Magic; }
+                else m_State = m_ReturnState;
+            }
             else if (i == 2) { auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player); if (inv) inv->isOpen = !inv->isOpen; }
-            else if (i == 3) { m_State = GameState::Map; }
-            else if (i == 4) { m_State = GameState::Character; }
+            else if (i == 3) { 
+                if (m_State != GameState::Map) { m_ReturnState = m_State; m_State = GameState::Map; }
+                else m_State = m_ReturnState;
+            }
+            else if (i == 4) { 
+                if (m_State != GameState::Character) { m_ReturnState = m_State; m_State = GameState::Character; }
+                else m_State = m_ReturnState;
+            }
             else if (i == 5) { // Opt -> Save/System
                 // For now, let's just SAVE on click.
                 // In a real game, this would open a menu.
@@ -1413,8 +1509,8 @@ void PixelsGateGame::RenderMainMenu() {
         SDL_Color color = (i == m_MenuSelection) ? SDL_Color{50, 255, 50, 255} : SDL_Color{200, 200, 200, 255};
         m_TextRenderer->RenderTextCentered(options[i], w / 2, y, color);
         if (i == m_MenuSelection) {
-             m_TextRenderer->RenderText(">", w / 2 - 100, y, color);
-             m_TextRenderer->RenderText("<", w / 2 + 100, y, color);
+             m_TextRenderer->RenderTextCentered(">", w / 2 - 100, y, color);
+             m_TextRenderer->RenderTextCentered("<", w / 2 + 100, y, color);
         }
         y += 40;
     }
@@ -1449,6 +1545,10 @@ void PixelsGateGame::RenderPauseMenu() {
     for (int i = 0; i < options.size(); ++i) {
         SDL_Color color = (i == m_MenuSelection) ? SDL_Color{50, 255, 50, 255} : SDL_Color{200, 200, 200, 255};
         m_TextRenderer->RenderTextCentered(options[i], w / 2, y, color);
+        if (i == m_MenuSelection) {
+             m_TextRenderer->RenderTextCentered(">", w / 2 - 100, y, color);
+             m_TextRenderer->RenderTextCentered("<", w / 2 + 100, y, color);
+        }
         y += 40;
     }
 }
@@ -1486,7 +1586,9 @@ void PixelsGateGame::HandlePauseMenuInput() {
                 m_State = GameState::Playing; // Will happen after fade
                 break;
             case 3: // Controls
-                m_State = GameState::Controls;
+                m_ReturnState = m_State;
+                m_State = GameState::KeybindSettings;
+                m_MenuSelection = 0;
                 break;
             case 4: // Options
                 m_State = GameState::Options;
@@ -1983,16 +2085,16 @@ void PixelsGateGame::UpdateCombat(float deltaTime) {
 }
 
 void PixelsGateGame::HandleCombatInput() {
-    if (PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_SPACE)) {
+    if (PixelsEngine::Input::IsKeyPressed(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::EndTurn))) {
         NextTurn();
         return;
     }
 
     float dx = 0, dy = 0;
-    if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_W)) dy -= 1;
-    if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_S)) dy += 1;
-    if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_A)) dx -= 1;
-    if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_D)) dx += 1;
+    if (PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::MoveUp))) dy -= 1;
+    if (PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::MoveDown))) dy += 1;
+    if (PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::MoveLeft))) dx -= 1;
+    if (PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::MoveRight))) dx += 1;
 
     if ((dx != 0 || dy != 0) && m_MovementLeft > 0) {
         float speed = 5.0f; 
@@ -2015,12 +2117,42 @@ void PixelsGateGame::HandleCombatInput() {
     }
     
     static bool wasDownLeft = false;
-    bool isDownLeftRaw = PixelsEngine::Input::IsMouseButtonDown(SDL_BUTTON_LEFT);
-    bool isPressedLeft = isDownLeftRaw && !wasDownLeft;
+    bool isAttackModifierDown = PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::AttackModifier));
     bool isCtrlDown = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_LCTRL) || PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_RCTRL);
+    
+    bool isDownLeftRaw = PixelsEngine::Input::IsMouseButtonDown(SDL_BUTTON_LEFT);
+    bool isPressedLeftRaw = isDownLeftRaw && !wasDownLeft;
     wasDownLeft = isDownLeftRaw;
 
-    if (isPressedLeft) {
+    // CTRL + CLICK = Right Click (Context Menu)
+    if (isPressedLeftRaw && isCtrlDown) {
+        int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
+        auto& camera = GetCamera(); auto& transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
+        bool found = false;
+        for (auto& [entity, transform] : transforms) {
+            if (entity == m_Player) continue;
+            auto* sprite = GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(entity);
+            if (sprite) {
+                int screenX, screenY; m_Level->GridToScreen(transform.x, transform.y, screenX, screenY);
+                screenX -= (int)camera.x; screenY -= (int)camera.y;
+                SDL_Rect drawRect = { screenX + 16 - sprite->pivotX, screenY + 16 - sprite->pivotY, sprite->srcRect.w, sprite->srcRect.h };
+                if (mx >= drawRect.x && mx <= drawRect.x + drawRect.w && my >= drawRect.y && my <= drawRect.y + drawRect.h) {
+                    m_ContextMenu.isOpen = true; m_ContextMenu.x = mx; m_ContextMenu.y = my; m_ContextMenu.targetEntity = entity;
+                    m_ContextMenu.actions.clear();
+                    m_ContextMenu.actions.push_back({"Attack", PixelsEngine::ContextActionType::Attack});
+                    if (GetRegistry().HasComponent<PixelsEngine::InteractionComponent>(entity)) { 
+                        m_ContextMenu.actions.push_back({"Talk", PixelsEngine::ContextActionType::Talk}); 
+                        m_ContextMenu.actions.push_back({"Pickpocket", PixelsEngine::ContextActionType::Pickpocket}); 
+                        m_ContextMenu.actions.push_back({"Trade", PixelsEngine::ContextActionType::Trade});
+                    }
+                    found = true; break; 
+                }
+            }
+        }
+        if (!found) m_ContextMenu.isOpen = false;
+    }
+
+    if (isPressedLeftRaw && !isCtrlDown) {
         int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
         int winW, winH; SDL_GetWindowSize(m_Window, &winW, &winH);
         
@@ -2034,7 +2166,7 @@ void PixelsGateGame::HandleCombatInput() {
         if (my > winH - 90) {
             CheckUIInteraction(mx, my);
         } else {
-            if (isCtrlDown) {
+            if (isAttackModifierDown) {
                 auto& camera = GetCamera(); auto& transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
                 bool found = false;
                 for (auto& [entity, transform] : transforms) {
@@ -2194,6 +2326,10 @@ void PixelsGateGame::RenderGameOver() {
     for (int i = 0; i < 2; ++i) {
         SDL_Color color = (m_MenuSelection == i) ? SDL_Color{255, 255, 0, 255} : SDL_Color{255, 255, 255, 255};
         m_TextRenderer->RenderTextCentered(options[i], w / 2, y, color);
+        if (i == m_MenuSelection) {
+             m_TextRenderer->RenderTextCentered(">", w / 2 - 120, y, color);
+             m_TextRenderer->RenderTextCentered("<", w / 2 + 120, y, color);
+        }
         y += 50;
     }
 }
@@ -2332,7 +2468,7 @@ void PixelsGateGame::HandleMapInput() {
     bool isEsc = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE);
     bool isM = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_M);
     if ((isEsc && !wasEsc) || (isM && !wasM)) {
-        m_State = GameState::Playing;
+        m_State = m_ReturnState;
     }
     wasEsc = isEsc; wasM = isM;
 }
@@ -2372,9 +2508,878 @@ void PixelsGateGame::HandleCharacterInput() {
     bool isEsc = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE);
     bool isC = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_C);
     if ((isEsc && !wasEsc) || (isC && !wasC)) {
-        m_State = GameState::Playing;
+        m_State = m_ReturnState;
     }
     wasEsc = isEsc; wasC = isC;
 }
+
+void PixelsGateGame::HandleTargetingInput() {
+
+    int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
+
+    bool isClick = PixelsEngine::Input::IsMouseButtonDown(SDL_BUTTON_LEFT);
+
+    static bool wasClick = false;
+
+    bool clicked = isClick && !wasClick;
+
+    wasClick = isClick;
+
+
+
+    if (clicked) {
+
+        // Find clicked entity
+
+        auto& camera = GetCamera(); 
+
+        auto& transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
+
+        PixelsEngine::Entity target = PixelsEngine::INVALID_ENTITY;
+
+
+
+        for (auto& [entity, transform] : transforms) {
+
+            auto* sprite = GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(entity);
+
+            if (sprite) {
+
+                int screenX, screenY; m_Level->GridToScreen(transform.x, transform.y, screenX, screenY);
+
+                screenX -= (int)camera.x; screenY -= (int)camera.y;
+
+                SDL_Rect drawRect = { screenX + 16 - sprite->pivotX, screenY + 16 - sprite->pivotY, sprite->srcRect.w, sprite->srcRect.h };
+
+                if (mx >= drawRect.x && mx <= drawRect.x + drawRect.w && my >= drawRect.y && my <= drawRect.y + drawRect.h) {
+
+                    target = entity;
+
+                    break;
+
+                }
+
+            }
+
+        }
+
+
+
+        if (target != PixelsEngine::INVALID_ENTITY || m_PendingSpellName == "Shield") {
+
+            CastSpell(m_PendingSpellName, target);
+
+        } else {
+
+            // Clicked empty ground
+
+            SpawnFloatingText(0, 0, "Select a valid target!", {255, 200, 0, 255});
+
+        }
+
+    }
+
+
+
+    if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE)) {
+
+        m_State = GameState::Magic; // Cancel back to spellbook
+
+    }
+
+}
+
+
+
+void PixelsGateGame::CastSpell(const std::string& spellName, PixelsEngine::Entity target) {
+
+    auto* pStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+
+    auto* pTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
+
+    if (!pStats || !pTrans) return;
+
+
+
+    if (m_State == GameState::Combat || m_ReturnState == GameState::Combat) {
+
+        if (m_CurrentTurnIndex >= 0 && m_CurrentTurnIndex < m_TurnOrder.size()) {
+
+            if (!m_TurnOrder[m_CurrentTurnIndex].isPlayer) {
+
+                SpawnFloatingText(pTrans->x, pTrans->y, "Not Your Turn!", {255, 0, 0, 255});
+
+                m_State = m_ReturnState;
+
+                return;
+
+            }
+
+        }
+
+        if (m_ActionsLeft <= 0) {
+
+            SpawnFloatingText(pTrans->x, pTrans->y, "No Actions!", {255, 0, 0, 255});
+
+            m_State = m_ReturnState;
+
+            return;
+
+        }
+
+    }
+
+
+
+    bool success = false;
+
+    if (spellName == "Heal") {
+
+        // Can heal self or anyone
+
+        PixelsEngine::Entity healTarget = (target == PixelsEngine::INVALID_ENTITY) ? m_Player : target;
+
+        auto* tStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(healTarget);
+
+        auto* tTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(healTarget);
+
+        
+
+        if (tStats) {
+
+            int healing = PixelsEngine::Dice::Roll(4) + PixelsEngine::Dice::Roll(4) + 2;
+
+            tStats->currentHealth += healing;
+
+            if (tStats->currentHealth > tStats->maxHealth) tStats->currentHealth = tStats->maxHealth;
+
+            if (tTrans) SpawnFloatingText(tTrans->x, tTrans->y, "+" + std::to_string(healing), {0, 255, 0, 255});
+
+            success = true;
+
+        }
+
+    } else if (spellName == "Fireball" || spellName == "Magic Missile") {
+
+        if (target != PixelsEngine::INVALID_ENTITY) {
+
+            auto* tStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(target);
+
+            auto* tTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(target);
+
+            
+
+            if (tStats) {
+
+                if (spellName == "Magic Missile") {
+
+                    int dmg = PixelsEngine::Dice::Roll(4) + 1;
+
+                    tStats->currentHealth -= dmg;
+
+                    if (tTrans) SpawnFloatingText(tTrans->x, tTrans->y, std::to_string(dmg), {200, 100, 255, 255});
+
+                    success = true;
+
+                } else if (spellName == "Fireball") {
+
+                    // AoE around target
+
+                    auto& allStats = GetRegistry().View<PixelsEngine::StatsComponent>();
+
+                    for (auto& [ent, s] : allStats) {
+
+                        if (ent == m_Player && target != m_Player) continue; // Friendly fire? usually fireball hits everyone
+
+                        auto* tr = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(ent);
+
+                        if (tr) {
+
+                            float d = std::sqrt(std::pow(tr->x - tTrans->x, 2) + std::pow(tr->y - tTrans->y, 2));
+
+                            if (d < 3.0f) { 
+
+                                int dmg = PixelsEngine::Dice::Roll(6) + PixelsEngine::Dice::Roll(6) + PixelsEngine::Dice::Roll(6);
+
+                                s.currentHealth -= dmg;
+
+                                SpawnFloatingText(tr->x, tr->y, std::to_string(dmg) + "!", {255, 100, 0, 255});
+
+                                if (s.currentHealth <= 0) { 
+
+                                    s.isDead = true; 
+
+                                    GetRegistry().DestroyEntity(ent); 
+
+                                }
+
+                            }
+
+                        }
+
+                    }
+
+                    success = true;
+
+                }
+
+                
+
+                if (success && (m_State == GameState::Playing || m_ReturnState == GameState::Playing) && target != m_Player) {
+
+                    StartCombat(target);
+
+                }
+
+            }
+
+        }
+
+    } else if (spellName == "Shield") {
+
+        SpawnFloatingText(pTrans->x, pTrans->y, "Shielded!", {100, 200, 255, 255});
+
+        success = true;
+
+    }
+
+
+
+    if (success) {
+
+        if (m_State == GameState::Combat || m_ReturnState == GameState::Combat) m_ActionsLeft--;
+
+        
+
+        // Final Victory Check if in combat
+
+        if (m_State == GameState::Combat || m_ReturnState == GameState::Combat) {
+
+            bool enemiesAlive = false;
+
+            auto& view = GetRegistry().View<PixelsEngine::AIComponent>();
+
+            for (auto& [ent, ai] : view) {
+
+                auto* s = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(ent);
+
+                if (s && !s->isDead) enemiesAlive = true;
+
+            }
+
+            if (!enemiesAlive) {
+
+                EndCombat();
+
+                m_ReturnState = GameState::Playing;
+
+            }
+
+        }
+
+        
+
+                m_State = m_ReturnState; 
+
+        
+
+            } else {
+
+        
+
+                // Return to spellbook if no success (clicked nothing etc)
+
+        
+
+                m_State = GameState::Magic;
+
+        
+
+            }
+
+        
+
+        }
+
+        
+
+        
+
+        
+
+        void PixelsGateGame::RenderTradeScreen() {
+
+        
+
+            SDL_Renderer* renderer = GetRenderer();
+
+        
+
+            int w, h; SDL_GetWindowSize(m_Window, &w, &h);
+
+        
+
+        
+
+        
+
+            // Overlay
+
+        
+
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
+        
+
+            SDL_SetRenderDrawColor(renderer, 20, 40, 20, 230);
+
+        
+
+            SDL_Rect screenRect = {0, 0, w, h};
+
+        
+
+            SDL_RenderFillRect(renderer, &screenRect);
+
+        
+
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+
+        
+
+        
+
+        
+
+            m_TextRenderer->RenderTextCentered("TRADING", w / 2, 50, {100, 255, 100, 255});
+
+        
+
+        
+
+        
+
+            // Simple Trade UI: Player Inventory Left, NPC Inventory Right
+
+        
+
+            auto* pInv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+
+        
+
+            auto* nInv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_TradingWith);
+
+        
+
+        
+
+        
+
+            if (pInv) {
+
+        
+
+                m_TextRenderer->RenderText("Your Items", w/4 - 50, 100, {255, 255, 255, 255});
+
+        
+
+                int y = 140;
+
+        
+
+                for (const auto& item : pInv->items) {
+
+        
+
+                    m_TextRenderer->RenderText(item.name + " (x" + std::to_string(item.quantity) + ")", w/4 - 100, y, {200, 200, 200, 255});
+
+        
+
+                    y += 35;
+
+        
+
+                }
+
+        
+
+            }
+
+        
+
+        
+
+        
+
+            if (nInv) {
+
+        
+
+                m_TextRenderer->RenderText("Trader Items", 3*w/4 - 50, 100, {255, 255, 255, 255});
+
+        
+
+                int y = 140;
+
+        
+
+                for (const auto& item : nInv->items) {
+
+        
+
+                    m_TextRenderer->RenderText(item.name + " (x" + std::to_string(item.quantity) + ")", 3*w/4 - 100, y, {200, 200, 200, 255});
+
+        
+
+                    y += 35;
+
+        
+
+                }
+
+        
+
+            } else {
+
+        
+
+                m_TextRenderer->RenderTextCentered("This NPC has nothing to trade.", 3*w/4, h/2, {150, 150, 150, 255});
+
+        
+
+            }
+
+        
+
+        
+
+        
+
+            m_TextRenderer->RenderTextCentered("Trading is a work in progress. Press ESC to Close.", w / 2, h - 50, {150, 150, 150, 255});
+
+        
+
+        }
+
+        
+
+        
+
+        
+
+        void PixelsGateGame::HandleTradeInput() {
+
+        
+
+            if (PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Pause))) {
+
+        
+
+                m_State = m_ReturnState;
+
+        
+
+            }
+
+        
+
+        }
+
+        
+
+        
+
+        
+
+        void PixelsGateGame::RenderKeybindSettings() {
+
+        
+
+            SDL_Renderer* renderer = GetRenderer();
+
+        
+
+            int w, h; SDL_GetWindowSize(m_Window, &w, &h);
+
+        
+
+        
+
+        
+
+            SDL_SetRenderDrawColor(renderer, 20, 20, 30, 255);
+
+        
+
+            SDL_RenderClear(renderer);
+
+        
+
+        
+
+        
+
+            m_TextRenderer->RenderTextCentered("CONTROLS & KEYBINDS", w / 2, 50, {255, 255, 0, 255});
+
+        
+
+        
+
+        
+
+            std::vector<PixelsEngine::GameAction> actions = {
+
+        
+
+                PixelsEngine::GameAction::MoveUp, PixelsEngine::GameAction::MoveDown,
+
+        
+
+                PixelsEngine::GameAction::MoveLeft, PixelsEngine::GameAction::MoveRight,
+
+        
+
+                PixelsEngine::GameAction::AttackModifier, PixelsEngine::GameAction::Inventory,
+
+        
+
+                PixelsEngine::GameAction::Map, PixelsEngine::GameAction::Character,
+
+        
+
+                PixelsEngine::GameAction::Magic, PixelsEngine::GameAction::Pause,
+
+        
+
+                PixelsEngine::GameAction::EndTurn
+
+        
+
+            };
+
+        
+
+        
+
+        
+
+            int y = 120;
+
+        
+
+            for (int i = 0; i < actions.size(); ++i) {
+
+        
+
+                SDL_Color color = (m_MenuSelection == i) ? SDL_Color{50, 255, 50, 255} : SDL_Color{255, 255, 255, 255};
+
+        
+
+                std::string actionName = PixelsEngine::Config::GetActionName(actions[i]);
+
+        
+
+                SDL_Scancode code = PixelsEngine::Config::GetKeybind(actions[i]);
+
+        
+
+                std::string keyName = SDL_GetScancodeName(code);
+
+        
+
+        
+
+        
+
+                if (m_IsWaitingForKey && m_MenuSelection == i) {
+
+        
+
+                    keyName = "PRESS ANY KEY...";
+
+        
+
+                    color = {255, 100, 100, 255};
+
+        
+
+                }
+
+        
+
+        
+
+        
+
+                m_TextRenderer->RenderText(actionName, w / 2 - 200, y, color);
+
+        
+
+                m_TextRenderer->RenderText(keyName, w / 2 + 100, y, color);
+
+        
+
+                
+
+        
+
+                if (m_MenuSelection == i) {
+
+        
+
+                    m_TextRenderer->RenderTextCentered(">", w / 2 - 220, y + 10, color);
+
+        
+
+                }
+
+        
+
+                y += 35;
+
+        
+
+            }
+
+        
+
+        
+
+        
+
+            m_TextRenderer->RenderTextCentered("Use W/S to select, ENTER to remap, ESC to go back.", w / 2, h - 50, {150, 150, 150, 255});
+
+        
+
+        }
+
+        
+
+        
+
+        
+
+        void PixelsGateGame::HandleKeybindInput() {
+
+        
+
+            if (m_IsWaitingForKey) {
+
+        
+
+                // Poll for any key
+
+        
+
+                for (int i = 0; i < SDL_NUM_SCANCODES; ++i) {
+
+        
+
+                    if (PixelsEngine::Input::IsKeyPressed((SDL_Scancode)i)) {
+
+        
+
+                        std::vector<PixelsEngine::GameAction> actions = {
+
+        
+
+                            PixelsEngine::GameAction::MoveUp, PixelsEngine::GameAction::MoveDown,
+
+        
+
+                            PixelsEngine::GameAction::MoveLeft, PixelsEngine::GameAction::MoveRight,
+
+        
+
+                            PixelsEngine::GameAction::AttackModifier, PixelsEngine::GameAction::Inventory,
+
+        
+
+                            PixelsEngine::GameAction::Map, PixelsEngine::GameAction::Character,
+
+        
+
+                            PixelsEngine::GameAction::Magic, PixelsEngine::GameAction::Pause,
+
+        
+
+                            PixelsEngine::GameAction::EndTurn
+
+        
+
+                        };
+
+        
+
+                        PixelsEngine::Config::SetKeybind(actions[m_MenuSelection], (SDL_Scancode)i);
+
+        
+
+                        m_IsWaitingForKey = false;
+
+        
+
+                        return;
+
+        
+
+                    }
+
+        
+
+                }
+
+        
+
+                return;
+
+        
+
+            }
+
+        
+
+        
+
+        
+
+            int numOptions = 11;
+
+        
+
+            static bool wasUp = false, wasDown = false, wasEnter = false, wasEsc = false;
+
+        
+
+            bool isUp = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_W);
+
+        
+
+            bool isDown = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_S);
+
+        
+
+            bool isEnter = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_RETURN);
+
+        
+
+            bool isEsc = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE);
+
+        
+
+        
+
+        
+
+            if (isUp && !wasUp) { m_MenuSelection--; if (m_MenuSelection < 0) m_MenuSelection = numOptions - 1; }
+
+        
+
+            if (isDown && !wasDown) { m_MenuSelection++; if (m_MenuSelection >= numOptions) m_MenuSelection = 0; }
+
+        
+
+            if (isEnter && !wasEnter) { m_IsWaitingForKey = true; }
+
+        
+
+            if (isEsc && !wasEsc) { m_State = GameState::Paused; m_MenuSelection = 0; }
+
+        
+
+        
+
+        
+
+            wasUp = isUp; wasDown = isDown; wasEnter = isEnter; wasEsc = isEsc;
+
+        
+
+        }
+
+        
+
+        
+
+
+
+
+void PixelsGateGame::HandleMagicInput() {
+    int w, h; SDL_GetWindowSize(m_Window, &w, &h);
+    int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
+    bool isClick = PixelsEngine::Input::IsMouseButtonDown(SDL_BUTTON_LEFT);
+    static bool wasClick = false;
+    bool clicked = isClick && !wasClick;
+    wasClick = isClick;
+
+    if (clicked) {
+        int x = w / 4, y = 120;
+        std::string spellNames[] = {"Fireball", "Heal", "Magic Missile", "Shield"};
+        for (int i = 0; i < 4; ++i) {
+            SDL_Rect row = { x, y, w / 2, 40 };
+            if (mx >= row.x && mx <= row.x + row.w && my >= row.y && my <= row.y + row.h) {
+                m_PendingSpellName = spellNames[i];
+                m_State = GameState::Targeting;
+                return;
+            }
+            y += 45;
+        }
+    }
+
+    static bool wasEsc = false, wasK = false;
+    bool isEsc = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE);
+    bool isK = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_K);
+    if ((isEsc && !wasEsc) || (isK && !wasK)) {
+        m_State = m_ReturnState;
+    }
+    wasEsc = isEsc; wasK = isK;
+}
+
+void PixelsGateGame::RenderMagicScreen() {
+    SDL_Renderer* renderer = GetRenderer();
+    int w, h; SDL_GetWindowSize(m_Window, &w, &h);
+    int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
+
+    // Semi-transparent Overlay
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 40, 10, 60, 230);
+    SDL_Rect screenRect = {0, 0, w, h};
+    SDL_RenderFillRect(renderer, &screenRect);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+
+    m_TextRenderer->RenderTextCentered("SPELLBOOK", w / 2, 50, {200, 100, 255, 255});
+
+    // Spells
+    std::vector<std::pair<std::string, std::string>> spells = {
+        {"Fireball", "Deals 3d6 fire damage in an area."},
+        {"Heal", "Restores 2d4+2 health points."},
+        {"Magic Missile", "Always hits, deals 1d4+1 damage."},
+        {"Shield", "Increases AC by 5 for 1 round."}
+    };
+
+    int x = w / 4, y = 120;
+    for (int i = 0; i < spells.size(); ++i) {
+        SDL_Rect row = { x, y, w / 2, 40 };
+        bool hover = (mx >= row.x && mx <= row.x + row.w && my >= row.y && my <= row.y + row.h);
+        
+        if (hover) {
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 50);
+            SDL_RenderFillRect(renderer, &row);
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+
+            // Add arrows
+            m_TextRenderer->RenderTextCentered(">", x - 20, y + 20, {50, 255, 50, 255});
+            m_TextRenderer->RenderTextCentered("<", x + (w / 2) + 20, y + 20, {50, 255, 50, 255});
+        }
+
+        m_TextRenderer->RenderText(spells[i].first, x + 10, y + 10, {255, 255, 255, 255});
+        m_TextRenderer->RenderText(spells[i].second, x + 160, y + 10, {180, 180, 180, 255});
+        y += 45;
+    }
+
+    m_TextRenderer->RenderTextCentered("Click a spell to cast. Press ESC to Close", w / 2, h - 50, {150, 150, 150, 255});
+}
+
 
 
