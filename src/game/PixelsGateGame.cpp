@@ -188,23 +188,9 @@ void PixelsGateGame::OnStart() {
     PixelsEngine::DialogueNode workFail;
     workFail.id = "work_fail";
     workFail.npcText = "You look a bit... slow. I don't have anything for someone who can't tell a boar from a bush.";
-    workFail.options.push_back(PixelsEngine::DialogueOption("Hmph.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation)); // No flag set, can try again? No, INT check non-repeatable handles it.
-    // The option "I'm looking for work" is non-repeatable. If I choose it and fail, `hasBeenChosen` is true.
-    // So I don't need flags to hide it if I fail!
-    // I only need flags to hide it if I SUCCEED and ACCEPT (because `hasBeenChosen` resets on new game, but state persists? No, new game resets everything).
-    // Wait, if I succeed, `hasBeenChosen` is true. So it hides itself!
-    // I don't need `excludeFlag` at all for the start option if it's non-repeatable!
-    // EXCEPT if I want to hide it because I accepted the quest.
-    // "I'm looking for work" -> `repeatable=false`.
-    // If I pick it, it's gone.
-    // If I succeed -> accept quest.
-    // If I fail -> gone.
-    // If I succeed -> decline quest? (Not an option implemented).
-    // So `repeatable=false` is sufficient!
-    // The only issue is if I accept, I don't want to see it. `hasBeenChosen` handles that.
-    
-    // So I don't need `Inn_Work_Topic_Closed`.
-    
+    workFail.options.push_back(PixelsEngine::DialogueOption("Hmph.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    innTree.nodes["work_fail"] = workFail;
+
     PixelsEngine::DialogueNode questComplete;
     questComplete.id = "quest_complete";
     questComplete.npcText = "My Orb! You found it! Thank you so much.";
@@ -835,10 +821,22 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
             }
             if (PixelsEngine::Input::IsKeyPressed(mapKey)) {
                 if (m_State == GameState::Map) {
-                    m_State = m_ReturnState;
+                    if (m_MapTab == 0) m_State = m_ReturnState;
+                    else m_MapTab = 0;
                 } else {
                     m_ReturnState = m_State;
                     m_State = GameState::Map;
+                    m_MapTab = 0;
+                }
+            }
+            if (PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_J)) {
+                if (m_State == GameState::Map) {
+                    if (m_MapTab == 1) m_State = m_ReturnState;
+                    else m_MapTab = 1;
+                } else {
+                    m_ReturnState = m_State;
+                    m_State = GameState::Map;
+                    m_MapTab = 1;
                 }
             }
             if (PixelsEngine::Input::IsKeyPressed(chrKey)) {
@@ -3049,12 +3047,12 @@ void PixelsGateGame::RenderCombatUI() {
                          " | Bonus: " + std::to_string(m_BonusActionsLeft) + 
                          " | Move: " + std::to_string((int)m_MovementLeft);
     
-    m_TextRenderer->RenderTextCentered(resStr, w/2, h - 80, {255, 255, 0, 255});
+    m_TextRenderer->RenderTextCentered(resStr, w/2, h - 150, {255, 255, 0, 255});
     
     if (m_TurnOrder[m_CurrentTurnIndex].isPlayer) {
-        m_TextRenderer->RenderTextCentered("Press SPACE to End Turn", w/2, h - 100, {200, 200, 200, 255});
+        m_TextRenderer->RenderTextCentered("Press SPACE to End Turn", w/2, h - 125, {200, 200, 200, 255});
     } else {
-        m_TextRenderer->RenderTextCentered("Enemy Turn...", w/2, h - 100, {255, 100, 100, 255});
+        m_TextRenderer->RenderTextCentered("Enemy Turn...", w/2, h - 125, {255, 100, 100, 255});
     }
 }void PixelsGateGame::RenderEnemyCones(const PixelsEngine::Camera& camera) {
     if (!PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_LSHIFT)) return;
@@ -3190,115 +3188,192 @@ void PixelsGateGame::RenderMapScreen() {
     SDL_RenderFillRect(renderer, &screenRect);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
 
-    m_TextRenderer->RenderTextCentered("WORLD MAP", w / 2, 50, {255, 215, 0, 255});
+    // --- Tabs ---
+    int tabW = 150;
+    int tabH = 40;
+    int startX = w / 2 - tabW;
+    int startY = 20;
 
-    if (m_Level) {
-        int mapW = m_Level->GetWidth();
-        int mapH = m_Level->GetHeight();
-        int tileSize = 10; 
-        int miniW = mapW * tileSize;
-        int miniH = mapH * tileSize;
-        int mx = (w - miniW) / 2;
-        int my = (h - miniH) / 2;
+    SDL_Rect mapTabRect = {startX, startY, tabW, tabH};
+    SDL_Rect journalTabRect = {startX + tabW, startY, tabW, tabH};
 
-        SDL_Rect miniRect = {mx - 5, my - 5, miniW + 10, miniH + 10};
-        SDL_SetRenderDrawColor(renderer, 50, 50, 50, 255);
-        SDL_RenderFillRect(renderer, &miniRect);
+    // Draw Map Tab
+    SDL_SetRenderDrawColor(renderer, (m_MapTab == 0) ? 100 : 50, (m_MapTab == 0) ? 100 : 50, (m_MapTab == 0) ? 150 : 50, 255);
+    SDL_RenderFillRect(renderer, &mapTabRect);
+    SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
+    SDL_RenderDrawRect(renderer, &mapTabRect);
+    m_TextRenderer->RenderTextCentered("MAP (M)", mapTabRect.x + tabW/2, mapTabRect.y + 10, {255, 255, 255, 255});
 
-        for (int ty = 0; ty < mapH; ++ty) {
-            for (int tx = 0; tx < mapW; ++tx) {
-                if (!m_Level->IsExplored(tx, ty)) continue;
-                using namespace PixelsEngine::Tiles;
-                int tileIdx = m_Level->GetTile(tx, ty);
-                SDL_Color c = {0, 0, 0, 255};
+    // Draw Journal Tab
+    SDL_SetRenderDrawColor(renderer, (m_MapTab == 1) ? 100 : 50, (m_MapTab == 1) ? 100 : 50, (m_MapTab == 1) ? 150 : 50, 255);
+    SDL_RenderFillRect(renderer, &journalTabRect);
+    SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
+    SDL_RenderDrawRect(renderer, &journalTabRect);
+    m_TextRenderer->RenderTextCentered("JOURNAL (J)", journalTabRect.x + tabW/2, journalTabRect.y + 10, {255, 255, 255, 255});
 
-                if (tileIdx >= DIRT && tileIdx <= DIRT_VARIANT_18) c = {101, 67, 33, 255}; // Brown
-                else if (tileIdx >= DIRT_WITH_LEAVES_01 && tileIdx <= DIRT_WITH_LEAVES_02) c = {85, 107, 47, 255}; // Olive
-                else if (tileIdx >= GRASS && tileIdx <= GRASS_VARIANT_02) c = {34, 139, 34, 255}; // Forest Green
-                else if (tileIdx == DIRT_VARIANT_19 || tileIdx == DIRT_WITH_PARTIAL_GRASS) c = {139, 69, 19, 255}; // Saddle Brown
-                else if (tileIdx >= GRASS_BLOCK_FULL && tileIdx <= GRASS_BLOCK_FULL_VARIANT_01) c = {0, 128, 0, 255}; // Green
-                else if (tileIdx >= GRASS_WITH_BUSH && tileIdx <= GRASS_WITH_BUSH_VARIANT_07) c = {0, 100, 0, 255}; // Dark Green
-                else if (tileIdx >= GRASS_VARIANT_03 && tileIdx <= GRASS_VARIANT_06) c = {50, 205, 50, 255}; // Lime Green
-                else if (tileIdx >= FLOWER && tileIdx <= FLOWERS_WITHOUT_LEAVES) c = {255, 105, 180, 255}; // Pink/Flower
-                else if (tileIdx >= LOG && tileIdx <= LOG_WITH_LEAVES_VARIANT_02) c = {139, 69, 19, 255}; // Log Brown
-                else if (tileIdx >= DIRT_PILE && tileIdx <= DIRT_PILE_VARIANT_07) c = {160, 82, 45, 255}; // Sienna
-                else if (tileIdx >= COBBLESTONE && tileIdx <= SMOOTH_STONE) c = {128, 128, 128, 255}; // Grey
-                else if (tileIdx >= ROCK && tileIdx <= ROCK_VARIANT_03) c = {105, 105, 105, 255}; // Dim Grey
-                else if (tileIdx >= ROCK_ON_WATER && tileIdx <= STONES_ON_WATER_VARIANT_11) c = {70, 130, 180, 255}; // Steel Blue
-                else if (tileIdx >= WATER_DROPLETS && tileIdx <= OCEAN_ROUGH) c = {0, 0, 255, 255}; // Blue
-                else c = {100, 100, 100, 255}; 
-                
-                SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
-                SDL_Rect tileRect = {mx + tx * tileSize, my + ty * tileSize, tileSize, tileSize};
-                SDL_RenderFillRect(renderer, &tileRect);
+    if (m_MapTab == 0) {
+        // --- Render Map ---
+        if (m_Level) {
+            int mapW = m_Level->GetWidth();
+            int mapH = m_Level->GetHeight();
+            int tileSize = 10; 
+            int miniW = mapW * tileSize;
+            int miniH = mapH * tileSize;
+            int mx = (w - miniW) / 2;
+            int my = (h - miniH) / 2 + 40; // Offset for tabs
+
+            SDL_Rect miniRect = {mx - 5, my - 5, miniW + 10, miniH + 10};
+            SDL_SetRenderDrawColor(renderer, 50, 50, 50, 255);
+            SDL_RenderFillRect(renderer, &miniRect);
+
+            for (int ty = 0; ty < mapH; ++ty) {
+                for (int tx = 0; tx < mapW; ++tx) {
+                    if (!m_Level->IsExplored(tx, ty)) continue;
+                    using namespace PixelsEngine::Tiles;
+                    int tileIdx = m_Level->GetTile(tx, ty);
+                    SDL_Color c = {0, 0, 0, 255};
+
+                    if (tileIdx >= DIRT && tileIdx <= DIRT_VARIANT_18) c = {101, 67, 33, 255}; 
+                    else if (tileIdx >= DIRT_WITH_LEAVES_01 && tileIdx <= DIRT_WITH_LEAVES_02) c = {85, 107, 47, 255}; 
+                    else if (tileIdx >= GRASS && tileIdx <= GRASS_VARIANT_02) c = {34, 139, 34, 255}; 
+                    else if (tileIdx == DIRT_VARIANT_19 || tileIdx == DIRT_WITH_PARTIAL_GRASS) c = {139, 69, 19, 255}; 
+                    else if (tileIdx >= GRASS_BLOCK_FULL && tileIdx <= GRASS_BLOCK_FULL_VARIANT_01) c = {0, 128, 0, 255}; 
+                    else if (tileIdx >= GRASS_WITH_BUSH && tileIdx <= GRASS_WITH_BUSH_VARIANT_07) c = {0, 100, 0, 255}; 
+                    else if (tileIdx >= GRASS_VARIANT_03 && tileIdx <= GRASS_VARIANT_06) c = {50, 205, 50, 255}; 
+                    else if (tileIdx >= FLOWER && tileIdx <= FLOWERS_WITHOUT_LEAVES) c = {255, 105, 180, 255}; 
+                    else if (tileIdx >= LOG && tileIdx <= LOG_WITH_LEAVES_VARIANT_02) c = {139, 69, 19, 255}; 
+                    else if (tileIdx >= DIRT_PILE && tileIdx <= DIRT_PILE_VARIANT_07) c = {160, 82, 45, 255}; 
+                    else if (tileIdx >= COBBLESTONE && tileIdx <= SMOOTH_STONE) c = {128, 128, 128, 255}; 
+                    else if (tileIdx >= ROCK && tileIdx <= ROCK_VARIANT_03) c = {105, 105, 105, 255}; 
+                    else if (tileIdx >= ROCK_ON_WATER && tileIdx <= STONES_ON_WATER_VARIANT_11) c = {70, 130, 180, 255}; 
+                    else if (tileIdx >= WATER_DROPLETS && tileIdx <= OCEAN_ROUGH) c = {0, 0, 255, 255}; 
+                    else c = {100, 100, 100, 255}; 
+                    
+                    SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
+                    SDL_Rect tileRect = {mx + tx * tileSize, my + ty * tileSize, tileSize, tileSize};
+                    SDL_RenderFillRect(renderer, &tileRect);
+                }
+            }
+
+            auto FillCircleLarge = [&](int cx, int cy, int r, SDL_Color color) {
+                SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+                for (int dy = -r; dy <= r; dy++) {
+                    for (int dx = -r; dx <= r; dx++) {
+                        if (dx*dx + dy*dy <= r*r) SDL_RenderDrawPoint(renderer, cx + dx, cy + dy);
+                    }
+                }
+            };
+
+            auto& transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
+            for (auto& [entity, trans] : transforms) {
+                if (!m_Level->IsExplored((int)trans.x, (int)trans.y)) continue;
+
+                int px = mx + (int)trans.x * tileSize + tileSize/2;
+                int py = my + (int)trans.y * tileSize + tileSize/2;
+
+                if (entity == m_Player) {
+                    FillCircleLarge(px, py, 6, {255, 255, 255, 255}); 
+                    continue;
+                }
+
+                auto* tagComp = GetRegistry().GetComponent<PixelsEngine::TagComponent>(entity);
+                if (tagComp) {
+                    switch (tagComp->tag) {
+                        case PixelsEngine::EntityTag::Hostile: FillCircleLarge(px, py, 4, {255, 0, 0, 255}); break;
+                        case PixelsEngine::EntityTag::NPC: FillCircleLarge(px, py, 4, {255, 215, 0, 255}); break;
+                        case PixelsEngine::EntityTag::Companion: FillCircleLarge(px, py, 4, {0, 191, 255, 255}); break;
+                        case PixelsEngine::EntityTag::Trader: { SDL_Rect box = {px - 4, py - 4, 8, 8}; SDL_SetRenderDrawColor(renderer, 139, 69, 19, 255); SDL_RenderFillRect(renderer, &box); break; }
+                        case PixelsEngine::EntityTag::Quest: { FillCircleLarge(px, py, 6, {255, 255, 255, 255}); SDL_Rect sq = {px - 2, py - 2, 4, 4}; SDL_SetRenderDrawColor(renderer, 255, 215, 0, 255); SDL_RenderFillRect(renderer, &sq); break; }
+                        default: break;
+                    }
+                }
             }
         }
-
-        // Helper for circles on map
-        auto FillCircleLarge = [&](int cx, int cy, int r, SDL_Color color) {
-            SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
-            for (int dy = -r; dy <= r; dy++) {
-                for (int dx = -r; dx <= r; dx++) {
-                    if (dx*dx + dy*dy <= r*r) SDL_RenderDrawPoint(renderer, cx + dx, cy + dy);
-                }
+    } else {
+        // --- Render Journal ---
+        m_TextRenderer->RenderTextCentered("QUEST JOURNAL", w / 2, 100, {255, 215, 0, 255});
+        
+        auto& quests = GetRegistry().View<PixelsEngine::QuestComponent>();
+        int qY = 160;
+        bool anyQuests = false;
+        
+        for (auto& [entity, quest] : quests) {
+            if (quest.state == 0) continue; // Not started
+            anyQuests = true;
+            
+            std::string title = quest.questId;
+            if (title == "FetchOrb") title = "The Lost Orb";
+            else if (title == "HuntBoars") title = "Boar Hunt";
+            
+            std::string status = (quest.state == 2) ? " (Complete)" : "";
+            SDL_Color color = (quest.state == 2) ? SDL_Color{150, 150, 150, 255} : SDL_Color{255, 255, 255, 255};
+            
+            // Draw bullet point
+            m_TextRenderer->RenderText("- " + title + status, w/2 - 150, qY, color);
+            
+            // Draw simple description based on ID/State
+            std::string desc = "";
+            if (quest.state == 1) {
+                if (quest.questId == "FetchOrb") desc = "Find the Gold Orb for the Innkeeper.";
+                else if (quest.questId == "HuntBoars") desc = "Hunt Boars and bring Boar Meat to the Guardian.";
+            } else {
+                 if (quest.questId == "FetchOrb") desc = "You returned the Gold Orb.";
+                 else if (quest.questId == "HuntBoars") desc = "You helped reduce the boar population.";
             }
-        };
-
-        // Render all entities on Map
-        auto& transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
-        for (auto& [entity, trans] : transforms) {
-            if (!m_Level->IsExplored((int)trans.x, (int)trans.y)) continue;
-
-            int px = mx + (int)trans.x * tileSize + tileSize/2;
-            int py = my + (int)trans.y * tileSize + tileSize/2;
-
-            if (entity == m_Player) {
-                FillCircleLarge(px, py, 6, {255, 255, 255, 255}); // Player: White Circle
-                continue;
+            
+            if (!desc.empty()) {
+                m_TextRenderer->RenderTextWrapped(desc, w/2 - 130, qY + 25, 300, {180, 180, 180, 255});
+                qY += 60; // Extra spacing for description
+            } else {
+                qY += 40;
             }
-
-            auto* tagComp = GetRegistry().GetComponent<PixelsEngine::TagComponent>(entity);
-            if (tagComp) {
-                switch (tagComp->tag) {
-                    case PixelsEngine::EntityTag::Hostile:
-                        FillCircleLarge(px, py, 4, {255, 0, 0, 255}); // Hostile: Red Circle
-                        break;
-                    case PixelsEngine::EntityTag::NPC:
-                        FillCircleLarge(px, py, 4, {255, 215, 0, 255}); // NPC: Gold Circle
-                        break;
-                    case PixelsEngine::EntityTag::Companion:
-                        FillCircleLarge(px, py, 4, {0, 191, 255, 255}); // Companion: Blue Circle
-                        break;
-                    case PixelsEngine::EntityTag::Trader:
-                    {
-                        SDL_Rect box = {px - 4, py - 4, 8, 8};
-                        SDL_SetRenderDrawColor(renderer, 139, 69, 19, 255);
-                        SDL_RenderFillRect(renderer, &box);
-                        break;
-                    }
-                    case PixelsEngine::EntityTag::Quest:
-                    {
-                        FillCircleLarge(px, py, 6, {255, 255, 255, 255});
-                        SDL_Rect sq = {px - 2, py - 2, 4, 4};
-                        SDL_SetRenderDrawColor(renderer, 255, 215, 0, 255);
-                        SDL_RenderFillRect(renderer, &sq);
-                        break;
-                    }
-                    default: break;
-                }
-            }
+        }
+        
+        if (!anyQuests) {
+             m_TextRenderer->RenderTextCentered("No active quests.", w/2, h/2, {150, 150, 150, 255});
         }
     }
 
-    m_TextRenderer->RenderTextCentered("Press ESC or MAP to Close", w / 2, h - 50, {150, 150, 150, 255});
+    m_TextRenderer->RenderTextCentered("Press ESC or MAP/J to Close", w / 2, h - 50, {150, 150, 150, 255});
 }
 
 void PixelsGateGame::HandleMapInput() {
     auto escKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Pause);
     auto mapKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Map);
     
-    if (PixelsEngine::Input::IsKeyPressed(escKey) || PixelsEngine::Input::IsKeyPressed(mapKey)) {
+    if (PixelsEngine::Input::IsKeyPressed(escKey)) {
         m_State = m_ReturnState;
+        return;
+    }
+    
+    // M and J keys handled in OnUpdate mostly, but good to have toggle here for M/J within menu
+    if (PixelsEngine::Input::IsKeyPressed(mapKey)) {
+        if (m_MapTab == 0) m_State = m_ReturnState;
+        else m_MapTab = 0;
+    }
+    if (PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_J)) {
+        if (m_MapTab == 1) m_State = m_ReturnState;
+        else m_MapTab = 1;
+    }
+
+    // Mouse Interaction for Tabs
+    if (PixelsEngine::Input::IsMouseButtonPressed(SDL_BUTTON_LEFT)) {
+        int w, h; SDL_GetWindowSize(m_Window, &w, &h);
+        int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
+
+        int tabW = 150;
+        int tabH = 40;
+        int startX = w / 2 - tabW;
+        int startY = 20;
+
+        SDL_Rect mapTabRect = {startX, startY, tabW, tabH};
+        SDL_Rect journalTabRect = {startX + tabW, startY, tabW, tabH};
+
+        if (mx >= mapTabRect.x && mx <= mapTabRect.x + mapTabRect.w && my >= mapTabRect.y && my <= mapTabRect.y + mapTabRect.h) {
+            m_MapTab = 0;
+        } else if (mx >= journalTabRect.x && mx <= journalTabRect.x + journalTabRect.w && my >= journalTabRect.y && my <= journalTabRect.y + journalTabRect.h) {
+            m_MapTab = 1;
+        }
     }
 }
 

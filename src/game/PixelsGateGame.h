@@ -109,6 +109,7 @@ private:
 
     // Menu Navigation
     int m_MenuSelection = 0;
+    int m_MapTab = 0; // 0: Map, 1: Journal
     float m_MenuTimer = 0.0f; // for debouncing or animations
 
     // Visual Feedback
