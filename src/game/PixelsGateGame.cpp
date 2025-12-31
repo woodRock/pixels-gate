@@ -105,6 +105,7 @@ void PixelsGateGame::OnStart() {
     GetRegistry().AddComponent(npc1, PixelsEngine::StatsComponent{50, 50, 5, false}); 
     GetRegistry().AddComponent(npc1, PixelsEngine::QuestComponent{ "FetchOrb", 0, "Gold Orb" });
     GetRegistry().AddComponent(npc1, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Quest });
+    GetRegistry().AddComponent(npc1, PixelsEngine::AIComponent{ 8.0f, 1.5f, 2.0f, 0.0f, false, 0.0f, 90.0f, 90.0f }); // Non-aggressive, facing South
     auto& n1Inv = GetRegistry().AddComponent(npc1, PixelsEngine::InventoryComponent{});
     n1Inv.AddItem("Coins", 100);
     n1Inv.AddItem("Potion", 1, PixelsEngine::ItemType::Consumable, 0, "", 50);
@@ -116,6 +117,7 @@ void PixelsGateGame::OnStart() {
     GetRegistry().AddComponent(npc2, PixelsEngine::StatsComponent{50, 50, 5, false}); 
     GetRegistry().AddComponent(npc2, PixelsEngine::QuestComponent{ "HuntBoars", 0, "Boar Meat" });
     GetRegistry().AddComponent(npc2, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Quest });
+    GetRegistry().AddComponent(npc2, PixelsEngine::AIComponent{ 8.0f, 1.5f, 2.0f, 0.0f, false, 0.0f, 270.0f, 90.0f }); // Non-aggressive, facing North
     auto& n2Inv = GetRegistry().AddComponent(npc2, PixelsEngine::InventoryComponent{});
     n2Inv.AddItem("Coins", 50);
     n2Inv.AddItem("Bread", 2, PixelsEngine::ItemType::Consumable, 0, "", 10);
@@ -126,6 +128,7 @@ void PixelsGateGame::OnStart() {
     GetRegistry().AddComponent(comp, PixelsEngine::SpriteComponent{ playerTexture, {0, 0, 32, 32}, 16, 30 });
     GetRegistry().AddComponent(comp, PixelsEngine::InteractionComponent{ "I'm with you!", false, 0.0f });
     GetRegistry().AddComponent(comp, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Companion });
+    GetRegistry().AddComponent(comp, PixelsEngine::AIComponent{ 10.0f, 1.5f, 2.0f, 0.0f, false });
     auto& cInv = GetRegistry().AddComponent(comp, PixelsEngine::InventoryComponent{});
     cInv.AddItem("Coins", 10);
 
@@ -135,6 +138,7 @@ void PixelsGateGame::OnStart() {
     GetRegistry().AddComponent(trader, PixelsEngine::SpriteComponent{ playerTexture, {0, 0, 32, 32}, 16, 30 });
     GetRegistry().AddComponent(trader, PixelsEngine::InteractionComponent{ "Want to trade?", false, 0.0f });
     GetRegistry().AddComponent(trader, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Trader });
+    GetRegistry().AddComponent(trader, PixelsEngine::AIComponent{ 8.0f, 1.5f, 2.0f, 0.0f, false, 0.0f, 0.0f, 120.0f });
     auto& tInv = GetRegistry().AddComponent(trader, PixelsEngine::InventoryComponent{});
     tInv.AddItem("Coins", 500);
     tInv.AddItem("Sword", 1, PixelsEngine::ItemType::WeaponMelee, 10, "assets/sword.png", 150);
@@ -335,6 +339,50 @@ void PixelsGateGame::PerformAttack(PixelsEngine::Entity forcedTarget) {
                     std::string dmgText = std::to_string(dmg);
                     if (isCrit) dmgText += "!";
                     SpawnFloatingText(targetTrans->x, targetTrans->y, dmgText, isCrit ? SDL_Color{255, 0, 0, 255} : SDL_Color{255, 255, 255, 255});
+                }
+
+                // --- Witness Logic ---
+                auto* targetTag = GetRegistry().GetComponent<PixelsEngine::TagComponent>(target);
+                bool isCrime = (targetTag && (targetTag->tag == PixelsEngine::EntityTag::NPC || targetTag->tag == PixelsEngine::EntityTag::Trader || targetTag->tag == PixelsEngine::EntityTag::Quest));
+                
+                if (isCrime) {
+                    auto& aiView = GetRegistry().View<PixelsEngine::AIComponent>();
+                    for (auto& [witness, wai] : aiView) {
+                        if (witness == m_Player || witness == target) continue;
+                        auto* wTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(witness);
+                        if (!wTrans) continue;
+
+                        // Check if witness sees the player (criminal)
+                        float dx = playerTrans->x - wTrans->x;
+                        float dy = playerTrans->y - wTrans->y;
+                        float d = std::sqrt(dx*dx + dy*dy);
+                        if (d <= wai.sightRange) {
+                            float angle = std::atan2(dy, dx) * (180.0f / M_PI);
+                            float diff = angle - wai.facingDir;
+                            while (diff > 180.0f) diff -= 360.0f;
+                            while (diff < -180.0f) diff += 360.0f;
+
+                            if (std::abs(diff) <= wai.coneAngle / 2.0f) {
+                                // Witnessed!
+                                wai.isAggressive = true;
+                                wai.hostileTimer = 30.0f; // Hostile for 30 seconds
+                                SpawnFloatingText(wTrans->x, wTrans->y, "Halt criminal!", {255, 0, 0, 255});
+                                
+                                // Join combat if not already
+                                if (m_State == GameState::Combat) {
+                                    // Add to turn order if not there
+                                    bool inTurnOrder = false;
+                                    for(auto& t : m_TurnOrder) if(t.entity == witness) inTurnOrder = true;
+                                    if(!inTurnOrder) {
+                                        auto* wStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(witness);
+                                        int init = PixelsEngine::Dice::Roll(20) + (wStats ? wStats->GetModifier(wStats->dexterity) : 0);
+                                        m_TurnOrder.push_back({witness, init, false});
+                                        // Sort needs to happen but simplified here
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             } else {
                 // Miss
@@ -1789,6 +1837,19 @@ void PixelsGateGame::UpdateAI(float deltaTime) {
         
         if (!transform) continue;
 
+        // Update Hostile Timer
+        if (ai.hostileTimer > 0.0f) {
+            ai.hostileTimer -= deltaTime;
+            if (ai.hostileTimer <= 0.0f) {
+                // Calm down if not naturally aggressive
+                auto* tag = GetRegistry().GetComponent<PixelsEngine::TagComponent>(entity);
+                if (tag && tag->tag != PixelsEngine::EntityTag::Hostile) {
+                    ai.isAggressive = false;
+                    SpawnFloatingText(transform->x, transform->y, "Must have been the wind...", {200, 200, 200, 255});
+                }
+            }
+        }
+
         float dist = std::sqrt(std::pow(pTrans->x - transform->x, 2) + std::pow(pTrans->y - transform->y, 2));
 
         bool canSee = false;
@@ -2131,6 +2192,9 @@ void PixelsGateGame::UpdateCombat(float deltaTime) {
     } else {
         // AI Logic
         m_CombatTurnTimer -= deltaTime;
+        auto* aiComp = GetRegistry().GetComponent<PixelsEngine::AIComponent>(turn.entity);
+        if (aiComp && aiComp->hostileTimer > 0.0f) aiComp->hostileTimer -= deltaTime;
+
         if (m_CombatTurnTimer <= 0.0f) {
             auto* aiTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(turn.entity);
             auto* pTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);

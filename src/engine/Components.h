@@ -75,8 +75,9 @@ namespace PixelsEngine {
         float attackCooldown = 2.0f;
         float attackTimer = 0.0f;
         bool isAggressive = true;
+        float hostileTimer = 0.0f; // Temporary hostility
         // Cone of vision
-        float facingDir = 0.0f; // in degrees, 0 = East? Standard math convention? Or screen coordinates? Let's say 0 is East, 90 South (screen coords)
+        float facingDir = 0.0f; // in degrees, 0 = East
         float coneAngle = 60.0f; // Total angle of the cone
     };
 
