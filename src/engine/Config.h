@@ -16,7 +16,12 @@ namespace PixelsEngine {
         Character,
         Magic,
         Pause,
-        EndTurn
+        EndTurn,
+        Dash,
+        Jump,
+        Sneak,
+        Shove,
+        ToggleWeapon
     };
 
     class Config {
@@ -27,13 +32,18 @@ namespace PixelsEngine {
             m_Keybinds[GameAction::MoveDown] = SDL_SCANCODE_S;
             m_Keybinds[GameAction::MoveLeft] = SDL_SCANCODE_A;
             m_Keybinds[GameAction::MoveRight] = SDL_SCANCODE_D;
-            m_Keybinds[GameAction::AttackModifier] = SDL_SCANCODE_LSHIFT; // Changed from CTRL to LSHIFT by default to avoid Mac conflict
+            m_Keybinds[GameAction::AttackModifier] = SDL_SCANCODE_LSHIFT; 
             m_Keybinds[GameAction::Inventory] = SDL_SCANCODE_I;
             m_Keybinds[GameAction::Map] = SDL_SCANCODE_M;
-            m_Keybinds[GameAction::Character] = SDL_SCANCODE_C;
+            m_Keybinds[GameAction::Character] = SDL_SCANCODE_O; // Moved from C to O
             m_Keybinds[GameAction::Magic] = SDL_SCANCODE_K;
             m_Keybinds[GameAction::Pause] = SDL_SCANCODE_ESCAPE;
             m_Keybinds[GameAction::EndTurn] = SDL_SCANCODE_SPACE;
+            m_Keybinds[GameAction::Jump] = SDL_SCANCODE_Z;
+            m_Keybinds[GameAction::Sneak] = SDL_SCANCODE_C;
+            m_Keybinds[GameAction::Shove] = SDL_SCANCODE_V;
+            m_Keybinds[GameAction::Dash] = SDL_SCANCODE_B; 
+            m_Keybinds[GameAction::ToggleWeapon] = SDL_SCANCODE_F;
         }
 
         static SDL_Scancode GetKeybind(GameAction action) {
@@ -53,10 +63,15 @@ namespace PixelsEngine {
                 case GameAction::AttackModifier: return "Attack (Hold + Click)";
                 case GameAction::Inventory: return "Inventory";
                 case GameAction::Map: return "Map";
-                case GameAction::Character: return "Character";
+                case GameAction::Character: return "Character Sheet";
                 case GameAction::Magic: return "Magic";
                 case GameAction::Pause: return "Pause/Back";
                 case GameAction::EndTurn: return "End Turn";
+                case GameAction::Jump: return "Jump";
+                case GameAction::Sneak: return "Hide/Sneak";
+                case GameAction::Shove: return "Shove";
+                case GameAction::Dash: return "Dash";
+                case GameAction::ToggleWeapon: return "Toggle Melee/Ranged";
                 default: return "Unknown";
             }
         }

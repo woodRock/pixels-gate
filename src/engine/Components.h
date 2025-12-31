@@ -42,6 +42,8 @@ namespace PixelsEngine {
         int experience = 0;
         int level = 1;
         int inspiration = 1; // Default 1 inspiration point
+        bool isStealthed = false;
+        bool hasAdvantage = false;
 
         // D&D Stats
         int strength = 10;
@@ -96,6 +98,10 @@ namespace PixelsEngine {
 
     struct TagComponent {
         EntityTag tag = EntityTag::None;
+    };
+
+    struct DialogueComponent {
+        PixelsEngine::DialogueTree tree;
     };
 
 }

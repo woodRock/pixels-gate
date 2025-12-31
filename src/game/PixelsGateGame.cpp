@@ -11,6 +11,7 @@
 #include "../engine/Components.h"
 #include "../engine/Pathfinding.h"
 #include "../engine/AnimationSystem.h"
+#include "../engine/Tiles.h"
 #include <SDL2/SDL_ttf.h>
 #include <algorithm>
 #include <functional>
@@ -22,6 +23,7 @@ PixelsGateGame::PixelsGateGame()
 }
 
 void PixelsGateGame::OnStart() {
+    // Init Config
     PixelsEngine::Config::Init();
     // Init Font
     m_TextRenderer = std::make_unique<PixelsEngine::TextRenderer>(GetRenderer(), "assets/font.ttf", 16);
@@ -33,33 +35,50 @@ void PixelsGateGame::OnStart() {
     m_Level = std::make_unique<PixelsEngine::Tilemap>(GetRenderer(), isoTileset, 32, 32, mapW, mapH);
     m_Level->SetProjection(PixelsEngine::Projection::Isometric);
     
-    const int GRASS = 0;  
-    const int GRASS_VAR = 1;
-    const int DIRT = 2;   
-    const int GRASS_Dense = 10; 
-    const int WATER = 28; 
-    const int SAND = 100; 
-    const int STONE = 61; 
+    using namespace PixelsEngine::Tiles;
 
-    // Generate Biomes
+    // --- Structured World Generation ---
     for (int y = 0; y < mapH; ++y) {
         for (int x = 0; x < mapW; ++x) {
-            float nx = x / (float)mapW;
-            float ny = y / (float)mapH;
-            float noise = std::sin(nx * 10.0f) + std::cos(ny * 10.0f) + std::sin((nx + ny) * 5.0f);
-            
             int tile = GRASS;
-            if (noise < -1.0f) tile = WATER;
-            else if (noise < -0.6f) tile = SAND;
-            else if (noise < 0.5f) {
-                tile = GRASS;
-                if ((x * y) % 10 == 0) tile = GRASS_VAR;
-                if ((x * y) % 17 == 0) tile = GRASS_Dense; 
-            } else if (noise < 1.2f) tile = DIRT;
-            else tile = STONE;
             
-            if (x == 0 || x == mapW-1 || y == 0 || y == mapH-1) tile = STONE;
-            if (x >= 18 && x <= 22 && y >= 18 && y <= 22) tile = GRASS;
+            // 1. The Inn (Center 20,20) - Highest Priority
+            if (x >= 17 && x <= 23 && y >= 17 && y <= 23) {
+                // Inn Walls
+                if (x == 17 || x == 23 || y == 17 || y == 23) {
+                    tile = LOGS;
+                    // Entrance
+                    if (x == 20 && y == 23) tile = DIRT; 
+                } else {
+                    tile = SMOOTH_STONE; // Inn Floor (Fixed from water)
+                }
+            }
+            // 2. Non-linear Path Network (DIRT)
+            else if ((x == 20) || (y == 20) || // Main cross paths
+                     (x == y) || (x + y == 40) || // Diagonal paths
+                     (std::sqrt(std::pow(x-20, 2) + std::pow(y-20, 2)) < 12.0f && std::sqrt(std::pow(x-20, 2) + std::pow(y-20, 2)) > 10.5f)) // Circular courtyard path
+            {
+                tile = DIRT;
+            }
+            // 3. River (Diagonal)
+            else if (std::abs(x - y) < 3) {
+                tile = (std::abs(x - y) == 0) ? DEEP_WATER : WATER;
+                if ((x + y) % 7 == 0) tile = ROCK_ON_WATER;
+            } 
+            // 4. Natural Terrain
+            else {
+                float noise = std::sin(x * 0.2f) + std::cos(y * 0.2f);
+                if (noise > 1.0f) tile = GRASS_WITH_BUSH;
+                else if (noise < -1.2f) tile = DIRT_VARIANT_19;
+                
+                // Add variety
+                if (tile == GRASS && (x * y) % 13 == 0) tile = GRASS_VARIANT_01;
+                if (tile == GRASS && (x * y) % 17 == 0) tile = FLOWER;
+                if (tile == GRASS_WITH_BUSH && (x * y) % 11 == 0) tile = BUSH;
+            }
+
+            // Boundaries
+            if (x == 0 || x == mapW-1 || y == 0 || y == mapH-1) tile = ROCK;
 
             m_Level->SetTile(x, y, tile); 
         }
@@ -92,41 +111,76 @@ void PixelsGateGame::OnStart() {
     anim.AddAnimation("WalkUp", 0, 32, 32, 32, 4);
     anim.AddAnimation("WalkLeft", 0, 32, 32, 32, 4);
 
-    // 3. Spawn Boars
-    CreateBoar(28.0f, 28.0f);
-    CreateBoar(32.0f, 32.0f);
-    CreateBoar(25.0f, 35.0f);
+    // 3. Spawn Boars (Far from Inn)
+    CreateBoar(35.0f, 35.0f);
+    CreateBoar(32.0f, 5.0f);
+    CreateBoar(5.0f, 32.0f);
 
     // 4. NPCs
     auto npc1 = GetRegistry().CreateEntity();
-    GetRegistry().AddComponent(npc1, PixelsEngine::TransformComponent{ 21.0f, 21.0f });
+    GetRegistry().AddComponent(npc1, PixelsEngine::TransformComponent{ 19.0f, 19.0f }); // In Inn
     GetRegistry().AddComponent(npc1, PixelsEngine::SpriteComponent{ playerTexture, {0, 0, 32, 32}, 16, 30 });
-    GetRegistry().AddComponent(npc1, PixelsEngine::InteractionComponent{ "Hello Hunter!", false, 0.0f });
+    GetRegistry().AddComponent(npc1, PixelsEngine::InteractionComponent{ "Innkeeper", false, 0.0f });
     GetRegistry().AddComponent(npc1, PixelsEngine::StatsComponent{50, 50, 5, false}); 
     GetRegistry().AddComponent(npc1, PixelsEngine::QuestComponent{ "FetchOrb", 0, "Gold Orb" });
     GetRegistry().AddComponent(npc1, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Quest });
-    GetRegistry().AddComponent(npc1, PixelsEngine::AIComponent{ 8.0f, 1.5f, 2.0f, 0.0f, false, 0.0f, 90.0f, 90.0f }); // Non-aggressive, facing South
+    GetRegistry().AddComponent(npc1, PixelsEngine::AIComponent{ 8.0f, 1.5f, 2.0f, 0.0f, false, 0.0f, 90.0f, 90.0f }); 
+    
+    // --- Build Complex Dialogue Tree for Innkeeper ---
+    PixelsEngine::DialogueTree innTree;
+    innTree.currentEntityName = "Innkeeper";
+    innTree.currentNodeId = "start";
+
+    PixelsEngine::DialogueNode startNode;
+    startNode.id = "start";
+    startNode.npcText = "Welcome to the Pixel Inn! What can I do for you today, traveler?";
+    startNode.options.push_back({"I'm looking for work. [Intelligence DC 10]", "work_check", "Intelligence", 10, "work_success", "work_fail"});
+    startNode.options.push_back({"Can I get a discount on a room? [Charisma DC 12]", "room_check", "Charisma", 12, "discount_success", "discount_fail"});
+    startNode.options.push_back({"I don't like your face. [Attack]", "end", "None", 0, "", "", PixelsEngine::DialogueAction::StartCombat});
+    startNode.options.push_back({"Just looking around. [End]", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation});
+    innTree.nodes["start"] = startNode;
+
+    PixelsEngine::DialogueNode workSuccess;
+    workSuccess.id = "work_success";
+    workSuccess.npcText = "A sharp eye! Indeed, the local boars have been raiding our stores. Hunt them and I'll pay you well.";
+    workSuccess.options.push_back({"I'll get right on it.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation});
+    innTree.nodes["work_success"] = workSuccess;
+
+    PixelsEngine::DialogueNode workFail;
+    workFail.id = "work_fail";
+    workFail.npcText = "You look a bit... slow. I don't have anything for someone who can't tell a boar from a bush.";
+    workFail.options.push_back({"Hmph.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation});
+    innTree.nodes["work_fail"] = workFail;
+
+    PixelsEngine::DialogueNode discountSuccess;
+    discountSuccess.id = "discount_success";
+    discountSuccess.npcText = "You have a silver tongue! Fine, half price for you tonight.";
+    discountSuccess.options.push_back({"Much appreciated.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation, "discount_active"});
+    innTree.nodes["discount_success"] = discountSuccess;
+
+    GetRegistry().AddComponent(npc1, PixelsEngine::DialogueComponent{ innTree });
+
     auto& n1Inv = GetRegistry().AddComponent(npc1, PixelsEngine::InventoryComponent{});
     n1Inv.AddItem("Coins", 100);
     n1Inv.AddItem("Potion", 1, PixelsEngine::ItemType::Consumable, 0, "", 50);
 
     auto npc2 = GetRegistry().CreateEntity();
-    GetRegistry().AddComponent(npc2, PixelsEngine::TransformComponent{ 18.0f, 22.0f });
+    GetRegistry().AddComponent(npc2, PixelsEngine::TransformComponent{ 20.0f, 25.0f }); // Guarding path
     GetRegistry().AddComponent(npc2, PixelsEngine::SpriteComponent{ playerTexture, {0, 0, 32, 32}, 16, 30 });
-    GetRegistry().AddComponent(npc2, PixelsEngine::InteractionComponent{ "Hello Warrior!", false, 0.0f });
+    GetRegistry().AddComponent(npc2, PixelsEngine::InteractionComponent{ "The world is dangerous out there.", false, 0.0f });
     GetRegistry().AddComponent(npc2, PixelsEngine::StatsComponent{50, 50, 5, false}); 
     GetRegistry().AddComponent(npc2, PixelsEngine::QuestComponent{ "HuntBoars", 0, "Boar Meat" });
     GetRegistry().AddComponent(npc2, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Quest });
-    GetRegistry().AddComponent(npc2, PixelsEngine::AIComponent{ 8.0f, 1.5f, 2.0f, 0.0f, false, 0.0f, 270.0f, 90.0f }); // Non-aggressive, facing North
+    GetRegistry().AddComponent(npc2, PixelsEngine::AIComponent{ 8.0f, 1.5f, 2.0f, 0.0f, false, 0.0f, 270.0f, 90.0f }); 
     auto& n2Inv = GetRegistry().AddComponent(npc2, PixelsEngine::InventoryComponent{});
     n2Inv.AddItem("Coins", 50);
-    n2Inv.AddItem("Bread", 2, PixelsEngine::ItemType::Consumable, 0, "", 10);
+    n2Inv.AddItem("Bread", 5, PixelsEngine::ItemType::Consumable, 0, "", 10);
 
     // Add a Companion
     auto comp = GetRegistry().CreateEntity();
-    GetRegistry().AddComponent(comp, PixelsEngine::TransformComponent{ 22.0f, 18.0f });
+    GetRegistry().AddComponent(comp, PixelsEngine::TransformComponent{ 21.0f, 21.0f }); // In Inn
     GetRegistry().AddComponent(comp, PixelsEngine::SpriteComponent{ playerTexture, {0, 0, 32, 32}, 16, 30 });
-    GetRegistry().AddComponent(comp, PixelsEngine::InteractionComponent{ "I'm with you!", false, 0.0f });
+    GetRegistry().AddComponent(comp, PixelsEngine::InteractionComponent{ "Need a hand, traveler?", false, 0.0f });
     GetRegistry().AddComponent(comp, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Companion });
     GetRegistry().AddComponent(comp, PixelsEngine::StatsComponent{80, 80, 8, false}); 
     GetRegistry().AddComponent(comp, PixelsEngine::AIComponent{ 10.0f, 1.5f, 2.0f, 0.0f, false });
@@ -135,9 +189,9 @@ void PixelsGateGame::OnStart() {
 
     // Add a Trader
     auto trader = GetRegistry().CreateEntity();
-    GetRegistry().AddComponent(trader, PixelsEngine::TransformComponent{ 15.0f, 15.0f });
+    GetRegistry().AddComponent(trader, PixelsEngine::TransformComponent{ 18.0f, 21.0f }); // In Inn
     GetRegistry().AddComponent(trader, PixelsEngine::SpriteComponent{ playerTexture, {0, 0, 32, 32}, 16, 30 });
-    GetRegistry().AddComponent(trader, PixelsEngine::InteractionComponent{ "Want to trade?", false, 0.0f });
+    GetRegistry().AddComponent(trader, PixelsEngine::InteractionComponent{ "I have wares if you have coins.", false, 0.0f });
     GetRegistry().AddComponent(trader, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Trader });
     GetRegistry().AddComponent(trader, PixelsEngine::StatsComponent{100, 100, 10, false}); 
     GetRegistry().AddComponent(trader, PixelsEngine::AIComponent{ 8.0f, 1.5f, 2.0f, 0.0f, false, 0.0f, 0.0f, 120.0f });
@@ -147,10 +201,10 @@ void PixelsGateGame::OnStart() {
     tInv.AddItem("Leather Armor", 1, PixelsEngine::ItemType::Armor, 5, "assets/armor.png", 200);
     tInv.AddItem("Potion", 5, PixelsEngine::ItemType::Consumable, 0, "", 50);
 
-    // 5. Spawn Gold Orb
+    // 5. Spawn Gold Orb (Across the river)
     auto orb = GetRegistry().CreateEntity();
-    GetRegistry().AddComponent(orb, PixelsEngine::TransformComponent{ 23.0f, 23.0f }); 
-    m_Level->SetTile(23, 23, GRASS);
+    GetRegistry().AddComponent(orb, PixelsEngine::TransformComponent{ 5.0f, 5.0f }); 
+    m_Level->SetTile(5, 5, GRASS);
     auto orbTexture = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/gold_orb.png");
     GetRegistry().AddComponent(orb, PixelsEngine::SpriteComponent{ 
         orbTexture, {0, 0, 32, 32}, 16, 16 
@@ -327,9 +381,16 @@ void PixelsGateGame::PerformAttack(PixelsEngine::Entity forcedTarget) {
 
             // Hit Roll against AC (Assuming NPCs have default 10 AC + Dex mod for now)
             int targetAC = 10 + targetStats->GetModifier(targetStats->dexterity);
-            int roll = PixelsEngine::Dice::Roll(20);
             
-            // Use Str for melee, Dex for ranged
+            int roll = PixelsEngine::Dice::Roll(20);
+            if (playerStats->hasAdvantage) {
+                int secondRoll = PixelsEngine::Dice::Roll(20);
+                roll = std::max(roll, secondRoll);
+                playerStats->hasAdvantage = false; // Consume advantage
+                playerStats->isStealthed = false;  // Break stealth
+                SpawnFloatingText(playerTrans->x, playerTrans->y, "Advantage!", {0, 255, 0, 255});
+            }
+
             int attackBonus = (m_SelectedWeaponSlot == 0) ? playerStats->GetModifier(playerStats->strength) : playerStats->GetModifier(playerStats->dexterity);
             attackBonus += activeWeapon.statBonus;
 
@@ -570,8 +631,17 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
         case GameState::Looting:
             HandleLootInput();
             break;
+        case GameState::Dialogue:
+            HandleDialogueInput();
+            break;
         case GameState::Targeting:
             HandleTargetingInput();
+            break;
+        case GameState::TargetingJump:
+            HandleTargetingJumpInput();
+            break;
+        case GameState::TargetingShove:
+            HandleTargetingShoveInput();
             break;
         case GameState::Playing:
         case GameState::Combat:
@@ -588,13 +658,18 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
             auto mapKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Map);
             auto chrKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Character);
             auto magKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Magic);
+            auto jumpKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Jump);
+            auto sneakKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Sneak);
+            auto shoveKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Shove);
+            auto dashKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Dash);
+            auto toggleKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::ToggleWeapon);
             
             auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
             
             if (PixelsEngine::Input::IsKeyPressed(escKey)) {
                 if (inv && inv->isOpen) {
                     inv->isOpen = false;
-                } else if (m_State == GameState::Magic || m_State == GameState::Map || m_State == GameState::Character) {
+                } else if (m_State == GameState::Magic || m_State == GameState::Map || m_State == GameState::Character || m_State == GameState::Targeting || m_State == GameState::TargetingJump || m_State == GameState::TargetingShove) {
                     m_State = m_ReturnState;
                 } else {
                     m_State = GameState::Paused;
@@ -626,6 +701,48 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
                 } else {
                     m_ReturnState = m_State;
                     m_State = GameState::Magic;
+                }
+            }
+
+            // --- New Actions ---
+            if (PixelsEngine::Input::IsKeyPressed(toggleKey)) {
+                m_SelectedWeaponSlot = (m_SelectedWeaponSlot == 0) ? 1 : 0;
+                SpawnFloatingText(0, 0, (m_SelectedWeaponSlot == 0) ? "Melee Mode" : "Ranged Mode", {200, 200, 255, 255});
+            }
+            if (PixelsEngine::Input::IsKeyPressed(jumpKey)) {
+                m_ReturnState = m_State;
+                m_State = GameState::TargetingJump;
+            }
+            if (PixelsEngine::Input::IsKeyPressed(shoveKey)) {
+                m_ReturnState = m_State;
+                m_State = GameState::TargetingShove;
+            }
+            if (PixelsEngine::Input::IsKeyPressed(sneakKey) && pStats) {
+                // Sneak logic (Hide) - Uses Action
+                if (m_State == GameState::Combat) {
+                    if (m_ActionsLeft > 0) {
+                        pStats->isStealthed = true;
+                        pStats->hasAdvantage = true;
+                        m_ActionsLeft--;
+                        SpawnFloatingText(0, 0, "Hidden!", {150, 150, 150, 255});
+                    } else {
+                        SpawnFloatingText(0, 0, "No Actions!", {255, 0, 0, 255});
+                    }
+                } else {
+                    pStats->isStealthed = !pStats->isStealthed;
+                    if (pStats->isStealthed) SpawnFloatingText(0, 0, "Sneaking...", {150, 150, 150, 255});
+                }
+            }
+            if (PixelsEngine::Input::IsKeyPressed(dashKey)) {
+                // Dash - Uses Action
+                if (m_State == GameState::Combat) {
+                    if (m_ActionsLeft > 0) {
+                        m_MovementLeft += 5.0f; // Approx double
+                        m_ActionsLeft--;
+                        SpawnFloatingText(0, 0, "Dashed!", {255, 255, 0, 255});
+                    } else {
+                        SpawnFloatingText(0, 0, "No Actions!", {255, 0, 0, 255});
+                    }
                 }
             }
             
@@ -826,6 +943,9 @@ void PixelsGateGame::OnRender() {
         case GameState::Character:
         case GameState::Magic:
         case GameState::Targeting:
+        case GameState::TargetingJump:
+        case GameState::TargetingShove:
+        case GameState::Dialogue:
         case GameState::Trading:
         case GameState::KeybindSettings:
         case GameState::Looting:
@@ -868,10 +988,14 @@ void PixelsGateGame::OnRender() {
                     if (entStats && entStats->isDead) {
                         sprite->texture->SetColorMod(100, 100, 100); // Tint Grey
                     }
+                    if (item.entity == m_Player && entStats && entStats->isStealthed) {
+                        // Apply alpha for stealth (Note: Texture class needs to handle alpha mod or we can use SetColorMod)
+                        sprite->texture->SetColorMod(150, 150, 255); // Blueish tint for stealth
+                    }
 
                     sprite->texture->RenderRect(screenX + 16 - sprite->pivotX, screenY + 16 - sprite->pivotY, &sprite->srcRect, -1, -1, sprite->flip);
                     
-                    if (entStats && entStats->isDead) {
+                    if (entStats && (entStats->isDead || entStats->isStealthed)) {
                         sprite->texture->SetColorMod(255, 255, 255); // Reset
                     }
 
@@ -905,15 +1029,22 @@ void PixelsGateGame::OnRender() {
             if (m_State == GameState::Combat) RenderCombatUI();
 
             // --- Targeting Visuals ---
-            if (m_State == GameState::Targeting || PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::AttackModifier))) {
+            if (m_State == GameState::Targeting || m_State == GameState::TargetingJump || m_State == GameState::TargetingShove || PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::AttackModifier))) {
                 SDL_Renderer* renderer = GetRenderer();
                 int winW, winH; SDL_GetWindowSize(m_Window, &winW, &winH);
+                int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
                 
-                bool isAttack = (m_State != GameState::Targeting);
+                bool isAttack = (m_State != GameState::Targeting && m_State != GameState::TargetingJump && m_State != GameState::TargetingShove);
 
                 if (m_State == GameState::Targeting) {
                     m_TextRenderer->RenderTextCentered("TARGETING: " + m_PendingSpellName, winW / 2, 100, {200, 100, 255, 255});
                     m_TextRenderer->RenderTextCentered("Click a target or ESC to cancel", winW / 2, 130, {150, 150, 150, 255});
+                } else if (m_State == GameState::TargetingJump) {
+                    m_TextRenderer->RenderTextCentered("JUMPING", winW / 2, 100, {100, 255, 255, 255});
+                    m_TextRenderer->RenderTextCentered("Click location to jump (Costs 3m + Bonus Action)", winW / 2, 130, {150, 150, 150, 255});
+                } else if (m_State == GameState::TargetingShove) {
+                    m_TextRenderer->RenderTextCentered("SHOVING", winW / 2, 100, {255, 150, 50, 255});
+                    m_TextRenderer->RenderTextCentered("Click an entity to shove (Costs Bonus Action)", winW / 2, 130, {150, 150, 150, 255});
                 } else {
                     m_TextRenderer->RenderTextCentered("ATTACK MODE", winW / 2, 100, {255, 100, 100, 255});
                 }
@@ -938,12 +1069,38 @@ void PixelsGateGame::OnRender() {
                 auto* pTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
                 if (pTrans) {
                     float pulse = (std::sin(SDL_GetTicks() * 0.01f) + 1.0f) * 0.5f;
-                    SDL_Color casterCol = isAttack ? SDL_Color{ 255, 50, 50, (Uint8)(100 + pulse * 100) } : SDL_Color{ 150, 50, 255, (Uint8)(100 + pulse * 100) };
-                    DrawWorldCircle(pTrans->x, pTrans->y, isAttack ? 1.2f : 1.5f, casterCol);
+                    SDL_Color auraCol = { 255, 255, 255, (Uint8)(100 + pulse * 100) };
+                    if (m_State == GameState::Targeting) auraCol = { 150, 50, 255, (Uint8)(100 + pulse * 100) };
+                    else if (m_State == GameState::TargetingJump) auraCol = { 255, 255, 255, (Uint8)(100 + pulse * 100) }; // White for Jump
+                    else if (m_State == GameState::TargetingShove || PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::AttackModifier))) auraCol = { 255, 50, 50, (Uint8)(100 + pulse * 100) };
+                    DrawWorldCircle(pTrans->x, pTrans->y, 1.5f, auraCol);
                 }
 
-                // 3. Circle around hovered target
-                int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
+                // 3. Jump Path Line
+                if (m_State == GameState::TargetingJump && pTrans) {
+                    int px, py; m_Level->GridToScreen(pTrans->x, pTrans->y, px, py);
+                    px -= (int)camera.x; py -= (int)camera.y; px += 16; py += 16;
+                    
+                    // Cap the line at max jump distance
+                    float maxJumpDistPixels = 5.0f * 32.0f;
+                    float dx = (float)mx - px;
+                    float dy = (float)my - py;
+                    float currentDist = std::sqrt(dx*dx + dy*dy);
+                    
+                    int endX = mx;
+                    int endY = my;
+                    
+                    if (currentDist > maxJumpDistPixels) {
+                        float ratio = maxJumpDistPixels / currentDist;
+                        endX = px + (int)(dx * ratio);
+                        endY = py + (int)(dy * ratio);
+                    }
+
+                    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 200);
+                    SDL_RenderDrawLine(renderer, px, py, endX, endY);
+                }
+
+                // 4. Circle around hovered target
                 auto& transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
                 for (auto& [entity, transform] : transforms) {
                     if (entity == m_Player) continue;
@@ -953,13 +1110,44 @@ void PixelsGateGame::OnRender() {
                         screenX -= (int)camera.x; screenY -= (int)camera.y;
                         SDL_Rect drawRect = { screenX + 16 - sprite->pivotX, screenY + 16 - sprite->pivotY, sprite->srcRect.w, sprite->srcRect.h };
                         if (mx >= drawRect.x && mx <= drawRect.x + drawRect.w && my >= drawRect.y && my <= drawRect.y + drawRect.h) {
-                            bool isAttackable = GetRegistry().HasComponent<PixelsEngine::AIComponent>(entity);
-                            if (!isAttack && !isAttackable) isAttackable = true; // Spells can hit NPCs too
-                            
-                            if (isAttackable) {
-                                DrawWorldCircle(transform.x, transform.y, 0.8f, { 255, 0, 0, 255 });
-                            }
+                            bool isTargetable = (m_State == GameState::Targeting || m_State == GameState::TargetingShove || PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::AttackModifier)));
+                            if (isTargetable) DrawWorldCircle(transform.x, transform.y, 0.8f, { 255, 0, 0, 255 });
                             break;
+                        }
+                    }
+                }
+            }
+
+            // --- Movement Path Visual (Dash/Normal) ---
+            if (m_State == GameState::Combat || m_ReturnState == GameState::Combat) {
+                auto* pTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
+                if (pTrans && !PixelsEngine::Input::IsMouseButtonDown(SDL_BUTTON_LEFT)) {
+                    int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
+                    auto& camera = GetCamera();
+                    int worldX = mx + (int)camera.x, worldY = my + (int)camera.y, gridX, gridY;
+                    m_Level->ScreenToGrid(worldX, worldY, gridX, gridY);
+                    
+                    if (m_Level->IsWalkable(gridX, gridY)) {
+                        float dist = std::sqrt(std::pow(pTrans->x - gridX, 2) + std::pow(pTrans->y - gridY, 2));
+                        int px, py; m_Level->GridToScreen(pTrans->x, pTrans->y, px, py);
+                        px -= (int)camera.x; py -= (int)camera.y; px += 16; py += 16;
+                        
+                        SDL_Renderer* renderer = GetRenderer();
+                        if (dist <= m_MovementLeft) {
+                            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 150); // White: Reachable
+                            SDL_RenderDrawLine(renderer, px, py, mx, my);
+                        } else {
+                            // Draw two-part line
+                            float dashPotential = m_MovementLeft + 5.0f; // If they dashed
+                            float t = m_MovementLeft / dist;
+                            int midX = px + (int)((mx - px) * t);
+                            int midY = py + (int)((my - py) * t);
+                            
+                            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 150); // Reachable now
+                            SDL_RenderDrawLine(renderer, px, py, midX, midY);
+                            
+                            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 150); // Need dash or too far
+                            SDL_RenderDrawLine(renderer, midX, midY, mx, my);
                         }
                     }
                 }
@@ -1020,6 +1208,9 @@ void PixelsGateGame::OnRender() {
             if (m_State == GameState::Looting) {
                 RenderLootScreen();
             }
+            if (m_State == GameState::Dialogue) {
+                RenderDialogueScreen();
+            }
         }
         break;
     }
@@ -1039,11 +1230,34 @@ void PixelsGateGame::ResolveDiceRoll() {
             std::cout << "Pickpocket Success!" << std::endl;
             auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
             if (inv) inv->AddItem("Coins", 10);
+        } else if (m_DiceRoll.actionType == PixelsEngine::ContextActionType::Talk) {
+            auto* diag = GetRegistry().GetComponent<PixelsEngine::DialogueComponent>(m_DialogueWith);
+            if (diag) {
+                // Find the option that triggered this
+                auto& node = diag->tree.nodes[diag->tree.currentNodeId];
+                for (auto& opt : node.options) {
+                    if (opt.requiredStat != "None" && (opt.requiredStat == m_DiceRoll.skillName || m_DiceRoll.skillName.find(opt.requiredStat) != std::string::npos)) {
+                        diag->tree.currentNodeId = m_DiceRoll.success ? opt.onSuccessNodeId : opt.onFailureNodeId;
+                        break;
+                    }
+                }
+            }
         }
     } else {
         if (m_DiceRoll.actionType == PixelsEngine::ContextActionType::Pickpocket) {
              auto* interact = GetRegistry().GetComponent<PixelsEngine::InteractionComponent>(m_DiceRoll.target);
              if (interact) { interact->dialogueText = "Hey! Hands off!"; interact->showDialogue = true; interact->dialogueTimer = 2.0f; }
+        } else if (m_DiceRoll.actionType == PixelsEngine::ContextActionType::Talk) {
+            auto* diag = GetRegistry().GetComponent<PixelsEngine::DialogueComponent>(m_DialogueWith);
+            if (diag) {
+                auto& node = diag->tree.nodes[diag->tree.currentNodeId];
+                for (auto& opt : node.options) {
+                    if (opt.requiredStat != "None" && (opt.requiredStat == m_DiceRoll.skillName || m_DiceRoll.skillName.find(opt.requiredStat) != std::string::npos)) {
+                        diag->tree.currentNodeId = opt.onFailureNodeId;
+                        break;
+                    }
+                }
+            }
         }
     }
 }
@@ -1219,6 +1433,10 @@ void PixelsGateGame::HandleInput() {
             // Click to close
             if (isPressedLeft) {
                 m_DiceRoll.active = false;
+                // If it was a dialogue roll, return to dialogue to show consequence
+                if (m_DiceRoll.actionType == PixelsEngine::ContextActionType::Talk) {
+                    m_State = GameState::Dialogue;
+                }
             }
         }
         return; // Block other input
@@ -1241,7 +1459,18 @@ void PixelsGateGame::HandleInput() {
                 int index = (my - m_ContextMenu.y - 5) / 30;
                 if (index >= 0 && index < m_ContextMenu.actions.size()) {
                     auto& action = m_ContextMenu.actions[index];
-                    if (action.type == PixelsEngine::ContextActionType::Talk) m_SelectedNPC = m_ContextMenu.targetEntity;
+                    if (action.type == PixelsEngine::ContextActionType::Talk) {
+                        auto* diag = GetRegistry().GetComponent<PixelsEngine::DialogueComponent>(m_ContextMenu.targetEntity);
+                        if (diag) {
+                            m_DialogueWith = m_ContextMenu.targetEntity;
+                            m_ReturnState = m_State;
+                            m_State = GameState::Dialogue;
+                            m_DialogueSelection = 0;
+                            diag->tree.currentNodeId = "start"; // Reset tree
+                        } else {
+                            m_SelectedNPC = m_ContextMenu.targetEntity; // Fallback to floating bubble
+                        }
+                    }
                     else if (action.type == PixelsEngine::ContextActionType::Attack) PerformAttack(m_ContextMenu.targetEntity);
                     else if (action.type == PixelsEngine::ContextActionType::Trade) {
                         m_TradingWith = m_ContextMenu.targetEntity;
@@ -1327,47 +1556,87 @@ void PixelsGateGame::HandleInput() {
 
 void PixelsGateGame::CheckUIInteraction(int mx, int my) {
     int winW, winH; SDL_GetWindowSize(m_Window, &winW, &winH);
-    for (int i = 0; i < 6; ++i) {
-        SDL_Rect btnRect = { 20 + (i * 55), winH - 50, 40, 40 };
-        
-        // Special: Check sub-buttons for weapon selection above Atk (i=0)
-        if (i == 0) {
-            SDL_Rect mRect = { btnRect.x, btnRect.y - 35, 20, 30 };
-            SDL_Rect rRect = { btnRect.x + 22, btnRect.y - 35, 20, 30 };
-            if (mx >= mRect.x && mx <= mRect.x + mRect.w && my >= mRect.y && my <= mRect.y + mRect.h) {
-                m_SelectedWeaponSlot = 0; return;
-            }
-            if (mx >= rRect.x && mx <= rRect.x + rRect.w && my >= rRect.y && my <= rRect.y + rRect.h) {
-                m_SelectedWeaponSlot = 1; return;
+    int barH = 100;
+
+    auto CheckGridClick = [&](int startX, int count, std::function<void(int)> onClick) {
+        for (int i = 0; i < count; ++i) {
+            int row = i / 3;
+            int col = i % 3;
+            SDL_Rect btn = { startX + col * 45, winH - barH + 25 + row * 35, 40, 30 };
+            if (mx >= btn.x && mx <= btn.x + btn.w && my >= btn.y && my <= btn.y + btn.h) {
+                onClick(i);
+                return true;
             }
         }
+        return false;
+    };
 
-        if (mx >= btnRect.x && mx <= btnRect.x + btnRect.w && my >= btnRect.y && my <= btnRect.y + btnRect.h) {
-            if (i == 0) PerformAttack();
-            else if (i == 1) { 
-                if (m_State != GameState::Magic) { m_ReturnState = m_State; m_State = GameState::Magic; }
-                else m_State = m_ReturnState;
+    // Actions Grid (20)
+    if (CheckGridClick(20, 6, [&](int i) {
+        if (i == 0) PerformAttack();
+        else if (i == 1) { m_ReturnState = m_State; m_State = GameState::TargetingJump; }
+        else if (i == 2) { 
+            auto* pStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+            if (pStats) {
+                if (m_State == GameState::Combat) { if (m_ActionsLeft > 0) { pStats->isStealthed = true; pStats->hasAdvantage = true; m_ActionsLeft--; } }
+                else { pStats->isStealthed = !pStats->isStealthed; }
             }
-            else if (i == 2) { auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player); if (inv) inv->isOpen = !inv->isOpen; }
-            else if (i == 3) { 
-                if (m_State != GameState::Map) { m_ReturnState = m_State; m_State = GameState::Map; }
-                else m_State = m_ReturnState;
+        }
+        else if (i == 3) { m_ReturnState = m_State; m_State = GameState::TargetingShove; }
+        else if (i == 4) { if (m_State == GameState::Combat && m_ActionsLeft > 0) { m_MovementLeft += 5.0f; m_ActionsLeft--; SpawnFloatingText(0,0,"Dashed!",{255,255,0,255}); } }
+        else if (i == 5) { if (m_State == GameState::Combat) NextTurn(); }
+    })) return;
+
+    // Spells Grid (170)
+    if (CheckGridClick(170, 6, [&](int i) {
+        std::string spellNames[] = {"Fireball", "Heal", "Magic Missile", "Shield", "", ""};
+        if (!spellNames[i].empty()) {
+            m_PendingSpellName = spellNames[i];
+            m_ReturnState = m_State;
+            m_State = GameState::Targeting;
+        }
+    })) return;
+
+    // Items Grid (320)
+    if (CheckGridClick(320, 6, [&](int i) {
+        // Potions etc
+        auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+        auto* stats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+        if (i == 0 && inv && stats) { // Potion
+            for (auto it = inv->items.begin(); it != inv->items.end(); ++it) {
+                if (it->name == "Potion") {
+                    stats->currentHealth = std::min(stats->maxHealth, stats->currentHealth + 20);
+                    it->quantity--;
+                    if (it->quantity <= 0) inv->items.erase(it);
+                    if (m_State == GameState::Combat) m_BonusActionsLeft--;
+                    SpawnFloatingText(0,0,"+20 HP",{0,255,0,255});
+                    break;
+                }
             }
-            else if (i == 4) { 
-                if (m_State != GameState::Character) { m_ReturnState = m_State; m_State = GameState::Character; }
-                else m_State = m_ReturnState;
-            }
-            else if (i == 5) { // Opt -> Save/System
-                // For now, let's just SAVE on click.
-                // In a real game, this would open a menu.
+        }
+    })) return;
+
+    // System Buttons
+    for (int i = 0; i < 4; ++i) {
+        SDL_Rect btn = { winW - 180 + (i % 2) * 85, winH - barH + 15 + (i / 2) * 40, 75, 35 };
+        if (mx >= btn.x && mx <= btn.x + btn.w && my >= btn.y && my <= btn.y + btn.h) {
+            if (i == 0) { if (m_State != GameState::Map) { m_ReturnState = m_State; m_State = GameState::Map; } else m_State = m_ReturnState; }
+            else if (i == 1) { if (m_State != GameState::Character) { m_ReturnState = m_State; m_State = GameState::Character; } else m_State = m_ReturnState; }
+            else if (i == 2) { 
                 PixelsEngine::SaveSystem::SaveGame("savegame.dat", GetRegistry(), m_Player, *m_Level);
                 ShowSaveMessage();
-                // Also restore HP/Inspiration as a bonus "Rest" (previous functionality)
-                auto* stats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player); 
-                if (stats) { stats->currentHealth = stats->maxHealth; stats->inspiration = 1; }
             }
+            else if (i == 3) { auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player); if (inv) inv->isOpen = !inv->isOpen; }
+            return;
         }
     }
+
+    // Weapon Selection (next to Atk)
+    SDL_Rect atkBtn = { 20, winH - barH + 25, 40, 30 };
+    SDL_Rect mRect = { atkBtn.x - 15, atkBtn.y, 12, 14 };
+    SDL_Rect rRect = { atkBtn.x - 15, atkBtn.y + 16, 12, 14 };
+    if (mx >= mRect.x && mx <= mRect.x + mRect.w && my >= mRect.y && my <= mRect.y + mRect.h) m_SelectedWeaponSlot = 0;
+    if (mx >= rRect.x && mx <= rRect.x + rRect.w && my >= rRect.y && my <= rRect.y + rRect.h) m_SelectedWeaponSlot = 1;
 }
 
 void PixelsGateGame::CheckWorldInteraction(int mx, int my) {
@@ -1469,17 +1738,26 @@ void PixelsGateGame::RenderHUD() {
                 // Check Exploration
                 if (!m_Level->IsExplored(tx, ty)) continue;
 
+                using namespace PixelsEngine::Tiles;
                 int tileIdx = m_Level->GetTile(tx, ty);
                 SDL_Color c = {0, 0, 0, 255};
 
-                // Determine Color based on tile index
-                // 0, 1, 10 = Grass
-                if (tileIdx == 0 || tileIdx == 1 || tileIdx == 10) c = {34, 139, 34, 255}; // Green
-                else if (tileIdx == 2) c = {139, 69, 19, 255}; // Brown (Dirt)
-                else if (tileIdx == 28) c = {30, 144, 255, 255}; // Blue (Water)
-                else if (tileIdx == 100) c = {210, 180, 140, 255}; // Tan (Sand)
-                else if (tileIdx == 61) c = {128, 128, 128, 255}; // Grey (Stone)
-                else c = {50, 200, 50, 255}; // Default Greenish
+                // Detailed Minimap Colors
+                if (tileIdx >= DIRT && tileIdx <= DIRT_VARIANT_18) c = {101, 67, 33, 255}; // Brown
+                else if (tileIdx >= DIRT_WITH_LEAVES_01 && tileIdx <= DIRT_WITH_LEAVES_02) c = {85, 107, 47, 255}; // Olive
+                else if (tileIdx >= GRASS && tileIdx <= GRASS_VARIANT_02) c = {34, 139, 34, 255}; // Forest Green
+                else if (tileIdx == DIRT_VARIANT_19 || tileIdx == DIRT_WITH_PARTIAL_GRASS) c = {139, 69, 19, 255}; // Saddle Brown
+                else if (tileIdx >= GRASS_BLOCK_FULL && tileIdx <= GRASS_BLOCK_FULL_VARIANT_01) c = {0, 128, 0, 255}; // Green
+                else if (tileIdx >= GRASS_WITH_BUSH && tileIdx <= GRASS_WITH_BUSH_VARIANT_07) c = {0, 100, 0, 255}; // Dark Green
+                else if (tileIdx >= GRASS_VARIANT_03 && tileIdx <= GRASS_VARIANT_06) c = {50, 205, 50, 255}; // Lime Green
+                else if (tileIdx >= FLOWER && tileIdx <= FLOWERS_WITHOUT_LEAVES) c = {255, 105, 180, 255}; // Pink/Flower
+                else if (tileIdx >= LOG && tileIdx <= LOG_WITH_LEAVES_VARIANT_02) c = {139, 69, 19, 255}; // Log Brown
+                else if (tileIdx >= DIRT_PILE && tileIdx <= DIRT_PILE_VARIANT_07) c = {160, 82, 45, 255}; // Sienna
+                else if (tileIdx >= COBBLESTONE && tileIdx <= SMOOTH_STONE) c = {128, 128, 128, 255}; // Grey
+                else if (tileIdx >= ROCK && tileIdx <= ROCK_VARIANT_03) c = {105, 105, 105, 255}; // Dim Grey
+                else if (tileIdx >= ROCK_ON_WATER && tileIdx <= STONES_ON_WATER_VARIANT_11) c = {70, 130, 180, 255}; // Steel Blue
+                else if (tileIdx >= WATER_DROPLETS && tileIdx <= OCEAN_ROUGH) c = {0, 0, 255, 255}; // Blue
+                else c = {100, 100, 100, 255}; // Unknown: Dark Grey
 
                 SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
                 SDL_Rect tileRect = {mx + tx * tileSize, my + ty * tileSize, tileSize, tileSize};
@@ -1545,35 +1823,73 @@ void PixelsGateGame::RenderHUD() {
         }
     }
 
-    // --- 3. Bottom Action Bar (Existing) ---
-    SDL_Rect hudRect = { 0, winH - 90, winW, 90 };
-    SDL_SetRenderDrawColor(renderer, 50, 50, 50, 255); SDL_RenderFillRect(renderer, &hudRect);
-    SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255); SDL_RenderDrawRect(renderer, &hudRect);
-    const char* labels[] = { "Atk", "Mag", "Inv", "Map", "Chr", "Opt" };
-    for (int i = 0; i < 6; ++i) {
-        SDL_Rect btnRect = { 20 + (i * 55), winH - 50, 40, 40 };
-        SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255); SDL_RenderFillRect(renderer, &btnRect);
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255); SDL_RenderDrawRect(renderer, &btnRect);
-        m_TextRenderer->RenderTextCentered(labels[i], btnRect.x + 20, btnRect.y + 20, {255, 255, 255, 255});
+    // --- 3. Bottom Action Bar (Redesigned) ---
+    int barH = 100;
+    SDL_Rect hudRect = { 0, winH - barH, winW, barH };
+    SDL_SetRenderDrawColor(renderer, 40, 40, 40, 255); SDL_RenderFillRect(renderer, &hudRect);
+    SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255); SDL_RenderDrawRect(renderer, &hudRect);
 
-        // Special: Attack button has weapon toggles next to it
-        if (i == 0) {
-            // Melee Icon (Sword)
-            SDL_Rect mRect = { btnRect.x, btnRect.y - 35, 20, 30 };
-            SDL_SetRenderDrawColor(renderer, (m_SelectedWeaponSlot == 0) ? 200 : 50, (m_SelectedWeaponSlot == 0) ? 200 : 50, 50, 255);
-            SDL_RenderFillRect(renderer, &mRect);
-            auto swordTex = PixelsEngine::TextureManager::LoadTexture(renderer, "assets/sword.png");
-            if (swordTex) swordTex->Render(mRect.x + 2, mRect.y + 2, 16, 26);
+    auto DrawGrid = [&](const std::string& title, int startX, const std::vector<std::string>& labels, const std::vector<std::string>& keys, int count) {
+        m_TextRenderer->RenderText(title, startX, winH - barH + 5, {200, 200, 200, 255});
+        for (int i = 0; i < count; ++i) {
+            int row = i / 3;
+            int col = i % 3;
+            SDL_Rect btn = { startX + col * 45, winH - barH + 25 + row * 35, 40, 30 };
+            SDL_SetRenderDrawColor(renderer, 80, 80, 80, 255); SDL_RenderFillRect(renderer, &btn);
+            SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255); SDL_RenderDrawRect(renderer, &btn);
+            
+            if (i < (int)labels.size() && !labels[i].empty()) {
+                m_TextRenderer->RenderTextCentered(labels[i], btn.x + 20, btn.y + 15, {255, 255, 255, 255});
+            }
 
-            // Ranged Icon (Bow)
-            SDL_Rect rRect = { btnRect.x + 22, btnRect.y - 35, 20, 30 };
-            SDL_SetRenderDrawColor(renderer, (m_SelectedWeaponSlot == 1) ? 200 : 50, (m_SelectedWeaponSlot == 1) ? 200 : 50, 50, 255);
-            SDL_RenderFillRect(renderer, &rRect);
-            auto bowTex = PixelsEngine::TextureManager::LoadTexture(renderer, "assets/bow.png");
-            if (bowTex) bowTex->Render(rRect.x + 2, rRect.y + 2, 16, 26);
+            // Render Keybind hint in bottom left
+            if (i < (int)keys.size() && !keys[i].empty()) {
+                m_TextRenderer->RenderTextSmall(keys[i], btn.x + 2, btn.y + 18, {255, 255, 0, 200}); // Small yellow hint
+            }
+
+            // Restore weapon toggles next to Atk (i=0)
+            if (title == "ACTIONS" && i == 0) {
+                SDL_Rect mRect = { btn.x - 15, btn.y, 12, 14 };
+                SDL_SetRenderDrawColor(renderer, (m_SelectedWeaponSlot == 0) ? 200 : 50, 50, 50, 255);
+                SDL_RenderFillRect(renderer, &mRect);
+                auto sTex = PixelsEngine::TextureManager::LoadTexture(renderer, "assets/sword.png");
+                if (sTex) sTex->Render(mRect.x + 1, mRect.y + 1, 10, 12);
+
+                SDL_Rect rRect = { btn.x - 15, btn.y + 16, 12, 14 };
+                SDL_SetRenderDrawColor(renderer, (m_SelectedWeaponSlot == 1) ? 200 : 50, 50, 50, 255);
+                SDL_RenderFillRect(renderer, &rRect);
+                auto bTex = PixelsEngine::TextureManager::LoadTexture(renderer, "assets/bow.png");
+                if (bTex) bTex->Render(rRect.x + 1, rRect.y + 1, 10, 12);
+            }
         }
+    };
+
+    // Actions Grid
+    std::vector<std::string> actions = { "Atk", "Jmp", "Snk", "Shv", "Dsh", "End" };
+    std::vector<std::string> actionKeys = { "SHT/F", "Z", "C", "V", "B", "SPC" };
+    DrawGrid("ACTIONS", 20, actions, actionKeys, 6);
+
+    // Spells Grid (K key opens menu, spells cast via click for now)
+    std::vector<std::string> spells = { "Fir", "Hel", "Mis", "Shd", "", "" };
+    DrawGrid("SPELLS", 170, spells, {}, 6);
+
+    // Items Grid
+    std::vector<std::string> items = { "Pot", "Brd", "", "", "", "" };
+    DrawGrid("ITEMS", 320, items, {}, 6);
+
+    // System Buttons (Map, Chr, Opt)
+    const char* sysLabels[] = { "Map", "Chr", "Opt", "Inv" };
+    const char* sysKeys[] = { "M", "O", "ESC", "I" };
+    for (int i = 0; i < 4; ++i) {
+        SDL_Rect btn = { winW - 180 + (i % 2) * 85, winH - barH + 15 + (i / 2) * 40, 75, 35 };
+        SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255); SDL_RenderFillRect(renderer, &btn);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255); SDL_RenderDrawRect(renderer, &btn);
+        m_TextRenderer->RenderTextCentered(sysLabels[i], btn.x + 37, btn.y + 17, {255, 255, 255, 255});
+        m_TextRenderer->RenderTextSmall(sysKeys[i], btn.x + 5, btn.y + 22, {255, 255, 0, 200});
     }
-    auto& camera = GetCamera(); auto& interactions = GetRegistry().View<PixelsEngine::InteractionComponent>();
+
+    auto& camera = GetCamera(); 
+    auto& interactions = GetRegistry().View<PixelsEngine::InteractionComponent>();
     for (auto& [entity, interact] : interactions) {
         if (interact.showDialogue) {
             auto* transform = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(entity);
@@ -1922,7 +2238,7 @@ void PixelsGateGame::UpdateAI(float deltaTime) {
         float dist = std::sqrt(std::pow(pTrans->x - transform->x, 2) + std::pow(pTrans->y - transform->y, 2));
 
         bool canSee = false;
-        if (ai.isAggressive && dist <= ai.sightRange) {
+        if (ai.isAggressive && dist <= ai.sightRange && !pStats->isStealthed) {
             float dx = pTrans->x - transform->x;
             float dy = pTrans->y - transform->y;
             float angleToPlayer = std::atan2(dy, dx) * (180.0f / M_PI); // Degrees
@@ -2689,10 +3005,25 @@ void PixelsGateGame::RenderMapScreen() {
         for (int ty = 0; ty < mapH; ++ty) {
             for (int tx = 0; tx < mapW; ++tx) {
                 if (!m_Level->IsExplored(tx, ty)) continue;
+                using namespace PixelsEngine::Tiles;
                 int tileIdx = m_Level->GetTile(tx, ty);
-                SDL_Color c = {50, 200, 50, 255};
-                if (tileIdx == 28) c = {30, 144, 255, 255};
-                else if (tileIdx == 61) c = {128, 128, 128, 255};
+                SDL_Color c = {0, 0, 0, 255};
+
+                if (tileIdx >= DIRT && tileIdx <= DIRT_VARIANT_18) c = {101, 67, 33, 255}; // Brown
+                else if (tileIdx >= DIRT_WITH_LEAVES_01 && tileIdx <= DIRT_WITH_LEAVES_02) c = {85, 107, 47, 255}; // Olive
+                else if (tileIdx >= GRASS && tileIdx <= GRASS_VARIANT_02) c = {34, 139, 34, 255}; // Forest Green
+                else if (tileIdx == DIRT_VARIANT_19 || tileIdx == DIRT_WITH_PARTIAL_GRASS) c = {139, 69, 19, 255}; // Saddle Brown
+                else if (tileIdx >= GRASS_BLOCK_FULL && tileIdx <= GRASS_BLOCK_FULL_VARIANT_01) c = {0, 128, 0, 255}; // Green
+                else if (tileIdx >= GRASS_WITH_BUSH && tileIdx <= GRASS_WITH_BUSH_VARIANT_07) c = {0, 100, 0, 255}; // Dark Green
+                else if (tileIdx >= GRASS_VARIANT_03 && tileIdx <= GRASS_VARIANT_06) c = {50, 205, 50, 255}; // Lime Green
+                else if (tileIdx >= FLOWER && tileIdx <= FLOWERS_WITHOUT_LEAVES) c = {255, 105, 180, 255}; // Pink/Flower
+                else if (tileIdx >= LOG && tileIdx <= LOG_WITH_LEAVES_VARIANT_02) c = {139, 69, 19, 255}; // Log Brown
+                else if (tileIdx >= DIRT_PILE && tileIdx <= DIRT_PILE_VARIANT_07) c = {160, 82, 45, 255}; // Sienna
+                else if (tileIdx >= COBBLESTONE && tileIdx <= SMOOTH_STONE) c = {128, 128, 128, 255}; // Grey
+                else if (tileIdx >= ROCK && tileIdx <= ROCK_VARIANT_03) c = {105, 105, 105, 255}; // Dim Grey
+                else if (tileIdx >= ROCK_ON_WATER && tileIdx <= STONES_ON_WATER_VARIANT_11) c = {70, 130, 180, 255}; // Steel Blue
+                else if (tileIdx >= WATER_DROPLETS && tileIdx <= OCEAN_ROUGH) c = {0, 0, 255, 255}; // Blue
+                else c = {100, 100, 100, 255}; 
                 
                 SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
                 SDL_Rect tileRect = {mx + tx * tileSize, my + ty * tileSize, tileSize, tileSize};
@@ -2807,6 +3138,106 @@ void PixelsGateGame::HandleCharacterInput() {
         m_State = m_ReturnState;
     }
 }
+
+void PixelsGateGame::RenderDialogueScreen() {
+    SDL_Renderer* renderer = GetRenderer();
+    int w, h; SDL_GetWindowSize(m_Window, &w, &h);
+    int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
+
+    auto* diag = GetRegistry().GetComponent<PixelsEngine::DialogueComponent>(m_DialogueWith);
+    if (!diag) return;
+
+    // Overlay
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 200);
+    SDL_Rect overlay = {0, 0, w, h};
+    SDL_RenderFillRect(renderer, &overlay);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+
+    // Dialogue Panel
+    int panelW = 600, panelH = 250;
+    SDL_Rect panel = { (w - panelW) / 2, h - panelH - 100, panelW, panelH };
+    SDL_SetRenderDrawColor(renderer, 40, 40, 45, 255); SDL_RenderFillRect(renderer, &panel);
+    SDL_SetRenderDrawColor(renderer, 150, 150, 160, 255); SDL_RenderDrawRect(renderer, &panel);
+
+    // NPC Name & Text
+    m_TextRenderer->RenderText(diag->tree.currentEntityName, panel.x + 20, panel.y + 20, {255, 215, 0, 255});
+    m_TextRenderer->RenderText(diag->tree.nodes[diag->tree.currentNodeId].npcText, panel.x + 20, panel.y + 50, {255, 255, 255, 255});
+
+    // Options
+    auto& options = diag->tree.nodes[diag->tree.currentNodeId].options;
+    int optY = panel.y + 100;
+    for (int i = 0; i < (int)options.size(); ++i) {
+        SDL_Color color = (m_DialogueSelection == i) ? SDL_Color{50, 255, 50, 255} : SDL_Color{200, 200, 200, 255};
+        
+        SDL_Rect row = { panel.x + 20, optY - 5, panelW - 40, 30 };
+        bool hover = (mx >= row.x && mx <= row.x + row.w && my >= row.y && my <= row.y + row.h);
+        if (hover) {
+            color = {255, 255, 0, 255};
+            m_DialogueSelection = i; // Update selection on hover
+        }
+
+        std::string prefix = std::to_string(i+1) + ". ";
+        m_TextRenderer->RenderText(prefix + options[i].text, panel.x + 30, optY, color);
+        optY += 35;
+    }
+}
+
+void PixelsGateGame::HandleDialogueInput() {
+    auto* diag = GetRegistry().GetComponent<PixelsEngine::DialogueComponent>(m_DialogueWith);
+    if (!diag) { m_State = m_ReturnState; return; }
+
+    auto& node = diag->tree.nodes[diag->tree.currentNodeId];
+    int numOptions = node.options.size();
+
+    bool isClick = PixelsEngine::Input::IsMouseButtonPressed(SDL_BUTTON_LEFT);
+    bool isEnter = PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_RETURN) || PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_SPACE);
+
+    if (isClick || isEnter) {
+        if (m_DialogueSelection >= 0 && m_DialogueSelection < numOptions) {
+            auto& opt = node.options[m_DialogueSelection];
+            
+            // 1. Handle Dice Roll if needed
+            if (opt.requiredStat != "None") {
+                auto* pStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+                int mod = 0;
+                if (pStats) {
+                    if (opt.requiredStat == "Intelligence") mod = pStats->GetModifier(pStats->intelligence);
+                    else if (opt.requiredStat == "Charisma") mod = pStats->GetModifier(pStats->charisma);
+                }
+                StartDiceRoll(mod, opt.dc, opt.requiredStat, m_DialogueWith, PixelsEngine::ContextActionType::Talk);
+                m_State = GameState::Playing; // Will return to Dialogue via ResolveDiceRoll
+                return;
+            }
+
+            // 2. Handle Actions
+            if (opt.action == PixelsEngine::DialogueAction::StartCombat) {
+                m_State = m_ReturnState;
+                StartCombat(m_DialogueWith);
+                auto* ai = GetRegistry().GetComponent<PixelsEngine::AIComponent>(m_DialogueWith);
+                if (ai) ai->isAggressive = true;
+                return;
+            } else if (opt.action == PixelsEngine::DialogueAction::SetFlag) {
+                m_WorldFlags[opt.actionParam] = true;
+            } else if (opt.action == PixelsEngine::DialogueAction::EndConversation) {
+                m_State = m_ReturnState;
+                return;
+            }
+
+            // 3. Next Node
+            if (opt.nextNodeId == "end") {
+                m_State = m_ReturnState;
+            } else {
+                diag->tree.currentNodeId = opt.nextNodeId;
+                m_DialogueSelection = 0;
+            }
+        }
+    }
+
+    if (PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_W)) { m_DialogueSelection = (m_DialogueSelection - 1 + numOptions) % numOptions; }
+    if (PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_S)) { m_DialogueSelection = (m_DialogueSelection + 1) % numOptions; }
+}
+
 
 void PixelsGateGame::HandleTargetingInput() {
 
@@ -4957,6 +5388,90 @@ bool PixelsGateGame::IsInTurnOrder(PixelsEngine::Entity entity) {
         if (turn.entity == entity) return true;
     }
     return false;
+}
+
+void PixelsGateGame::HandleTargetingJumpInput() {
+    int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
+    if (PixelsEngine::Input::IsMouseButtonPressed(SDL_BUTTON_LEFT)) {
+        auto& camera = GetCamera();
+        int worldX = mx + camera.x, worldY = my + camera.y, gridX, gridY;
+        m_Level->ScreenToGrid(worldX, worldY, gridX, gridY);
+
+        if (m_Level->IsWalkable(gridX, gridY)) {
+            auto* transform = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
+            float dist = std::sqrt(std::pow(transform->x - gridX, 2) + std::pow(transform->y - gridY, 2));
+            
+            bool canJump = true;
+            if (m_State == GameState::Combat || m_ReturnState == GameState::Combat) {
+                if (m_BonusActionsLeft <= 0 || m_MovementLeft < 3.0f) canJump = false;
+            }
+
+            if (canJump && dist < 5.0f) {
+                transform->x = (float)gridX;
+                transform->y = (float)gridY;
+                if (m_State == GameState::Combat || m_ReturnState == GameState::Combat) {
+                    m_BonusActionsLeft--;
+                    m_MovementLeft -= 3.0f;
+                }
+                SpawnFloatingText(transform->x, transform->y, "Jump!", {100, 255, 255, 255});
+                m_State = m_ReturnState;
+            } else {
+                SpawnFloatingText(0, 0, "Can't jump there!", {255, 0, 0, 255});
+            }
+        }
+    }
+    if (PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_ESCAPE)) m_State = m_ReturnState;
+}
+
+void PixelsGateGame::HandleTargetingShoveInput() {
+    int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
+    if (PixelsEngine::Input::IsMouseButtonPressed(SDL_BUTTON_LEFT)) {
+        auto& camera = GetCamera(); 
+        auto& transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
+        PixelsEngine::Entity target = PixelsEngine::INVALID_ENTITY;
+
+        for (auto& [entity, transform] : transforms) {
+            if (entity == m_Player) continue;
+            auto* sprite = GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(entity);
+            if (sprite) {
+                int screenX, screenY; m_Level->GridToScreen(transform.x, transform.y, screenX, screenY);
+                screenX -= (int)camera.x; screenY -= (int)camera.y;
+                SDL_Rect drawRect = { screenX + 16 - sprite->pivotX, screenY + 16 - sprite->pivotY, sprite->srcRect.w, sprite->srcRect.h };
+                if (mx >= drawRect.x && mx <= drawRect.x + drawRect.w && my >= drawRect.y && my <= drawRect.y + drawRect.h) {
+                    target = entity; break;
+                }
+            }
+        }
+
+        if (target != PixelsEngine::INVALID_ENTITY) {
+            bool canShove = true;
+            if (m_State == GameState::Combat || m_ReturnState == GameState::Combat) {
+                if (m_BonusActionsLeft <= 0) canShove = false;
+            }
+
+            if (canShove) {
+                auto* pTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
+                auto* tTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(target);
+                
+                float dx = tTrans->x - pTrans->x;
+                float dy = tTrans->y - pTrans->y;
+                float len = std::sqrt(dx*dx + dy*dy);
+                if (len > 0) { dx /= len; dy /= len; }
+
+                float pushX = tTrans->x + dx * 2.0f;
+                float pushY = tTrans->y + dy * 2.0f;
+
+                if (m_Level->IsWalkable((int)pushX, (int)pushY)) {
+                    tTrans->x = pushX; tTrans->y = pushY;
+                }
+                
+                if (m_State == GameState::Combat || m_ReturnState == GameState::Combat) m_BonusActionsLeft--;
+                SpawnFloatingText(tTrans->x, tTrans->y, "Shove!", {255, 150, 50, 255});
+                m_State = m_ReturnState;
+            }
+        }
+    }
+    if (PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_ESCAPE)) m_State = m_ReturnState;
 }
 
 

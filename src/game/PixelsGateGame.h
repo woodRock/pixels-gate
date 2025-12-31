@@ -56,13 +56,21 @@ private:
         Targeting,
         Trading,
         KeybindSettings,
-        Looting
+        Looting,
+        TargetingJump,
+        TargetingShove,
+        Dialogue
     };
     GameState m_State = GameState::MainMenu;
     GameState m_ReturnState = GameState::Playing; 
 
     PixelsEngine::Entity m_TradingWith = PixelsEngine::INVALID_ENTITY;
     PixelsEngine::Entity m_LootingEntity = PixelsEngine::INVALID_ENTITY;
+    PixelsEngine::Entity m_DialogueWith = PixelsEngine::INVALID_ENTITY;
+    
+    std::unordered_map<std::string, bool> m_WorldFlags; // Persisted choices
+    int m_DialogueSelection = 0;
+
     PixelsEngine::GameAction m_BindingAction = PixelsEngine::GameAction::Pause;
     bool m_IsWaitingForKey = false;
 
@@ -129,6 +137,7 @@ private:
     void RenderTradeScreen();
     void RenderKeybindSettings();
     void RenderLootScreen();
+    void RenderDialogueScreen();
 
     // Menu Input Handlers
     void HandleMainMenuInput();
@@ -138,9 +147,12 @@ private:
     void HandleCharacterInput();
     void HandleMagicInput();
     void HandleTargetingInput();
+    void HandleTargetingJumpInput();
+    void HandleTargetingShoveInput();
     void HandleTradeInput();
     void HandleKeybindInput();
     void HandleLootInput();
+    void HandleDialogueInput();
     void CastSpell(const std::string& spellName, PixelsEngine::Entity target);
     bool IsInTurnOrder(PixelsEngine::Entity entity);
     void HandleMenuNavigation(int numOptions, std::function<void(int)> onSelect, std::function<void()> onCancel = nullptr, int forceSelection = -1);

@@ -1,4 +1,5 @@
 #include "Tilemap.h"
+#include "Tiles.h"
 #include <iostream>
 
 namespace PixelsEngine {
@@ -81,11 +82,15 @@ namespace PixelsEngine {
 
     bool Tilemap::IsWalkable(int x, int y) const {
         int tile = GetTile(x, y);
-        if (tile == -1) return false; // Cannot walk out of bounds
+        if (tile == -1) return false; 
         
-        // Block Walls (61) and Water (28)
-        // Adjust these numbers if visual feedback changes
-        if (tile == 61 || tile == 28) return false;
+        using namespace Tiles;
+        
+        // Block Water, Rocks, Ocean
+        if (tile >= ROCK && tile <= ROCK_VARIANT_03) return false;
+        if (tile >= ROCK_ON_WATER && tile <= STONES_ON_WATER_VARIANT_11) return false;
+        if (tile >= WATER && tile <= OCEAN_ROUGH) return false;
+        if (tile == LOG || tile == LOGS) return false;
         
         return true; 
     }
