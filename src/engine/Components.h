@@ -82,4 +82,17 @@ namespace PixelsEngine {
         std::vector<PixelsEngine::Item> drops;
     };
 
+    enum class EntityTag {
+        None,
+        Hostile,
+        NPC,
+        Companion,
+        Trader,
+        Quest
+    };
+
+    struct TagComponent {
+        EntityTag tag = EntityTag::None;
+    };
+
 }

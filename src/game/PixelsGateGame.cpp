@@ -103,6 +103,7 @@ void PixelsGateGame::OnStart() {
     GetRegistry().AddComponent(npc1, PixelsEngine::InteractionComponent{ "Hello Hunter!", false, 0.0f });
     GetRegistry().AddComponent(npc1, PixelsEngine::StatsComponent{50, 50, 5, false}); 
     GetRegistry().AddComponent(npc1, PixelsEngine::QuestComponent{ "FetchOrb", 0, "Gold Orb" });
+    GetRegistry().AddComponent(npc1, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Quest });
 
     auto npc2 = GetRegistry().CreateEntity();
     GetRegistry().AddComponent(npc2, PixelsEngine::TransformComponent{ 18.0f, 22.0f });
@@ -110,6 +111,21 @@ void PixelsGateGame::OnStart() {
     GetRegistry().AddComponent(npc2, PixelsEngine::InteractionComponent{ "Hello Warrior!", false, 0.0f });
     GetRegistry().AddComponent(npc2, PixelsEngine::StatsComponent{50, 50, 5, false}); 
     GetRegistry().AddComponent(npc2, PixelsEngine::QuestComponent{ "HuntBoars", 0, "Boar Meat" });
+    GetRegistry().AddComponent(npc2, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Quest });
+
+    // Add a Companion
+    auto comp = GetRegistry().CreateEntity();
+    GetRegistry().AddComponent(comp, PixelsEngine::TransformComponent{ 22.0f, 18.0f });
+    GetRegistry().AddComponent(comp, PixelsEngine::SpriteComponent{ playerTexture, {0, 0, 32, 32}, 16, 30 });
+    GetRegistry().AddComponent(comp, PixelsEngine::InteractionComponent{ "I'm with you!", false, 0.0f });
+    GetRegistry().AddComponent(comp, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Companion });
+
+    // Add a Trader
+    auto trader = GetRegistry().CreateEntity();
+    GetRegistry().AddComponent(trader, PixelsEngine::TransformComponent{ 15.0f, 15.0f });
+    GetRegistry().AddComponent(trader, PixelsEngine::SpriteComponent{ playerTexture, {0, 0, 32, 32}, 16, 30 });
+    GetRegistry().AddComponent(trader, PixelsEngine::InteractionComponent{ "Want to trade?", false, 0.0f });
+    GetRegistry().AddComponent(trader, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Trader });
 
     // 5. Spawn Gold Orb
     auto orb = GetRegistry().CreateEntity();
@@ -331,6 +347,7 @@ void PixelsGateGame::CreateBoar(float x, float y) {
     GetRegistry().AddComponent(boar, PixelsEngine::TransformComponent{ x, y });
     GetRegistry().AddComponent(boar, PixelsEngine::StatsComponent{30, 30, 2, false}); // Reduced damage from 5 to 2
     GetRegistry().AddComponent(boar, PixelsEngine::InteractionComponent{ "Boar", false, 0.0f });
+    GetRegistry().AddComponent(boar, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Hostile });
     // Add AI
     GetRegistry().AddComponent(boar, PixelsEngine::AIComponent{ 8.0f, 1.2f, 2.0f, 0.0f, true });
     // Add Loot
@@ -1150,14 +1167,61 @@ void PixelsGateGame::RenderHUD() {
             }
         }
 
-        // Draw Player on Minimap
-        auto* trans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
-        if (trans) {
-            int px = (int)trans->x;
-            int py = (int)trans->y;
-            SDL_Rect playerDot = {mx + px * tileSize, my + py * tileSize, tileSize, tileSize};
-            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // Red Dot
-            SDL_RenderFillRect(renderer, &playerDot);
+        // Helper for circles on minimap
+        auto FillCircle = [&](int cx, int cy, int r, SDL_Color color) {
+            SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dx = -r; dx <= r; dx++) {
+                    if (dx*dx + dy*dy <= r*r) SDL_RenderDrawPoint(renderer, cx + dx, cy + dy);
+                }
+            }
+        };
+
+        // Render all entities on Minimap
+        auto& transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
+        for (auto& [entity, trans] : transforms) {
+            if (!m_Level->IsVisible((int)trans.x, (int)trans.y)) continue;
+
+            int px = mx + (int)trans.x * tileSize + tileSize/2;
+            int py = my + (int)trans.y * tileSize + tileSize/2;
+
+            if (entity == m_Player) {
+                FillCircle(px, py, 3, {255, 255, 255, 255}); // Player: White Circle
+                continue;
+            }
+
+            auto* tagComp = GetRegistry().GetComponent<PixelsEngine::TagComponent>(entity);
+            if (tagComp) {
+                switch (tagComp->tag) {
+                    case PixelsEngine::EntityTag::Hostile:
+                        FillCircle(px, py, 2, {255, 0, 0, 255}); // Hostile: Red Circle
+                        break;
+                    case PixelsEngine::EntityTag::NPC:
+                        FillCircle(px, py, 2, {255, 215, 0, 255}); // NPC: Gold Circle
+                        break;
+                    case PixelsEngine::EntityTag::Companion:
+                        FillCircle(px, py, 2, {0, 191, 255, 255}); // Companion: Blue Circle
+                        break;
+                    case PixelsEngine::EntityTag::Trader:
+                    {
+                        // Trader: Loot Bag Icon (Small box)
+                        SDL_Rect box = {px - 2, py - 2, 4, 4};
+                        SDL_SetRenderDrawColor(renderer, 139, 69, 19, 255);
+                        SDL_RenderFillRect(renderer, &box);
+                        break;
+                    }
+                    case PixelsEngine::EntityTag::Quest:
+                    {
+                        // Quest: Circle with Golden Square
+                        FillCircle(px, py, 3, {255, 255, 255, 255});
+                        SDL_Rect sq = {px - 1, py - 1, 2, 2};
+                        SDL_SetRenderDrawColor(renderer, 255, 215, 0, 255);
+                        SDL_RenderFillRect(renderer, &sq);
+                        break;
+                    }
+                    default: break;
+                }
+            }
         }
     }
 
@@ -1271,9 +1335,34 @@ void PixelsGateGame::HandleMainMenuInput() {
                 }
                 break;
             case 1: // New Game
+            {
+                // Reset player to default starting state
+                auto* stats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+                auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+                auto* trans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
+                
+                if (trans) { trans->x = 20.0f; trans->y = 20.0f; }
+                if (stats) {
+                    *stats = PixelsEngine::StatsComponent{100, 100, 15, false};
+                }
+                if (inv) {
+                    inv->items.clear();
+                    inv->equippedMelee = {"", "", 0, PixelsEngine::ItemType::WeaponMelee, 0};
+                    inv->equippedRanged = {"", "", 0, PixelsEngine::ItemType::WeaponRanged, 0};
+                    inv->equippedArmor = {"", "", 0, PixelsEngine::ItemType::Armor, 0};
+                    inv->AddItem("Potion", 3, PixelsEngine::ItemType::Consumable);
+                    inv->AddItem("Sword", 1, PixelsEngine::ItemType::WeaponMelee, 10, "assets/sword.png");
+                    inv->AddItem("Leather Armor", 1, PixelsEngine::ItemType::Armor, 5, "assets/armor.png");
+                    inv->AddItem("Shortbow", 1, PixelsEngine::ItemType::WeaponRanged, 8, "assets/bow.png");
+                }
+
                 m_State = GameState::Creation;
                 selectionIndex = 0; // Reset creation selection
+                pointsRemaining = 5; 
+                for(int i=0; i<6; ++i) tempStats[i] = 10;
+                classIndex = 0; raceIndex = 0;
                 break;
+            }
             case 2: // Load Game
                 if (std::filesystem::exists("savegame.dat")) TriggerLoadTransition("savegame.dat");
                 break;
@@ -2179,11 +2268,59 @@ void PixelsGateGame::RenderMapScreen() {
             }
         }
 
-        auto* trans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
-        if (trans) {
-            SDL_Rect pDot = {mx + (int)trans->x * tileSize, my + (int)trans->y * tileSize, tileSize, tileSize};
-            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-            SDL_RenderFillRect(renderer, &pDot);
+        // Helper for circles on map
+        auto FillCircleLarge = [&](int cx, int cy, int r, SDL_Color color) {
+            SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dx = -r; dx <= r; dx++) {
+                    if (dx*dx + dy*dy <= r*r) SDL_RenderDrawPoint(renderer, cx + dx, cy + dy);
+                }
+            }
+        };
+
+        // Render all entities on Map
+        auto& transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
+        for (auto& [entity, trans] : transforms) {
+            if (!m_Level->IsExplored((int)trans.x, (int)trans.y)) continue;
+
+            int px = mx + (int)trans.x * tileSize + tileSize/2;
+            int py = my + (int)trans.y * tileSize + tileSize/2;
+
+            if (entity == m_Player) {
+                FillCircleLarge(px, py, 6, {255, 255, 255, 255}); // Player: White Circle
+                continue;
+            }
+
+            auto* tagComp = GetRegistry().GetComponent<PixelsEngine::TagComponent>(entity);
+            if (tagComp) {
+                switch (tagComp->tag) {
+                    case PixelsEngine::EntityTag::Hostile:
+                        FillCircleLarge(px, py, 4, {255, 0, 0, 255}); // Hostile: Red Circle
+                        break;
+                    case PixelsEngine::EntityTag::NPC:
+                        FillCircleLarge(px, py, 4, {255, 215, 0, 255}); // NPC: Gold Circle
+                        break;
+                    case PixelsEngine::EntityTag::Companion:
+                        FillCircleLarge(px, py, 4, {0, 191, 255, 255}); // Companion: Blue Circle
+                        break;
+                    case PixelsEngine::EntityTag::Trader:
+                    {
+                        SDL_Rect box = {px - 4, py - 4, 8, 8};
+                        SDL_SetRenderDrawColor(renderer, 139, 69, 19, 255);
+                        SDL_RenderFillRect(renderer, &box);
+                        break;
+                    }
+                    case PixelsEngine::EntityTag::Quest:
+                    {
+                        FillCircleLarge(px, py, 6, {255, 255, 255, 255});
+                        SDL_Rect sq = {px - 2, py - 2, 4, 4};
+                        SDL_SetRenderDrawColor(renderer, 255, 215, 0, 255);
+                        SDL_RenderFillRect(renderer, &sq);
+                        break;
+                    }
+                    default: break;
+                }
+            }
         }
     }
 

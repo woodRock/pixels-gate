@@ -113,10 +113,24 @@ namespace PixelsEngine {
                         for (int i = 0; i < count; ++i) {
                             std::string name, icon;
                             int qty, type, bonus;
-                            std::getline(file, name);
-                            std::getline(file, icon);
-                            file >> qty >> type >> bonus;
-                            file.ignore();
+                            if (!(file >> std::ws && std::getline(file, name))) break;
+                            if (!(file >> std::ws && std::getline(file, icon))) break;
+                            
+                            // Basic validation: if icon looks like a number, it's probably an old save format
+                            if (!icon.empty() && std::isdigit(icon[0]) && icon.find('.') == std::string::npos) {
+                                // This is likely an old save where the next line was actually 'qty'
+                                std::stringstream ss(icon);
+                                ss >> qty;
+                                icon = ""; // Reset icon
+                                // Try to read remaining fields from current line
+                                // But simpler to just skip this item or handle carefully
+                                // For now, let's just use defaults for old saves
+                                type = (int)ItemType::Misc;
+                                bonus = 0;
+                            } else {
+                                if (!(file >> qty >> type >> bonus)) break;
+                                file.ignore();
+                            }
                             inv->AddItem(name, qty, (ItemType)type, bonus, icon);
                         }
                     }
