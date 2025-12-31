@@ -804,13 +804,18 @@ void PixelsGateGame::OnRender() {
             if (m_State == GameState::Combat) RenderCombatUI();
 
             // --- Targeting Visuals ---
-            if (m_State == GameState::Targeting) {
+            if (m_State == GameState::Targeting || PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::AttackModifier))) {
                 SDL_Renderer* renderer = GetRenderer();
                 int winW, winH; SDL_GetWindowSize(m_Window, &winW, &winH);
                 
-                // 1. Text at top
-                m_TextRenderer->RenderTextCentered("TARGETING: " + m_PendingSpellName, winW / 2, 100, {200, 100, 255, 255});
-                m_TextRenderer->RenderTextCentered("Click a target or ESC to cancel", winW / 2, 130, {150, 150, 150, 255});
+                bool isAttack = (m_State != GameState::Targeting);
+
+                if (m_State == GameState::Targeting) {
+                    m_TextRenderer->RenderTextCentered("TARGETING: " + m_PendingSpellName, winW / 2, 100, {200, 100, 255, 255});
+                    m_TextRenderer->RenderTextCentered("Click a target or ESC to cancel", winW / 2, 130, {150, 150, 150, 255});
+                } else {
+                    m_TextRenderer->RenderTextCentered("ATTACK MODE", winW / 2, 100, {255, 100, 100, 255});
+                }
 
                 // Helper for world circles
                 auto DrawWorldCircle = [&](float worldX, float worldY, float radiusTiles, SDL_Color color) {
@@ -828,26 +833,31 @@ void PixelsGateGame::OnRender() {
                     }
                 };
 
-                // 2. Large circle around caster (Player)
+                // 2. Circle around caster (Player)
                 auto* pTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
                 if (pTrans) {
                     float pulse = (std::sin(SDL_GetTicks() * 0.01f) + 1.0f) * 0.5f;
-                    SDL_Color casterCol = { 150, 50, 255, (Uint8)(100 + pulse * 100) };
-                    DrawWorldCircle(pTrans->x, pTrans->y, 1.5f, casterCol);
-                    DrawWorldCircle(pTrans->x, pTrans->y, 1.6f, casterCol); // Thicker
+                    SDL_Color casterCol = isAttack ? SDL_Color{ 255, 50, 50, (Uint8)(100 + pulse * 100) } : SDL_Color{ 150, 50, 255, (Uint8)(100 + pulse * 100) };
+                    DrawWorldCircle(pTrans->x, pTrans->y, isAttack ? 1.2f : 1.5f, casterCol);
                 }
 
-                // 3. Small circle around hovered target
+                // 3. Circle around hovered target
                 int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
                 auto& transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
                 for (auto& [entity, transform] : transforms) {
+                    if (entity == m_Player) continue;
                     auto* sprite = GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(entity);
                     if (sprite) {
                         int screenX, screenY; m_Level->GridToScreen(transform.x, transform.y, screenX, screenY);
                         screenX -= (int)camera.x; screenY -= (int)camera.y;
                         SDL_Rect drawRect = { screenX + 16 - sprite->pivotX, screenY + 16 - sprite->pivotY, sprite->srcRect.w, sprite->srcRect.h };
                         if (mx >= drawRect.x && mx <= drawRect.x + drawRect.w && my >= drawRect.y && my <= drawRect.y + drawRect.h) {
-                            DrawWorldCircle(transform.x, transform.y, 0.8f, { 255, 0, 0, 255 });
+                            bool isAttackable = GetRegistry().HasComponent<PixelsEngine::AIComponent>(entity);
+                            if (!isAttack && !isAttackable) isAttackable = true; // Spells can hit NPCs too
+                            
+                            if (isAttackable) {
+                                DrawWorldCircle(transform.x, transform.y, 0.8f, { 255, 0, 0, 255 });
+                            }
                             break;
                         }
                     }
@@ -1157,8 +1167,8 @@ void PixelsGateGame::HandleInput() {
 
         if (my > winH - 90) CheckUIInteraction(mx, my);
         else {
-            // Check for Ctrl + Click Attack
-            if (isCtrlDown) {
+            // Check for Shift/AttackModifier + Click Attack
+            if (isAttackModifierDown) {
                 auto& camera = GetCamera(); auto& transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
                 bool found = false;
                 for (auto& [entity, transform] : transforms) {
@@ -1175,6 +1185,9 @@ void PixelsGateGame::HandleInput() {
                     }
                 }
                 if (!found) CheckWorldInteraction(mx, my); // Fallback to move
+            } else if (isCtrlDown) {
+                // Ctrl + Click handles context menu logic elsewhere or fallback move here
+                CheckWorldInteraction(mx, my);
             } else {
                 CheckWorldInteraction(mx, my);
             }
