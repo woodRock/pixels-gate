@@ -52,6 +52,8 @@ namespace PixelsEngine {
         int intelligence = 10;
         int wisdom = 10;
         int charisma = 10;
+        
+        int sleightOfHand = 0; // Proficiency bonus or skill level
 
         std::string characterClass = "Commoner";
         std::string race = "Human";
@@ -98,6 +100,12 @@ namespace PixelsEngine {
 
     struct TagComponent {
         EntityTag tag = EntityTag::None;
+    };
+
+    struct LockComponent {
+        bool isLocked = true;
+        std::string keyName = ""; // Name of the key item required
+        int dc = 10; // Difficulty Class for lockpicking
     };
 
     struct DialogueComponent {

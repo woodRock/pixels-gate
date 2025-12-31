@@ -10,7 +10,8 @@ namespace PixelsEngine {
         Attack,
         Talk,
         Pickpocket,
-        Trade
+        Trade,
+        Lockpick
     };
 
     struct ContextAction {

@@ -349,6 +349,34 @@ void PixelsGateGame::OnStart() {
         orbTexture, {0, 0, 32, 32}, 16, 16 
     });
     GetRegistry().AddComponent(orb, PixelsEngine::InteractionComponent{ "Gold Orb", false, 0.0f }); 
+
+    // 6. Spawn Locked Chest
+    auto chest = GetRegistry().CreateEntity();
+    GetRegistry().AddComponent(chest, PixelsEngine::TransformComponent{ 22.0f, 22.0f }); // Inside Inn
+    auto chestTex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/chest.png");
+    GetRegistry().AddComponent(chest, PixelsEngine::SpriteComponent{ chestTex, {0, 0, 32, 32}, 16, 16 });
+    GetRegistry().AddComponent(chest, PixelsEngine::InteractionComponent{ "Old Chest", false, 0.0f });
+    GetRegistry().AddComponent(chest, PixelsEngine::LockComponent{ true, "Chest Key", 15 }); // Locked, DC 15
+    
+    std::vector<PixelsEngine::Item> chestLoot;
+    chestLoot.push_back({"Rare Gem", "", 1, PixelsEngine::ItemType::Misc, 0, 500});
+    chestLoot.push_back({"Potion", "", 2, PixelsEngine::ItemType::Consumable, 0, 50});
+    GetRegistry().AddComponent(chest, PixelsEngine::LootComponent{ chestLoot });
+
+    // 7. Spawn Items (Key and Tools)
+    auto keyEnt = GetRegistry().CreateEntity();
+    GetRegistry().AddComponent(keyEnt, PixelsEngine::TransformComponent{ 25.0f, 25.0f });
+    auto keyTex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/key.png");
+    GetRegistry().AddComponent(keyEnt, PixelsEngine::SpriteComponent{ keyTex, {0, 0, 32, 32}, 16, 16 });
+    GetRegistry().AddComponent(keyEnt, PixelsEngine::InteractionComponent{ "Chest Key", false, 0.0f });
+    GetRegistry().AddComponent(keyEnt, PixelsEngine::LootComponent{ std::vector<PixelsEngine::Item>{ {"Chest Key", "assets/key.png", 1, PixelsEngine::ItemType::Misc, 0, 0} } });
+
+    auto toolsEnt = GetRegistry().CreateEntity();
+    GetRegistry().AddComponent(toolsEnt, PixelsEngine::TransformComponent{ 21.0f, 25.0f });
+    auto toolsTex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/thieves_tools.png");
+    GetRegistry().AddComponent(toolsEnt, PixelsEngine::SpriteComponent{ toolsTex, {0, 0, 32, 32}, 16, 16 });
+    GetRegistry().AddComponent(toolsEnt, PixelsEngine::InteractionComponent{ "Thieves' Tools", false, 0.0f });
+    GetRegistry().AddComponent(toolsEnt, PixelsEngine::LootComponent{ std::vector<PixelsEngine::Item>{ {"Thieves' Tools", "assets/thieves_tools.png", 1, PixelsEngine::ItemType::Tool, 0, 25} } });
 }
 
 // Temporary storage for creation menu
@@ -1382,6 +1410,13 @@ void PixelsGateGame::ResolveDiceRoll() {
             std::cout << "Pickpocket Success!" << std::endl;
             auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
             if (inv) inv->AddItem("Coins", 10);
+        } else if (m_DiceRoll.actionType == PixelsEngine::ContextActionType::Lockpick) {
+             auto* lock = GetRegistry().GetComponent<PixelsEngine::LockComponent>(m_DiceRoll.target);
+             if (lock) {
+                 lock->isLocked = false;
+                 auto* tTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_DiceRoll.target);
+                 SpawnFloatingText(tTrans->x, tTrans->y, "Unlocked!", {0, 255, 0, 255});
+             }
         } else if (m_DiceRoll.actionType == PixelsEngine::ContextActionType::Talk) {
             auto* diag = GetRegistry().GetComponent<PixelsEngine::DialogueComponent>(m_DialogueWith);
             if (diag) {
@@ -1399,6 +1434,19 @@ void PixelsGateGame::ResolveDiceRoll() {
         if (m_DiceRoll.actionType == PixelsEngine::ContextActionType::Pickpocket) {
              auto* interact = GetRegistry().GetComponent<PixelsEngine::InteractionComponent>(m_DiceRoll.target);
              if (interact) { interact->dialogueText = "Hey! Hands off!"; interact->showDialogue = true; interact->dialogueTimer = 2.0f; }
+        } else if (m_DiceRoll.actionType == PixelsEngine::ContextActionType::Lockpick) {
+             auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+             if (inv) {
+                  for(auto it = inv->items.begin(); it != inv->items.end(); ++it) {
+                     if (it->name == "Thieves' Tools") {
+                         it->quantity--;
+                         if (it->quantity <= 0) inv->items.erase(it);
+                         break;
+                     }
+                 }
+             }
+             auto* tTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_DiceRoll.target);
+             SpawnFloatingText(tTrans->x, tTrans->y, "Failed! Tool Broke.", {255, 0, 0, 255});
         } else if (m_DiceRoll.actionType == PixelsEngine::ContextActionType::Talk) {
             auto* diag = GetRegistry().GetComponent<PixelsEngine::DialogueComponent>(m_DialogueWith);
             if (diag) {
@@ -1635,6 +1683,26 @@ void PixelsGateGame::HandleInput() {
                         auto* stats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
                         StartDiceRoll(stats->GetModifier(stats->dexterity), 15, "Dexterity (Sleight of Hand)", m_ContextMenu.targetEntity, PixelsEngine::ContextActionType::Pickpocket);
                     }
+                    else if (action.type == PixelsEngine::ContextActionType::Lockpick) {
+                         auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+                         bool hasTools = false;
+                         if (inv) {
+                             for(auto& item : inv->items) {
+                                 if (item.name == "Thieves' Tools") hasTools = true;
+                             }
+                         }
+                         
+                         if (hasTools) {
+                             auto* stats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+                             auto* lock = GetRegistry().GetComponent<PixelsEngine::LockComponent>(m_ContextMenu.targetEntity);
+                             int dc = lock ? lock->dc : 15;
+                             int bonus = stats->GetModifier(stats->dexterity) + stats->sleightOfHand;
+                             StartDiceRoll(bonus, dc, "Dexterity (Sleight of Hand)", m_ContextMenu.targetEntity, PixelsEngine::ContextActionType::Lockpick);
+                         } else {
+                             auto* pTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
+                             SpawnFloatingText(pTrans->x, pTrans->y, "Need Thieves' Tools!", {255, 0, 0, 255});
+                         }
+                    }
                 }
             }
             m_ContextMenu.isOpen = false;
@@ -1695,10 +1763,19 @@ void PixelsGateGame::HandleInput() {
                     m_ContextMenu.isOpen = true; m_ContextMenu.x = mx; m_ContextMenu.y = my; m_ContextMenu.targetEntity = entity;
                     m_ContextMenu.actions.clear();
                     m_ContextMenu.actions.push_back({"Attack", PixelsEngine::ContextActionType::Attack});
-                    if (GetRegistry().HasComponent<PixelsEngine::InteractionComponent>(entity)) { 
+                    
+                    auto* tag = GetRegistry().GetComponent<PixelsEngine::TagComponent>(entity);
+                    bool isLiving = (tag && (tag->tag == PixelsEngine::EntityTag::NPC || tag->tag == PixelsEngine::EntityTag::Trader || tag->tag == PixelsEngine::EntityTag::Companion || tag->tag == PixelsEngine::EntityTag::Hostile));
+
+                    if (isLiving && GetRegistry().HasComponent<PixelsEngine::InteractionComponent>(entity)) { 
                         m_ContextMenu.actions.push_back({"Talk", PixelsEngine::ContextActionType::Talk}); 
                         m_ContextMenu.actions.push_back({"Pickpocket", PixelsEngine::ContextActionType::Pickpocket}); 
                         m_ContextMenu.actions.push_back({"Trade", PixelsEngine::ContextActionType::Trade});
+                    }
+                    
+                    auto* lock = GetRegistry().GetComponent<PixelsEngine::LockComponent>(entity);
+                    if (lock && lock->isLocked) {
+                        m_ContextMenu.actions.push_back({"Lockpick", PixelsEngine::ContextActionType::Lockpick});
                     }
                     found = true; break; 
                 }
@@ -1814,6 +1891,28 @@ void PixelsGateGame::CheckWorldInteraction(int mx, int my) {
                         m_ReturnState = m_State;
                         m_State = GameState::Looting;
                         return;
+                    }
+                }
+
+                auto* lock = GetRegistry().GetComponent<PixelsEngine::LockComponent>(entity);
+                if (lock) {
+                    if (lock->isLocked) {
+                         auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+                         bool hasKey = false;
+                         if (inv) {
+                             for(auto& item : inv->items) {
+                                 if (item.name == lock->keyName) hasKey = true;
+                             }
+                         }
+                         if (hasKey) {
+                             lock->isLocked = false;
+                             SpawnFloatingText(transform.x, transform.y, "Unlocked with Key", {0, 255, 0, 255});
+                             m_LootingEntity = entity; m_ReturnState = m_State; m_State = GameState::Looting; return;
+                         } else {
+                             SpawnFloatingText(transform.x, transform.y, "Locked", {255, 0, 0, 255}); return;
+                         }
+                    } else {
+                         m_LootingEntity = entity; m_ReturnState = m_State; m_State = GameState::Looting; return;
                     }
                 }
 
@@ -2951,10 +3050,19 @@ void PixelsGateGame::HandleCombatInput() {
                     m_ContextMenu.isOpen = true; m_ContextMenu.x = mx; m_ContextMenu.y = my; m_ContextMenu.targetEntity = entity;
                     m_ContextMenu.actions.clear();
                     m_ContextMenu.actions.push_back({"Attack", PixelsEngine::ContextActionType::Attack});
-                    if (GetRegistry().HasComponent<PixelsEngine::InteractionComponent>(entity)) { 
+                    
+                    auto* tag = GetRegistry().GetComponent<PixelsEngine::TagComponent>(entity);
+                    bool isLiving = (tag && (tag->tag == PixelsEngine::EntityTag::NPC || tag->tag == PixelsEngine::EntityTag::Trader || tag->tag == PixelsEngine::EntityTag::Companion || tag->tag == PixelsEngine::EntityTag::Hostile));
+
+                    if (isLiving && GetRegistry().HasComponent<PixelsEngine::InteractionComponent>(entity)) { 
                         m_ContextMenu.actions.push_back({"Talk", PixelsEngine::ContextActionType::Talk}); 
                         m_ContextMenu.actions.push_back({"Pickpocket", PixelsEngine::ContextActionType::Pickpocket}); 
                         m_ContextMenu.actions.push_back({"Trade", PixelsEngine::ContextActionType::Trade});
+                    }
+                    
+                    auto* lock = GetRegistry().GetComponent<PixelsEngine::LockComponent>(entity);
+                    if (lock && lock->isLocked) {
+                        m_ContextMenu.actions.push_back({"Lockpick", PixelsEngine::ContextActionType::Lockpick});
                     }
                     found = true; break; 
                 }
