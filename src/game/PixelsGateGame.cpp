@@ -134,29 +134,106 @@ void PixelsGateGame::OnStart() {
     PixelsEngine::DialogueNode startNode;
     startNode.id = "start";
     startNode.npcText = "Welcome to the Pixel Inn! What can I do for you today, traveler?";
-    startNode.options.push_back({"I'm looking for work. [Intelligence DC 10]", "work_check", "Intelligence", 10, "work_success", "work_fail"});
-    startNode.options.push_back({"Can I get a discount on a room? [Charisma DC 12]", "room_check", "Charisma", 12, "discount_success", "discount_fail"});
-    startNode.options.push_back({"I don't like your face. [Attack]", "end", "None", 0, "", "", PixelsEngine::DialogueAction::StartCombat});
-    startNode.options.push_back({"Just looking around. [End]", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation});
+    
+    // Work Option: Hidden if work topic is closed (accepted or refused)
+    startNode.options.push_back(PixelsEngine::DialogueOption("I'm looking for work. [Intelligence DC 10]", "work_check", "Intelligence", 10, "work_success", "work_fail", PixelsEngine::DialogueAction::None, "", "Inn_Work_Topic_Closed", false));
+    
+    // Turn In Option: Visible if Quest Active, Not Done, and Has Item
+    startNode.options.push_back(PixelsEngine::DialogueOption("I found the Gold Orb.", "quest_complete", "None", 0, "", "", PixelsEngine::DialogueAction::CompleteQuest, "Quest_FetchOrb_Done", "Quest_FetchOrb_Done", true, "Quest_FetchOrb_Active", "Gold Orb"));
+
+    // Post-Quest Chatter
+    startNode.options.push_back(PixelsEngine::DialogueOption("How are things?", "quest_chat", "None", 0, "", "", PixelsEngine::DialogueAction::None, "", "", true, "Quest_FetchOrb_Done"));
+
+    // Standard Options
+    startNode.options.push_back(PixelsEngine::DialogueOption("Can I get a discount on a room? [Charisma DC 12]", "room_check", "Charisma", 12, "discount_success", "discount_fail", PixelsEngine::DialogueAction::None, "", "discount_active", false));
+    startNode.options.push_back(PixelsEngine::DialogueOption("I don't like your face. [Attack]", "end", "None", 0, "", "", PixelsEngine::DialogueAction::StartCombat));
+    startNode.options.push_back(PixelsEngine::DialogueOption("Just looking around. [End]", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
     innTree.nodes["start"] = startNode;
 
     PixelsEngine::DialogueNode workSuccess;
     workSuccess.id = "work_success";
-    workSuccess.npcText = "A sharp eye! Indeed, the local boars have been raiding our stores. Hunt them and I'll pay you well.";
-    workSuccess.options.push_back({"I'll get right on it.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation});
+    workSuccess.npcText = "A sharp eye! Indeed, the local boars have been raiding our stores. Hunt them... wait, actually, I lost my lucky Gold Orb in the woods. Find it for me?";
+    // Start Quest: Sets Active flag AND Work Topic Closed flag (chained via logic? No, DialogueAction::StartQuest sets ONE flag. I need to set "Inn_Work_Topic_Closed" manually or map "Quest_FetchOrb_Active" to it?
+    // Actually, I can just use "Quest_FetchOrb_Active" as the exclude flag for the start option!
+    // But what if I refuse?
+    // Let's rely on "Quest_FetchOrb_Active" for acceptance.
+    // And "refused_work" for refusal.
+    // I can't exclude on TWO flags.
+    // Workaround: "I'll get right on it." sets "Quest_FetchOrb_Active". 
+    // AND we can set "Inn_Work_Topic_Closed" via `actionParam`? No, param is used for the flag name.
+    // I will simplify: If "Quest_FetchOrb_Active" is true, hide it. If "refused_work" is true, hide it.
+    // I can duplicate the option with different exclude flags? No, that shows two.
+    // I will use "Inn_Work_Topic_Closed" as the unified flag.
+    // So StartQuest needs to set "Quest_FetchOrb_Active". And I also need to set "Inn_Work_Topic_Closed".
+    // I can't do two actions.
+    // I'll make the "I'm looking for work" check exclude on "Quest_FetchOrb_Active".
+    // If I refuse, I just won't set "Quest_FetchOrb_Active" and it might show again?
+    // That's fine. If I refuse, maybe I can ask again later. That's actually better game design (retry).
+    // So I will exclude on "Quest_FetchOrb_Active" AND "Quest_FetchOrb_Done".
+    // Wait, I still have the single string limit.
+    // "Quest_FetchOrb_Active" implies I have the job.
+    // "Quest_FetchOrb_Done" implies I finished.
+    // If I finish, "Active" stays true in my logic? Yes.
+    // So excluding "Quest_FetchOrb_Active" covers both phases!
+    // So "I'm looking for work" is hidden if "Quest_FetchOrb_Active" is set.
+    
+    // Corrected Start Node logic:
+    // Exclude: "Quest_FetchOrb_Active"
+    
+    // Options in workSuccess:
+    // "I'll do it." -> Action: StartQuest, Param: "Quest_FetchOrb_Active".
+    workSuccess.options.push_back(PixelsEngine::DialogueOption("I'll find it.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::StartQuest, "Quest_FetchOrb_Active"));
     innTree.nodes["work_success"] = workSuccess;
 
     PixelsEngine::DialogueNode workFail;
     workFail.id = "work_fail";
     workFail.npcText = "You look a bit... slow. I don't have anything for someone who can't tell a boar from a bush.";
-    workFail.options.push_back({"Hmph.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation});
-    innTree.nodes["work_fail"] = workFail;
+    workFail.options.push_back(PixelsEngine::DialogueOption("Hmph.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation)); // No flag set, can try again? No, INT check non-repeatable handles it.
+    // The option "I'm looking for work" is non-repeatable. If I choose it and fail, `hasBeenChosen` is true.
+    // So I don't need flags to hide it if I fail!
+    // I only need flags to hide it if I SUCCEED and ACCEPT (because `hasBeenChosen` resets on new game, but state persists? No, new game resets everything).
+    // Wait, if I succeed, `hasBeenChosen` is true. So it hides itself!
+    // I don't need `excludeFlag` at all for the start option if it's non-repeatable!
+    // EXCEPT if I want to hide it because I accepted the quest.
+    // "I'm looking for work" -> `repeatable=false`.
+    // If I pick it, it's gone.
+    // If I succeed -> accept quest.
+    // If I fail -> gone.
+    // If I succeed -> decline quest? (Not an option implemented).
+    // So `repeatable=false` is sufficient!
+    // The only issue is if I accept, I don't want to see it. `hasBeenChosen` handles that.
+    
+    // So I don't need `Inn_Work_Topic_Closed`.
+    
+    PixelsEngine::DialogueNode questComplete;
+    questComplete.id = "quest_complete";
+    questComplete.npcText = "My Orb! You found it! Thank you so much.";
+    questComplete.options.push_back(PixelsEngine::DialogueOption("Happy to help.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    innTree.nodes["quest_complete"] = questComplete;
+
+    PixelsEngine::DialogueNode questChat;
+    questChat.id = "quest_chat";
+    questChat.npcText = "Business is booming thanks to you!";
+    questChat.options.push_back(PixelsEngine::DialogueOption("Glad to hear it.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    innTree.nodes["quest_chat"] = questChat;
 
     PixelsEngine::DialogueNode discountSuccess;
     discountSuccess.id = "discount_success";
     discountSuccess.npcText = "You have a silver tongue! Fine, half price for you tonight.";
-    discountSuccess.options.push_back({"Much appreciated.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation, "discount_active"});
+    discountSuccess.options.push_back(PixelsEngine::DialogueOption("Much appreciated.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation, "discount_active"));
     innTree.nodes["discount_success"] = discountSuccess;
+
+    PixelsEngine::DialogueNode discountFail;
+    discountFail.id = "discount_fail";
+    discountFail.npcText = "Nice try, but I have a business to run. Full price.";
+    discountFail.options.push_back(PixelsEngine::DialogueOption("Worth a shot. [End]", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    innTree.nodes["discount_fail"] = discountFail;
+
+    PixelsEngine::DialogueNode refusedWork; // Not used anymore if we rely on repeatable=false, but good to keep structure
+    refusedWork.id = "refused_work";
+    refusedWork.npcText = "Suit yourself.";
+    refusedWork.options.push_back(PixelsEngine::DialogueOption("[End]", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    innTree.nodes["refused_work"] = refusedWork;
 
     GetRegistry().AddComponent(npc1, PixelsEngine::DialogueComponent{ innTree });
 
@@ -167,11 +244,54 @@ void PixelsGateGame::OnStart() {
     auto npc2 = GetRegistry().CreateEntity();
     GetRegistry().AddComponent(npc2, PixelsEngine::TransformComponent{ 20.0f, 25.0f }); // Guarding path
     GetRegistry().AddComponent(npc2, PixelsEngine::SpriteComponent{ playerTexture, {0, 0, 32, 32}, 16, 30 });
-    GetRegistry().AddComponent(npc2, PixelsEngine::InteractionComponent{ "The world is dangerous out there.", false, 0.0f });
+    GetRegistry().AddComponent(npc2, PixelsEngine::InteractionComponent{ "Guardian", false, 0.0f });
     GetRegistry().AddComponent(npc2, PixelsEngine::StatsComponent{50, 50, 5, false}); 
     GetRegistry().AddComponent(npc2, PixelsEngine::QuestComponent{ "HuntBoars", 0, "Boar Meat" });
     GetRegistry().AddComponent(npc2, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Quest });
     GetRegistry().AddComponent(npc2, PixelsEngine::AIComponent{ 8.0f, 1.5f, 2.0f, 0.0f, false, 0.0f, 270.0f, 90.0f }); 
+    
+    PixelsEngine::DialogueTree guardTree;
+    guardTree.currentEntityName = "Guardian";
+    guardTree.currentNodeId = "start";
+    PixelsEngine::DialogueNode gStart;
+    gStart.id = "start";
+    gStart.npcText = "The road ahead is dangerous. You'll need more than that look on your face to survive.";
+    gStart.options.push_back(PixelsEngine::DialogueOption("I can handle myself. [Intimidate DC 10]", "g_check", "Charisma", 10, "g_pass", "g_fail", PixelsEngine::DialogueAction::None, "", "", false));
+    gStart.options.push_back(PixelsEngine::DialogueOption("What's out there?", "g_info", "None", 0, "", "", PixelsEngine::DialogueAction::None, "", "", false)); // Lore
+    
+    // Turn In
+    gStart.options.push_back(PixelsEngine::DialogueOption("I have the Boar Meat.", "g_done", "None", 0, "", "", PixelsEngine::DialogueAction::CompleteQuest, "Quest_HuntBoars_Done", "Quest_HuntBoars_Done", true, "Quest_HuntBoars_Active", "Boar Meat"));
+    
+    // Post-Quest
+    gStart.options.push_back(PixelsEngine::DialogueOption("The boars are thinning out.", "g_chat", "None", 0, "", "", PixelsEngine::DialogueAction::None, "", "", true, "Quest_HuntBoars_Done"));
+    
+    gStart.options.push_back(PixelsEngine::DialogueOption("[Attack]", "end", "None", 0, "", "", PixelsEngine::DialogueAction::StartCombat));
+    gStart.options.push_back(PixelsEngine::DialogueOption("Just passing through. [End]", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    guardTree.nodes["start"] = gStart;
+    
+    PixelsEngine::DialogueNode gPass; gPass.id = "g_pass"; gPass.npcText = "Fine, go die then. Don't say I didn't warn you.";
+    gPass.options.push_back(PixelsEngine::DialogueOption("[End]", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    guardTree.nodes["g_pass"] = gPass;
+    
+    PixelsEngine::DialogueNode gFail; gFail.id = "g_fail"; gFail.npcText = "Ha! You're shaking like a leaf. Get inside before a boar eats you.";
+    gFail.options.push_back(PixelsEngine::DialogueOption("[End]", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    guardTree.nodes["g_fail"] = gFail;
+
+    PixelsEngine::DialogueNode gInfo; gInfo.id = "g_info"; gInfo.npcText = "Boars. Big ones. And worse. Stay on the path if you value your hide.";
+    gInfo.options.push_back(PixelsEngine::DialogueOption("I can help hunt them.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::StartQuest, "Quest_HuntBoars_Active"));
+    gInfo.options.push_back(PixelsEngine::DialogueOption("Thanks for the warning. [End]", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    guardTree.nodes["g_info"] = gInfo;
+
+    PixelsEngine::DialogueNode gDone; gDone.id = "g_done"; gDone.npcText = "You actually killed one? Hmph. Maybe you're not useless after all.";
+    gDone.options.push_back(PixelsEngine::DialogueOption("Told you.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    guardTree.nodes["g_done"] = gDone;
+
+    PixelsEngine::DialogueNode gChat; gChat.id = "g_chat"; gChat.npcText = "Keep up the good work.";
+    gChat.options.push_back(PixelsEngine::DialogueOption("[End]", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    guardTree.nodes["g_chat"] = gChat;
+    
+    GetRegistry().AddComponent(npc2, PixelsEngine::DialogueComponent{ guardTree });
+
     auto& n2Inv = GetRegistry().AddComponent(npc2, PixelsEngine::InventoryComponent{});
     n2Inv.AddItem("Coins", 50);
     n2Inv.AddItem("Bread", 5, PixelsEngine::ItemType::Consumable, 0, "", 10);
@@ -180,10 +300,26 @@ void PixelsGateGame::OnStart() {
     auto comp = GetRegistry().CreateEntity();
     GetRegistry().AddComponent(comp, PixelsEngine::TransformComponent{ 21.0f, 21.0f }); // In Inn
     GetRegistry().AddComponent(comp, PixelsEngine::SpriteComponent{ playerTexture, {0, 0, 32, 32}, 16, 30 });
-    GetRegistry().AddComponent(comp, PixelsEngine::InteractionComponent{ "Need a hand, traveler?", false, 0.0f });
+    GetRegistry().AddComponent(comp, PixelsEngine::InteractionComponent{ "Companion", false, 0.0f });
     GetRegistry().AddComponent(comp, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Companion });
     GetRegistry().AddComponent(comp, PixelsEngine::StatsComponent{80, 80, 8, false}); 
     GetRegistry().AddComponent(comp, PixelsEngine::AIComponent{ 10.0f, 1.5f, 2.0f, 0.0f, false });
+    
+    PixelsEngine::DialogueTree compTree;
+    compTree.currentEntityName = "Traveler";
+    compTree.currentNodeId = "start";
+    PixelsEngine::DialogueNode cStart;
+    cStart.id = "start"; cStart.npcText = "Quiet night, isn't it? Thinking of heading out?";
+    cStart.options.push_back(PixelsEngine::DialogueOption("Who are you?", "c_info", "None", 0, "", "", PixelsEngine::DialogueAction::None, "", "", false));
+    cStart.options.push_back(PixelsEngine::DialogueOption("[End]", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    compTree.nodes["start"] = cStart;
+
+    PixelsEngine::DialogueNode cInfo; cInfo.id = "c_info"; cInfo.npcText = "Just a wanderer, like you. I've seen things you wouldn't believe.";
+    cInfo.options.push_back(PixelsEngine::DialogueOption("Interesting. [End]", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    compTree.nodes["c_info"] = cInfo;
+
+    GetRegistry().AddComponent(comp, PixelsEngine::DialogueComponent{ compTree });
+
     auto& cInv = GetRegistry().AddComponent(comp, PixelsEngine::InventoryComponent{});
     cInv.AddItem("Coins", 10);
 
@@ -191,15 +327,32 @@ void PixelsGateGame::OnStart() {
     auto trader = GetRegistry().CreateEntity();
     GetRegistry().AddComponent(trader, PixelsEngine::TransformComponent{ 18.0f, 21.0f }); // In Inn
     GetRegistry().AddComponent(trader, PixelsEngine::SpriteComponent{ playerTexture, {0, 0, 32, 32}, 16, 30 });
-    GetRegistry().AddComponent(trader, PixelsEngine::InteractionComponent{ "I have wares if you have coins.", false, 0.0f });
+    GetRegistry().AddComponent(trader, PixelsEngine::InteractionComponent{ "Trader", false, 0.0f });
     GetRegistry().AddComponent(trader, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Trader });
     GetRegistry().AddComponent(trader, PixelsEngine::StatsComponent{100, 100, 10, false}); 
     GetRegistry().AddComponent(trader, PixelsEngine::AIComponent{ 8.0f, 1.5f, 2.0f, 0.0f, false, 0.0f, 0.0f, 120.0f });
+    
+    PixelsEngine::DialogueTree tradeTree;
+    tradeTree.currentEntityName = "Merchant";
+    tradeTree.currentNodeId = "start";
+    PixelsEngine::DialogueNode tStart;
+    tStart.id = "start"; tStart.npcText = "Looking for supplies? I've got the best prices in the valley.";
+    tStart.options.push_back(PixelsEngine::DialogueOption("Show me your wares. [Trade]", "start", "None", 0, "", "", PixelsEngine::DialogueAction::GiveItem));
+    tStart.options.push_back(PixelsEngine::DialogueOption("Any news? [Persuasion DC 10]", "t_check", "Charisma", 10, "t_pass", "t_fail", PixelsEngine::DialogueAction::None, "", "", false));
+    tStart.options.push_back(PixelsEngine::DialogueOption("[End]", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    tradeTree.nodes["start"] = tStart;
+
+    PixelsEngine::DialogueNode tPass; tPass.id = "t_pass"; tPass.npcText = "Rumor has it there's a golden orb hidden in the forest. Worth a fortune.";
+    tPass.options.push_back(PixelsEngine::DialogueOption("I'll keep an eye out. [End]", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    tradeTree.nodes["t_pass"] = tPass;
+
+    PixelsEngine::DialogueNode tFail; tFail.id = "t_fail"; tFail.npcText = "Nothing for free, friend. Buy something and maybe I'll talk.";
+    tFail.options.push_back(PixelsEngine::DialogueOption("[End]", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    tradeTree.nodes["t_fail"] = tFail;
+
+    GetRegistry().AddComponent(trader, PixelsEngine::DialogueComponent{ tradeTree });
+
     auto& tInv = GetRegistry().AddComponent(trader, PixelsEngine::InventoryComponent{});
-    tInv.AddItem("Coins", 500);
-    tInv.AddItem("Sword", 1, PixelsEngine::ItemType::WeaponMelee, 10, "assets/sword.png", 150);
-    tInv.AddItem("Leather Armor", 1, PixelsEngine::ItemType::Armor, 5, "assets/armor.png", 200);
-    tInv.AddItem("Potion", 5, PixelsEngine::ItemType::Consumable, 0, "", 50);
 
     // 5. Spawn Gold Orb (Across the river)
     auto orb = GetRegistry().CreateEntity();
@@ -572,6 +725,7 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
         if (m_FadeState == FadeState::FadingOut) {
             if (m_FadeTimer <= 0.0f) {
                 PixelsEngine::SaveSystem::LoadGame(m_PendingLoadFile, GetRegistry(), m_Player, *m_Level);
+                PixelsEngine::SaveSystem::LoadWorldFlags(m_PendingLoadFile, m_WorldFlags);
                 m_FadeState = FadeState::FadingIn;
                 m_FadeTimer = m_FadeDuration;
                 
@@ -1445,9 +1599,11 @@ void PixelsGateGame::HandleInput() {
     // Quick Save/Load
     if (PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_F5)) {
         PixelsEngine::SaveSystem::SaveGame("quicksave.dat", GetRegistry(), m_Player, *m_Level);
+        PixelsEngine::SaveSystem::SaveWorldFlags("quicksave.dat", m_WorldFlags);
         ShowSaveMessage();
     }
     if (PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_F8)) {
+        PixelsEngine::SaveSystem::LoadWorldFlags("quicksave.dat", m_WorldFlags);
         TriggerLoadTransition("quicksave.dat");
     }
 
@@ -1624,6 +1780,7 @@ void PixelsGateGame::CheckUIInteraction(int mx, int my) {
             else if (i == 1) { if (m_State != GameState::Character) { m_ReturnState = m_State; m_State = GameState::Character; } else m_State = m_ReturnState; }
             else if (i == 2) { 
                 PixelsEngine::SaveSystem::SaveGame("savegame.dat", GetRegistry(), m_Player, *m_Level);
+                PixelsEngine::SaveSystem::SaveWorldFlags("savegame.dat", m_WorldFlags);
                 ShowSaveMessage();
             }
             else if (i == 3) { auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player); if (inv) inv->isOpen = !inv->isOpen; }
@@ -1660,6 +1817,17 @@ void PixelsGateGame::CheckWorldInteraction(int mx, int my) {
                         m_State = GameState::Looting;
                         return;
                     }
+                }
+
+                // Default: Try to open Dialogue
+                auto* diag = GetRegistry().GetComponent<PixelsEngine::DialogueComponent>(entity);
+                if (diag) {
+                    m_DialogueWith = entity;
+                    m_ReturnState = m_State;
+                    m_State = GameState::Dialogue;
+                    m_DialogueSelection = 0;
+                    diag->tree.currentNodeId = "start";
+                    return;
                 }
 
                 m_SelectedNPC = entity; clickedEntity = true;
@@ -1896,10 +2064,18 @@ void PixelsGateGame::RenderHUD() {
             if (transform) {
                  int screenX, screenY; m_Level->GridToScreen(transform->x, transform->y, screenX, screenY);
                  screenX -= (int)camera.x; screenY -= (int)camera.y;
-                 int w = interact.dialogueText.length() * 10, h = 30; SDL_Rect bubble = { screenX + 16 - w/2, screenY - 40, w, h };
+                 
+                 int maxBubbleW = 200;
+                 // We don't have a way to measure text before rendering easily without adding more helpers.
+                 // Let's assume a safe height or just use RenderTextWrapped and let it overflow if really long.
+                 // But the prompt specifically asked for the conversation text (UI) to fit.
+                 
+                 int w = std::min((int)interact.dialogueText.length() * 10, maxBubbleW);
+                 int h = 30; // Will grow if we had better measuring
+                 SDL_Rect bubble = { screenX + 16 - w/2, screenY - 40, w, h };
                  SDL_SetRenderDrawColor(renderer, 255, 255, 255, 200); SDL_RenderFillRect(renderer, &bubble);
                  SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); SDL_RenderDrawRect(renderer, &bubble);
-                 m_TextRenderer->RenderTextCentered(interact.dialogueText, bubble.x + w/2, bubble.y + h/2, {0, 0, 0, 255});
+                 m_TextRenderer->RenderTextWrapped(interact.dialogueText, bubble.x + 5, bubble.y + 5, w - 10, {0, 0, 0, 255});
             }
         }
     }
@@ -1961,14 +2137,17 @@ void PixelsGateGame::HandleMainMenuInput() {
         switch (selection) {
             case 0: // Continue
                 if (std::filesystem::exists("savegame.dat")) {
+                    PixelsEngine::SaveSystem::LoadWorldFlags("savegame.dat", m_WorldFlags);
                     TriggerLoadTransition("savegame.dat");
                 } else if (std::filesystem::exists("quicksave.dat")) {
+                     PixelsEngine::SaveSystem::LoadWorldFlags("quicksave.dat", m_WorldFlags);
                      TriggerLoadTransition("quicksave.dat");
                 }
                 break;
             case 1: // New Game
             {
                 // Reset player to default starting state
+                m_WorldFlags.clear();
                 auto* stats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
                 auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
                 auto* trans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
@@ -1987,6 +2166,28 @@ void PixelsGateGame::HandleMainMenuInput() {
                     inv->AddItem("Leather Armor", 1, PixelsEngine::ItemType::Armor, 5, "assets/armor.png");
                     inv->AddItem("Shortbow", 1, PixelsEngine::ItemType::WeaponRanged, 8, "assets/bow.png");
                 }
+
+                // Reset Dialogues
+                auto& dialogues = GetRegistry().View<PixelsEngine::DialogueComponent>();
+                for (auto& [entity, diag] : dialogues) {
+                    diag.tree.currentNodeId = "start";
+                    for (auto& [id, node] : diag.tree.nodes) {
+                        for (auto& opt : node.options) {
+                            opt.hasBeenChosen = false;
+                        }
+                    }
+                }
+
+                // Reset Quest States (assuming quest components on NPCs need reset)
+                auto& quests = GetRegistry().View<PixelsEngine::QuestComponent>();
+                for (auto& [entity, quest] : quests) {
+                    quest.state = 0;
+                }
+                
+                // Reset NPC Inventories if needed (optional, but good for "New Game")
+                // This is harder as we hardcoded them in OnStart. 
+                // Ideally OnStart logic for NPCs should be reusable or we just rely on Save/Load for state.
+                // But for a simple reset, resetting flags and dialogue options is key.
 
                 m_State = GameState::Creation;
                 selectionIndex = 0; // Reset creation selection
@@ -2963,8 +3164,10 @@ void PixelsGateGame::HandleGameOverInput() {
     HandleMenuNavigation(2, [&](int selection) {
         if (selection == 0) { // Load Last Save
             if (std::filesystem::exists("quicksave.dat")) {
+                PixelsEngine::SaveSystem::LoadWorldFlags("quicksave.dat", m_WorldFlags);
                 TriggerLoadTransition("quicksave.dat");
             } else if (std::filesystem::exists("savegame.dat")) {
+                PixelsEngine::SaveSystem::LoadWorldFlags("savegame.dat", m_WorldFlags);
                 TriggerLoadTransition("savegame.dat");
             } else {
                 // No save found, just restart to main menu
@@ -3162,24 +3365,61 @@ void PixelsGateGame::RenderDialogueScreen() {
 
     // NPC Name & Text
     m_TextRenderer->RenderText(diag->tree.currentEntityName, panel.x + 20, panel.y + 20, {255, 215, 0, 255});
-    m_TextRenderer->RenderText(diag->tree.nodes[diag->tree.currentNodeId].npcText, panel.x + 20, panel.y + 50, {255, 255, 255, 255});
+    int npcTextHeight = m_TextRenderer->RenderTextWrapped(diag->tree.nodes[diag->tree.currentNodeId].npcText, panel.x + 20, panel.y + 50, panelW - 40, {255, 255, 255, 255});
 
     // Options
-    auto& options = diag->tree.nodes[diag->tree.currentNodeId].options;
-    int optY = panel.y + 100;
-    for (int i = 0; i < (int)options.size(); ++i) {
-        SDL_Color color = (m_DialogueSelection == i) ? SDL_Color{50, 255, 50, 255} : SDL_Color{200, 200, 200, 255};
+    auto& allOptions = diag->tree.nodes[diag->tree.currentNodeId].options;
+    auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+
+    std::vector<int> visibleOptionIndices;
+    for (int i = 0; i < (int)allOptions.size(); ++i) {
+        auto& opt = allOptions[i];
+        // Check Exclude Flag (Hide if true)
+        if (!opt.excludeFlag.empty() && m_WorldFlags[opt.excludeFlag]) continue;
         
-        SDL_Rect row = { panel.x + 20, optY - 5, panelW - 40, 30 };
-        bool hover = (mx >= row.x && mx <= row.x + row.w && my >= row.y && my <= row.y + row.h);
-        if (hover) {
-            color = {255, 255, 0, 255};
-            m_DialogueSelection = i; // Update selection on hover
+        // Check Required Flag (Hide if false/missing)
+        if (!opt.requiredFlag.empty() && !m_WorldFlags[opt.requiredFlag]) continue;
+
+        // Check Required Item (Hide if missing)
+        if (!opt.requiredItem.empty()) {
+            bool hasItem = false;
+            if (inv) {
+                for(auto& it : inv->items) { if(it.name == opt.requiredItem && it.quantity > 0) hasItem = true; }
+            }
+            if (!hasItem) continue;
         }
 
+        if (!opt.repeatable && opt.hasBeenChosen) continue;
+        visibleOptionIndices.push_back(i);
+    }
+
+    int optY = panel.y + 50 + npcTextHeight + 20; 
+    for (int i = 0; i < (int)visibleOptionIndices.size(); ++i) {
+        int originalIndex = visibleOptionIndices[i];
+        
         std::string prefix = std::to_string(i+1) + ". ";
-        m_TextRenderer->RenderText(prefix + options[i].text, panel.x + 30, optY, color);
-        optY += 35;
+        std::string fullText = prefix + allOptions[originalIndex].text;
+        
+        // We need the height for the hover box. 
+        // A simple way is to use a fixed max width and guess or pre-calculate.
+        // For now, let's use a standard height but wrap the text.
+        // Most options are short.
+        
+        SDL_Rect row = { panel.x + 20, optY - 5, panelW - 40, 30 }; // Default height 30
+        
+        // If we want truly dynamic hover boxes, we'd need a way to query text height without rendering.
+        // SDL_ttf has TTF_SizeText for this. 
+        
+        bool hover = (mx >= row.x && mx <= row.x + row.w && my >= row.y && my <= row.y + row.h);
+        SDL_Color color = (m_DialogueSelection == i) ? SDL_Color{50, 255, 50, 255} : SDL_Color{200, 200, 200, 255};
+        
+        if (hover) {
+            color = {255, 255, 0, 255};
+            m_DialogueSelection = i;
+        }
+
+        int optHeight = m_TextRenderer->RenderTextWrapped(fullText, panel.x + 30, optY, panelW - 60, color);
+        optY += std::max(30, optHeight) + 10; 
     }
 }
 
@@ -3188,14 +3428,35 @@ void PixelsGateGame::HandleDialogueInput() {
     if (!diag) { m_State = m_ReturnState; return; }
 
     auto& node = diag->tree.nodes[diag->tree.currentNodeId];
-    int numOptions = node.options.size();
+    auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+    
+    std::vector<int> visibleOptionIndices;
+    for (int i = 0; i < (int)node.options.size(); ++i) {
+        auto& opt = node.options[i];
+        if (!opt.excludeFlag.empty() && m_WorldFlags[opt.excludeFlag]) continue;
+        if (!opt.requiredFlag.empty() && !m_WorldFlags[opt.requiredFlag]) continue;
+        if (!opt.requiredItem.empty()) {
+            bool hasItem = false;
+            if (inv) {
+                for(auto& it : inv->items) { if(it.name == opt.requiredItem && it.quantity > 0) hasItem = true; }
+            }
+            if (!hasItem) continue;
+        }
+        if (!opt.repeatable && opt.hasBeenChosen) continue;
+        visibleOptionIndices.push_back(i);
+    }
+    int numOptions = visibleOptionIndices.size();
 
     bool isClick = PixelsEngine::Input::IsMouseButtonPressed(SDL_BUTTON_LEFT);
     bool isEnter = PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_RETURN) || PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_SPACE);
 
     if (isClick || isEnter) {
         if (m_DialogueSelection >= 0 && m_DialogueSelection < numOptions) {
-            auto& opt = node.options[m_DialogueSelection];
+            int originalIndex = visibleOptionIndices[m_DialogueSelection];
+            auto& opt = node.options[originalIndex];
+            
+            // Mark as chosen
+            opt.hasBeenChosen = true;
             
             // 1. Handle Dice Roll if needed
             if (opt.requiredStat != "None") {
@@ -3206,7 +3467,7 @@ void PixelsGateGame::HandleDialogueInput() {
                     else if (opt.requiredStat == "Charisma") mod = pStats->GetModifier(pStats->charisma);
                 }
                 StartDiceRoll(mod, opt.dc, opt.requiredStat, m_DialogueWith, PixelsEngine::ContextActionType::Talk);
-                m_State = GameState::Playing; // Will return to Dialogue via ResolveDiceRoll
+                m_State = GameState::Playing; 
                 return;
             }
 
@@ -3219,8 +3480,40 @@ void PixelsGateGame::HandleDialogueInput() {
                 return;
             } else if (opt.action == PixelsEngine::DialogueAction::SetFlag) {
                 m_WorldFlags[opt.actionParam] = true;
+            } else if (opt.action == PixelsEngine::DialogueAction::StartQuest) {
+                auto* q = GetRegistry().GetComponent<PixelsEngine::QuestComponent>(m_DialogueWith);
+                if (q) q->state = 1;
+                m_WorldFlags[opt.actionParam] = true; // Use param as flag name for "Active"
+            } else if (opt.action == PixelsEngine::DialogueAction::CompleteQuest) {
+                auto* q = GetRegistry().GetComponent<PixelsEngine::QuestComponent>(m_DialogueWith);
+                if (q && q->state == 1) {
+                    q->state = 2;
+                    m_WorldFlags[opt.actionParam] = true; // Flag "Completed"
+                    // Remove Item
+                    if (inv) {
+                         auto it = inv->items.begin();
+                         while (it != inv->items.end()) {
+                             if (it->name == q->targetItem) {
+                                 it->quantity--;
+                                 if (it->quantity <= 0) it = inv->items.erase(it);
+                                 break;
+                             } else ++it;
+                         }
+                         // Rewards
+                         inv->AddItem("Coins", 50);
+                         auto* pStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+                         if (pStats) {
+                            pStats->experience += 100;
+                            SpawnFloatingText(0, 0, "+100 XP", {0, 255, 255, 255});
+                         }
+                    }
+                }
             } else if (opt.action == PixelsEngine::DialogueAction::EndConversation) {
                 m_State = m_ReturnState;
+                return;
+            } else if (opt.action == PixelsEngine::DialogueAction::GiveItem) { // Special logic for trade trigger
+                m_TradingWith = m_DialogueWith;
+                m_State = GameState::Trading;
                 return;
             }
 
@@ -3234,8 +3527,10 @@ void PixelsGateGame::HandleDialogueInput() {
         }
     }
 
-    if (PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_W)) { m_DialogueSelection = (m_DialogueSelection - 1 + numOptions) % numOptions; }
-    if (PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_S)) { m_DialogueSelection = (m_DialogueSelection + 1) % numOptions; }
+    if (numOptions > 0) {
+        if (PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_W)) { m_DialogueSelection = (m_DialogueSelection - 1 + numOptions) % numOptions; }
+        if (PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_S)) { m_DialogueSelection = (m_DialogueSelection + 1) % numOptions; }
+    }
 }
 
 

@@ -120,6 +120,33 @@ namespace PixelsEngine {
             std::cout << "Game Saved to " << filename << std::endl;
         }
 
+        static void SaveWorldFlags(const std::string& filename, const std::unordered_map<std::string, bool>& flags) {
+            std::ofstream file(filename + ".flags");
+            if (file.is_open()) {
+                file << flags.size() << "\n";
+                for (auto const& [key, val] : flags) {
+                    file << key << " " << (val ? 1 : 0) << "\n";
+                }
+                file.close();
+            }
+        }
+
+        static void LoadWorldFlags(const std::string& filename, std::unordered_map<std::string, bool>& flags) {
+            std::ifstream file(filename + ".flags");
+            if (file.is_open()) {
+                flags.clear();
+                size_t size;
+                file >> size;
+                for (size_t i = 0; i < size; ++i) {
+                    std::string key;
+                    int val;
+                    file >> key >> val;
+                    flags[key] = (val == 1);
+                }
+                file.close();
+            }
+        }
+
         static void LoadGame(const std::string& filename, Registry& registry, Entity player, Tilemap& map) {
             std::ifstream file(filename);
             if (!file.is_open()) {

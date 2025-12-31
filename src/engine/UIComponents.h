@@ -44,7 +44,9 @@ namespace PixelsEngine {
         StartCombat,
         GiveItem,
         SetFlag,
-        EndConversation
+        EndConversation,
+        StartQuest,
+        CompleteQuest
     };
 
     struct DialogueOption {
@@ -52,10 +54,18 @@ namespace PixelsEngine {
         std::string nextNodeId;
         std::string requiredStat = "None"; // "Intelligence", "Charisma", etc.
         int dc = 0;
-        std::string onSuccessNodeId;
-        std::string onFailureNodeId;
+        std::string excludeFlag = ""; // Hides option if flag is TRUE
+        std::string requiredFlag = ""; // Shows option ONLY if flag is TRUE
+        std::string requiredItem = ""; // Shows option ONLY if player has item
+        std::string onSuccessNodeId = "";
+        std::string onFailureNodeId = "";
         DialogueAction action = DialogueAction::None;
         std::string actionParam = ""; // Flag name or Item name
+        bool repeatable = true;
+        bool hasBeenChosen = false;
+
+        DialogueOption(std::string t, std::string next, std::string stat = "None", int d = 0, std::string success = "", std::string fail = "", DialogueAction act = DialogueAction::None, std::string param = "", std::string exclFlag = "", bool rep = true, std::string reqFlag = "", std::string reqItem = "")
+            : text(t), nextNodeId(next), requiredStat(stat), dc(d), excludeFlag(exclFlag), requiredFlag(reqFlag), requiredItem(reqItem), onSuccessNodeId(success), onFailureNodeId(fail), action(act), actionParam(param), repeatable(rep) {}
     };
 
     struct DialogueNode {
