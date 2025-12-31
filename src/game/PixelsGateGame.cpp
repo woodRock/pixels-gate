@@ -128,6 +128,7 @@ void PixelsGateGame::OnStart() {
     GetRegistry().AddComponent(comp, PixelsEngine::SpriteComponent{ playerTexture, {0, 0, 32, 32}, 16, 30 });
     GetRegistry().AddComponent(comp, PixelsEngine::InteractionComponent{ "I'm with you!", false, 0.0f });
     GetRegistry().AddComponent(comp, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Companion });
+    GetRegistry().AddComponent(comp, PixelsEngine::StatsComponent{80, 80, 8, false}); 
     GetRegistry().AddComponent(comp, PixelsEngine::AIComponent{ 10.0f, 1.5f, 2.0f, 0.0f, false });
     auto& cInv = GetRegistry().AddComponent(comp, PixelsEngine::InventoryComponent{});
     cInv.AddItem("Coins", 10);
@@ -138,6 +139,7 @@ void PixelsGateGame::OnStart() {
     GetRegistry().AddComponent(trader, PixelsEngine::SpriteComponent{ playerTexture, {0, 0, 32, 32}, 16, 30 });
     GetRegistry().AddComponent(trader, PixelsEngine::InteractionComponent{ "Want to trade?", false, 0.0f });
     GetRegistry().AddComponent(trader, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Trader });
+    GetRegistry().AddComponent(trader, PixelsEngine::StatsComponent{100, 100, 10, false}); 
     GetRegistry().AddComponent(trader, PixelsEngine::AIComponent{ 8.0f, 1.5f, 2.0f, 0.0f, false, 0.0f, 0.0f, 120.0f });
     auto& tInv = GetRegistry().AddComponent(trader, PixelsEngine::InventoryComponent{});
     tInv.AddItem("Coins", 500);
@@ -840,7 +842,9 @@ void PixelsGateGame::OnRender() {
                 if (transform && m_Level) {
                     // Check Fog of War
                     if (entity != m_Player) {
-                        if (!m_Level->IsVisible((int)transform->x, (int)transform->y)) {
+                        // Always show entities currently in combat turn order
+                        bool inCombat = IsInTurnOrder(entity);
+                        if (!inCombat && !m_Level->IsVisible((int)transform->x, (int)transform->y)) {
                             continue; // Skip rendering hidden entity
                         }
                     }
@@ -2192,6 +2196,7 @@ void PixelsGateGame::StartCombat(PixelsEngine::Entity enemy) {
     if (eStartStats && eStartStats->isDead) return;
 
     m_TurnOrder.clear();
+    bool anyEnemyAdded = false;
     
     // Add Player
     auto* pStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
@@ -2205,6 +2210,7 @@ void PixelsGateGame::StartCombat(PixelsEngine::Entity enemy) {
         if (eStats && !eStats->isDead) {
             int eInit = PixelsEngine::Dice::Roll(20) + (eStats ? eStats->GetModifier(eStats->dexterity) : 0);
             m_TurnOrder.push_back({enemy, eInit, false});
+            anyEnemyAdded = true;
         }
     }
 
@@ -2218,12 +2224,18 @@ void PixelsGateGame::StartCombat(PixelsEngine::Entity enemy) {
             float dist = std::sqrt(std::pow(t->x - pTrans->x, 2) + std::pow(t->y - pTrans->y, 2));
             if (dist < 15.0f) { // Combat radius
                  auto* eStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(ent);
-                 if (eStats && !eStats->isDead) {
+                 if (eStats && !eStats->isDead && ai.isAggressive) { // Only add aggressive nearby NPCs
                      int eInit = PixelsEngine::Dice::Roll(20) + eStats->GetModifier(eStats->dexterity);
                      m_TurnOrder.push_back({ent, eInit, false});
+                     anyEnemyAdded = true;
                  }
             }
         }
+    }
+
+    if (!anyEnemyAdded) {
+        m_TurnOrder.clear();
+        return; // Don't start combat if no enemies
     }
 
     // Sort
@@ -3067,45 +3079,79 @@ void PixelsGateGame::CastSpell(const std::string& spellName, PixelsEngine::Entit
 
 
 
-    if (success) {
+        if (success) {
 
-        if (m_State == GameState::Combat || m_ReturnState == GameState::Combat) m_ActionsLeft--;
 
-        
 
-        // Final Victory Check if in combat
+            if (m_State == GameState::Combat || m_ReturnState == GameState::Combat) m_ActionsLeft--;
 
-        if (m_State == GameState::Combat || m_ReturnState == GameState::Combat) {
 
-            bool enemiesAlive = false;
 
-            auto& view = GetRegistry().View<PixelsEngine::AIComponent>();
+            
 
-            for (auto& [ent, ai] : view) {
 
-                auto* s = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(ent);
 
-                if (s && !s->isDead) enemiesAlive = true;
+            // Final Victory Check if in combat
+
+
+
+            if (m_State == GameState::Combat || m_ReturnState == GameState::Combat) {
+
+
+
+                bool enemiesAlive = false;
+
+
+
+                auto& view = GetRegistry().View<PixelsEngine::AIComponent>();
+
+
+
+                for (auto& [ent, ai] : view) {
+
+
+
+                    auto* s = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(ent);
+
+
+
+                    if (s && !s->isDead && IsInTurnOrder(ent)) enemiesAlive = true;
+
+
+
+                }
+
+
+
+                if (!enemiesAlive) {
+
+
+
+                    EndCombat();
+
+
+
+                    m_ReturnState = GameState::Playing;
+
+
+
+                }
+
+
 
             }
 
-            if (!enemiesAlive) {
 
-                EndCombat();
 
-                m_ReturnState = GameState::Playing;
+            
 
-            }
 
-        }
 
-        
+            if (m_State != GameState::Combat) m_State = m_ReturnState; 
 
-                m_State = m_ReturnState; 
 
-        
 
-            } else {
+        } else {
 
         
 

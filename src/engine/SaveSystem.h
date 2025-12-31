@@ -64,7 +64,47 @@ namespace PixelsEngine {
                 file << quest.questId << " " << quest.state << "\n";
             }
 
-            // 5. Fog of War
+            // 5. World Entities (NPCs and Mobs)
+            file << "[WORLD_ENTITIES]\n";
+            auto& transforms = registry.View<TransformComponent>();
+            int entityCount = 0;
+            for (auto& [entity, trans] : transforms) {
+                if (entity != player) entityCount++;
+            }
+            file << entityCount << "\n";
+            for (auto& [entity, trans] : transforms) {
+                if (entity == player) continue;
+                
+                // Identify entity by its interaction/tag name for reloading
+                std::string name = "Unknown";
+                if (auto* inter = registry.GetComponent<InteractionComponent>(entity)) name = inter->dialogueText;
+                
+                file << name << "\n";
+                file << trans.x << " " << trans.y << "\n";
+                
+                // Stats
+                if (auto* s = registry.GetComponent<StatsComponent>(entity)) {
+                    file << "1\n"; // Has stats
+                    file << s->maxHealth << " " << s->currentHealth << " " << s->damage << " " << (s->isDead ? 1 : 0) << "\n";
+                } else file << "0\n";
+
+                // AI
+                if (auto* ai = registry.GetComponent<AIComponent>(entity)) {
+                    file << "1\n"; // Has AI
+                    file << (ai->isAggressive ? 1 : 0) << " " << ai->facingDir << "\n";
+                } else file << "0\n";
+
+                // Inventory
+                if (auto* inv = registry.GetComponent<InventoryComponent>(entity)) {
+                    file << inv->items.size() << "\n";
+                    for (const auto& item : inv->items) {
+                        file << item.name << "\n" << item.iconPath << "\n" 
+                             << item.quantity << " " << (int)item.type << " " << item.statBonus << " " << item.value << "\n";
+                    }
+                } else file << "0\n";
+            }
+
+            // 6. Fog of War
             file << "[MAP_FOG]\n";
             int w = map.GetWidth();
             int h = map.GetHeight();
@@ -168,6 +208,89 @@ namespace PixelsEngine {
                     for (auto& [entity, quest] : quests) {
                         if (questStates.find(quest.questId) != questStates.end()) {
                             quest.state = questStates[quest.questId];
+                        }
+                    }
+                }
+                else if (line == "[WORLD_ENTITIES]") {
+                    int count;
+                    file >> count;
+                    file.ignore();
+                    
+                    // Pre-cache existing world entities to update them
+                    auto& worldTransforms = registry.View<TransformComponent>();
+                    std::unordered_map<std::string, Entity> existingEntities;
+                    for (auto& [ent, t] : worldTransforms) {
+                        if (ent == player) continue;
+                        if (auto* inter = registry.GetComponent<InteractionComponent>(ent)) {
+                            existingEntities[inter->dialogueText] = ent;
+                        }
+                    }
+
+                    for (int i = 0; i < count; ++i) {
+                        std::string name;
+                        std::getline(file, name);
+                        float ex, ey;
+                        file >> ex >> ey;
+                        
+                        Entity target = INVALID_ENTITY;
+                        if (existingEntities.count(name)) {
+                            target = existingEntities[name];
+                        }
+
+                        if (target != INVALID_ENTITY) {
+                            if (auto* t = registry.GetComponent<TransformComponent>(target)) {
+                                t->x = ex; t->y = ey;
+                            }
+                            
+                            // Load Stats
+                            int hasStats; file >> hasStats;
+                            if (hasStats) {
+                                auto* s = registry.GetComponent<StatsComponent>(target);
+                                int dead;
+                                if (s) file >> s->maxHealth >> s->currentHealth >> s->damage >> dead;
+                                else { int dummy; file >> dummy >> dummy >> dummy >> dead; }
+                                if (s) s->isDead = (dead == 1);
+                            }
+
+                            // Load AI
+                            int hasAI; file >> hasAI;
+                            if (hasAI) {
+                                auto* ai = registry.GetComponent<AIComponent>(target);
+                                int aggro; float face;
+                                file >> aggro >> face;
+                                if (ai) { ai->isAggressive = (aggro == 1); ai->facingDir = face; }
+                            }
+
+                            // Load Inventory
+                            int invCount; file >> invCount;
+                            file.ignore();
+                            if (invCount > 0 || registry.HasComponent<InventoryComponent>(target)) {
+                                auto* inv = registry.GetComponent<InventoryComponent>(target);
+                                if (inv) inv->items.clear();
+                                for (int j = 0; j < invCount; ++j) {
+                                    std::string iname, icon;
+                                    int qty, type, bonus, val;
+                                    std::getline(file, iname);
+                                    std::getline(file, icon);
+                                    file >> qty >> type >> bonus >> val;
+                                    file.ignore();
+                                    if (inv) inv->AddItem(iname, qty, (ItemType)type, bonus, icon, val);
+                                }
+                            }
+                        } else {
+                            // If entity doesn't exist in current scene, we might need to spawn it, 
+                            // but for this simple engine we assume all persistent NPCs are created in OnStart.
+                            // We'll skip the extra data for now to keep the file pointer in sync.
+                            int hasStats; file >> hasStats; if(hasStats) { int d; file >> d >> d >> d >> d; }
+                            int hasAI; file >> hasAI; if(hasAI) { float f; int d; file >> d >> f; }
+                            int skipInvCount; file >> skipInvCount; file.ignore();
+                            for(int j=0; j<skipInvCount; ++j) { 
+                                std::string s; int d; 
+                                std::getline(file, s); // name
+                                std::getline(file, s); // icon
+                                file >> d >> d >> d >> d; // qty, type, bonus, val
+                                file.ignore(); 
+                            }
                         }
                     }
                 }
