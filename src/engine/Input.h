@@ -13,12 +13,14 @@ namespace PixelsEngine {
         static bool IsKeyReleased(SDL_Scancode key);
         
         static bool IsMouseButtonDown(int button);
+        static bool IsMouseButtonPressed(int button);
         static void GetMousePosition(int& x, int& y);
 
     private:
         static const Uint8* m_KeyboardState;
         static Uint8 m_PrevKeyboardState[SDL_NUM_SCANCODES];
         static Uint32 m_MouseState;
+        static Uint32 m_PrevMouseState;
         static int m_MouseX, m_MouseY;
     };
 

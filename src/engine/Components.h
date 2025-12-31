@@ -39,6 +39,8 @@ namespace PixelsEngine {
         int damage = 10;
         bool isDead = false;
         
+        int experience = 0;
+        int level = 1;
         int inspiration = 1; // Default 1 inspiration point
 
         // D&D Stats

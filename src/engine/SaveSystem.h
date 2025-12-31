@@ -42,12 +42,12 @@ namespace PixelsEngine {
                 for (const auto& item : inv->items) {
                     file << item.name << "\n";
                     file << item.iconPath << "\n";
-                    file << item.quantity << " " << (int)item.type << " " << item.statBonus << "\n";
+                    file << item.quantity << " " << (int)item.type << " " << item.statBonus << " " << item.value << "\n";
                 }
                 // Save Equipment too!
                 file << "[EQUIPMENT]\n";
                 auto saveEquip = [&](const Item& item) {
-                    file << item.name << "\n" << item.iconPath << "\n" << item.quantity << " " << (int)item.type << " " << item.statBonus << "\n";
+                    file << item.name << "\n" << item.iconPath << "\n" << item.quantity << " " << (int)item.type << " " << item.statBonus << " " << item.value << "\n";
                 };
                 saveEquip(inv->equippedMelee);
                 saveEquip(inv->equippedRanged);
@@ -112,7 +112,7 @@ namespace PixelsEngine {
                         file.ignore(); // Consume newline
                         for (int i = 0; i < count; ++i) {
                             std::string name, icon;
-                            int qty, type, bonus;
+                            int qty, type, bonus, val;
                             if (!(file >> std::ws && std::getline(file, name))) break;
                             if (!(file >> std::ws && std::getline(file, icon))) break;
                             
@@ -127,11 +127,12 @@ namespace PixelsEngine {
                                 // For now, let's just use defaults for old saves
                                 type = (int)ItemType::Misc;
                                 bonus = 0;
+                                val = 10;
                             } else {
-                                if (!(file >> qty >> type >> bonus)) break;
+                                if (!(file >> qty >> type >> bonus >> val)) break;
                                 file.ignore();
                             }
-                            inv->AddItem(name, qty, (ItemType)type, bonus, icon);
+                            inv->AddItem(name, qty, (ItemType)type, bonus, icon, val);
                         }
                     }
                 }
@@ -140,10 +141,10 @@ namespace PixelsEngine {
                         auto loadEquip = [&](Item& item) {
                             std::getline(file, item.name);
                             std::getline(file, item.iconPath);
-                            int qty, type, bonus;
-                            file >> qty >> type >> bonus;
+                            int qty, type, bonus, val;
+                            file >> qty >> type >> bonus >> val;
                             file.ignore();
-                            item.quantity = qty; item.type = (ItemType)type; item.statBonus = bonus;
+                            item.quantity = qty; item.type = (ItemType)type; item.statBonus = bonus; item.value = val;
                         };
                         loadEquip(inv->equippedMelee);
                         loadEquip(inv->equippedRanged);

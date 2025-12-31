@@ -73,10 +73,10 @@ void PixelsGateGame::OnStart() {
     GetRegistry().AddComponent(m_Player, PixelsEngine::StatsComponent{100, 100, 15, false}); 
     
     auto& inv = GetRegistry().AddComponent(m_Player, PixelsEngine::InventoryComponent{});
-    inv.AddItem("Potion", 3, PixelsEngine::ItemType::Consumable);
-    inv.AddItem("Sword", 1, PixelsEngine::ItemType::WeaponMelee, 10, "assets/sword.png");
-    inv.AddItem("Leather Armor", 1, PixelsEngine::ItemType::Armor, 5, "assets/armor.png");
-    inv.AddItem("Shortbow", 1, PixelsEngine::ItemType::WeaponRanged, 8, "assets/bow.png");
+    inv.AddItem("Potion", 3, PixelsEngine::ItemType::Consumable, 0, "", 50);
+    inv.AddItem("Sword", 1, PixelsEngine::ItemType::WeaponMelee, 10, "assets/sword.png", 150);
+    inv.AddItem("Leather Armor", 1, PixelsEngine::ItemType::Armor, 5, "assets/armor.png", 200);
+    inv.AddItem("Shortbow", 1, PixelsEngine::ItemType::WeaponRanged, 8, "assets/bow.png", 120);
     
     std::string playerSheet = "assets/Pixel Art Top Down - Basic v1.2.2/Texture/TX Player.png";
     auto playerTexture = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), playerSheet);
@@ -105,6 +105,9 @@ void PixelsGateGame::OnStart() {
     GetRegistry().AddComponent(npc1, PixelsEngine::StatsComponent{50, 50, 5, false}); 
     GetRegistry().AddComponent(npc1, PixelsEngine::QuestComponent{ "FetchOrb", 0, "Gold Orb" });
     GetRegistry().AddComponent(npc1, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Quest });
+    auto& n1Inv = GetRegistry().AddComponent(npc1, PixelsEngine::InventoryComponent{});
+    n1Inv.AddItem("Coins", 100);
+    n1Inv.AddItem("Potion", 1, PixelsEngine::ItemType::Consumable, 0, "", 50);
 
     auto npc2 = GetRegistry().CreateEntity();
     GetRegistry().AddComponent(npc2, PixelsEngine::TransformComponent{ 18.0f, 22.0f });
@@ -113,6 +116,9 @@ void PixelsGateGame::OnStart() {
     GetRegistry().AddComponent(npc2, PixelsEngine::StatsComponent{50, 50, 5, false}); 
     GetRegistry().AddComponent(npc2, PixelsEngine::QuestComponent{ "HuntBoars", 0, "Boar Meat" });
     GetRegistry().AddComponent(npc2, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Quest });
+    auto& n2Inv = GetRegistry().AddComponent(npc2, PixelsEngine::InventoryComponent{});
+    n2Inv.AddItem("Coins", 50);
+    n2Inv.AddItem("Bread", 2, PixelsEngine::ItemType::Consumable, 0, "", 10);
 
     // Add a Companion
     auto comp = GetRegistry().CreateEntity();
@@ -120,6 +126,8 @@ void PixelsGateGame::OnStart() {
     GetRegistry().AddComponent(comp, PixelsEngine::SpriteComponent{ playerTexture, {0, 0, 32, 32}, 16, 30 });
     GetRegistry().AddComponent(comp, PixelsEngine::InteractionComponent{ "I'm with you!", false, 0.0f });
     GetRegistry().AddComponent(comp, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Companion });
+    auto& cInv = GetRegistry().AddComponent(comp, PixelsEngine::InventoryComponent{});
+    cInv.AddItem("Coins", 10);
 
     // Add a Trader
     auto trader = GetRegistry().CreateEntity();
@@ -127,6 +135,11 @@ void PixelsGateGame::OnStart() {
     GetRegistry().AddComponent(trader, PixelsEngine::SpriteComponent{ playerTexture, {0, 0, 32, 32}, 16, 30 });
     GetRegistry().AddComponent(trader, PixelsEngine::InteractionComponent{ "Want to trade?", false, 0.0f });
     GetRegistry().AddComponent(trader, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Trader });
+    auto& tInv = GetRegistry().AddComponent(trader, PixelsEngine::InventoryComponent{});
+    tInv.AddItem("Coins", 500);
+    tInv.AddItem("Sword", 1, PixelsEngine::ItemType::WeaponMelee, 10, "assets/sword.png", 150);
+    tInv.AddItem("Leather Armor", 1, PixelsEngine::ItemType::Armor, 5, "assets/armor.png", 200);
+    tInv.AddItem("Potion", 5, PixelsEngine::ItemType::Consumable, 0, "", 50);
 
     // 5. Spawn Gold Orb
     auto orb = GetRegistry().CreateEntity();
@@ -376,7 +389,7 @@ void PixelsGateGame::CreateBoar(float x, float y) {
     GetRegistry().AddComponent(boar, PixelsEngine::AIComponent{ 8.0f, 1.2f, 2.0f, 0.0f, true });
     // Add Loot
     std::vector<PixelsEngine::Item> drops;
-    drops.push_back({"Boar Meat", "", 1, PixelsEngine::ItemType::Consumable, 0});
+    drops.push_back({"Boar Meat", "", 1, PixelsEngine::ItemType::Consumable, 0, 25});
     GetRegistry().AddComponent(boar, PixelsEngine::LootComponent{ drops });
 
     auto tex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/critters/boar/boar_SE_run_strip.png");
@@ -481,20 +494,15 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
                 return;
             }
 
-            static bool wasEsc = false;
-            static bool wasI = false;
-            static bool wasM = false;
-            static bool wasC = false;
-            static bool wasK = false;
-            bool isEsc = PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Pause));
-            bool isI = PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Inventory));
-            bool isM = PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Map));
-            bool isC = PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Character));
-            bool isK = PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Magic));
+            auto escKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Pause);
+            auto invKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Inventory);
+            auto mapKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Map);
+            auto chrKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Character);
+            auto magKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Magic);
             
             auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
             
-            if (isEsc && !wasEsc) {
+            if (PixelsEngine::Input::IsKeyPressed(escKey)) {
                 if (inv && inv->isOpen) {
                     inv->isOpen = false;
                 } else if (m_State == GameState::Magic || m_State == GameState::Map || m_State == GameState::Character) {
@@ -504,10 +512,10 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
                     m_MenuSelection = 0;
                 }
             }
-            if (isI && !wasI && inv) {
+            if (PixelsEngine::Input::IsKeyPressed(invKey) && inv) {
                 inv->isOpen = !inv->isOpen;
             }
-            if (isM && !wasM) {
+            if (PixelsEngine::Input::IsKeyPressed(mapKey)) {
                 if (m_State == GameState::Map) {
                     m_State = m_ReturnState;
                 } else {
@@ -515,7 +523,7 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
                     m_State = GameState::Map;
                 }
             }
-            if (isC && !wasC) {
+            if (PixelsEngine::Input::IsKeyPressed(chrKey)) {
                 if (m_State == GameState::Character) {
                     m_State = m_ReturnState;
                 } else {
@@ -523,7 +531,7 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
                     m_State = GameState::Character;
                 }
             }
-            if (isK && !wasK) {
+            if (PixelsEngine::Input::IsKeyPressed(magKey)) {
                 if (m_State == GameState::Magic) {
                     m_State = m_ReturnState;
                 } else {
@@ -531,16 +539,11 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
                     m_State = GameState::Magic;
                 }
             }
-            wasEsc = isEsc;
-            wasI = isI;
-            wasM = isM;
-            wasC = isC;
-            wasK = isK;
             
             if (inv && inv->isOpen) {
                 HandleInventoryInput();
             }
-
+            
             if (m_State == GameState::Combat) {
                 UpdateCombat(deltaTime);
             } else if (m_State == GameState::Playing) {
@@ -585,7 +588,52 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
                                     } else if (quest->state == 1) {
                                         bool hasItem = false;
                                         for (auto& item : inv->items) { if (item.name == quest->targetItem && item.quantity > 0) hasItem = true; }
-                                        if (hasItem) { interaction->dialogueText = "You found it! Thank you."; quest->state = 2; inv->AddItem("Coins", 50); }
+                                        if (hasItem) { 
+                                            interaction->dialogueText = "You found it! Thank you."; 
+                                            quest->state = 2; 
+                                            
+                                            // 1. Remove Item from Player
+                                            auto it = inv->items.begin();
+                                            while (it != inv->items.end()) {
+                                                if (it->name == quest->targetItem) {
+                                                    PixelsEngine::Item removedItem = *it;
+                                                    removedItem.quantity = 1;
+                                                    it->quantity--;
+                                                    if (it->quantity <= 0) it = inv->items.erase(it);
+                                                    else ++it;
+
+                                                    // 2. Add Item to NPC
+                                                    auto* nInv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_SelectedNPC);
+                                                    if (nInv) nInv->AddItemObject(removedItem);
+                                                    break;
+                                                } else ++it;
+                                            }
+
+                                            // 3. Gold Reward from NPC (if they have it)
+                                            int reward = 50;
+                                            auto* nInv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_SelectedNPC);
+                                            if (nInv) {
+                                                auto nIt = nInv->items.begin();
+                                                while (nIt != nInv->items.end()) {
+                                                    if (nIt->name == "Coins") {
+                                                        int actualReward = std::min(nIt->quantity, reward);
+                                                        nIt->quantity -= actualReward;
+                                                        inv->AddItem("Coins", actualReward);
+                                                        if (nIt->quantity <= 0) nInv->items.erase(nIt);
+                                                        break;
+                                                    } else ++nIt;
+                                                }
+                                            } else {
+                                                inv->AddItem("Coins", reward); // Fallback
+                                            }
+
+                                            // 4. XP Reward
+                                            auto* pStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+                                            if (pStats) {
+                                                pStats->experience += 100;
+                                                SpawnFloatingText(transform->x, transform->y, "+100 XP", {0, 255, 255, 255});
+                                            }
+                                        }
                                         else { if (quest->questId == "FetchOrb") interaction->dialogueText = "Bring me the Orb..."; else if (quest->questId == "HuntBoars") interaction->dialogueText = "Bring me Boar Meat."; }
                                     } else if (quest->state == 2) interaction->dialogueText = "Blessings upon you.";
                                 }
@@ -754,6 +802,57 @@ void PixelsGateGame::OnRender() {
 
             RenderHUD(); 
             if (m_State == GameState::Combat) RenderCombatUI();
+
+            // --- Targeting Visuals ---
+            if (m_State == GameState::Targeting) {
+                SDL_Renderer* renderer = GetRenderer();
+                int winW, winH; SDL_GetWindowSize(m_Window, &winW, &winH);
+                
+                // 1. Text at top
+                m_TextRenderer->RenderTextCentered("TARGETING: " + m_PendingSpellName, winW / 2, 100, {200, 100, 255, 255});
+                m_TextRenderer->RenderTextCentered("Click a target or ESC to cancel", winW / 2, 130, {150, 150, 150, 255});
+
+                // Helper for world circles
+                auto DrawWorldCircle = [&](float worldX, float worldY, float radiusTiles, SDL_Color color) {
+                    SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+                    int cx, cy; m_Level->GridToScreen(worldX, worldY, cx, cy);
+                    cx -= (int)camera.x; cy -= (int)camera.y;
+                    cx += 16; cy += 16; // Center of tile
+
+                    int r = (int)(radiusTiles * 32.0f);
+                    for (int i = 0; i < 360; i += 5) {
+                        float rad1 = i * (M_PI / 180.0f);
+                        float rad2 = (i + 5) * (M_PI / 180.0f);
+                        SDL_RenderDrawLine(renderer, cx + std::cos(rad1) * r, cy + std::sin(rad1) * r,
+                                                     cx + std::cos(rad2) * r, cy + std::sin(rad2) * r);
+                    }
+                };
+
+                // 2. Large circle around caster (Player)
+                auto* pTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
+                if (pTrans) {
+                    float pulse = (std::sin(SDL_GetTicks() * 0.01f) + 1.0f) * 0.5f;
+                    SDL_Color casterCol = { 150, 50, 255, (Uint8)(100 + pulse * 100) };
+                    DrawWorldCircle(pTrans->x, pTrans->y, 1.5f, casterCol);
+                    DrawWorldCircle(pTrans->x, pTrans->y, 1.6f, casterCol); // Thicker
+                }
+
+                // 3. Small circle around hovered target
+                int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
+                auto& transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
+                for (auto& [entity, transform] : transforms) {
+                    auto* sprite = GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(entity);
+                    if (sprite) {
+                        int screenX, screenY; m_Level->GridToScreen(transform.x, transform.y, screenX, screenY);
+                        screenX -= (int)camera.x; screenY -= (int)camera.y;
+                        SDL_Rect drawRect = { screenX + 16 - sprite->pivotX, screenY + 16 - sprite->pivotY, sprite->srcRect.w, sprite->srcRect.h };
+                        if (mx >= drawRect.x && mx <= drawRect.x + drawRect.w && my >= drawRect.y && my <= drawRect.y + drawRect.h) {
+                            DrawWorldCircle(transform.x, transform.y, 0.8f, { 255, 0, 0, 255 });
+                            break;
+                        }
+                    }
+                }
+            }
             
             RenderInventory(); RenderContextMenu(); RenderDiceRoll();
             RenderDayNightCycle(); // Render tint on top
@@ -969,21 +1068,17 @@ void PixelsGateGame::RenderInventoryItem(const PixelsEngine::Item& item, int x, 
 }
 
 void PixelsGateGame::HandleInput() {
-    static bool wasDownLeft = false, wasDownRight = false;
     bool isAttackModifierDown = PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::AttackModifier));
     bool isCtrlDown = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_LCTRL) || PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_RCTRL);
     
     bool isDownLeftRaw = PixelsEngine::Input::IsMouseButtonDown(SDL_BUTTON_LEFT);
-    bool isDownRightRaw = PixelsEngine::Input::IsMouseButtonDown(SDL_BUTTON_RIGHT);
-    
-    bool isPressedLeftRaw = isDownLeftRaw && !wasDownLeft;
-    bool isPressedRightRaw = isDownRightRaw && !wasDownRight;
+    bool isPressedLeftRaw = PixelsEngine::Input::IsMouseButtonPressed(SDL_BUTTON_LEFT);
+    bool isPressedRightRaw = PixelsEngine::Input::IsMouseButtonPressed(SDL_BUTTON_RIGHT);
     
     // CTRL + CLICK = Right Click (equivalent to isPressedRight)
     bool isPressedLeft = isPressedLeftRaw && !isCtrlDown;
     bool isPressedRight = isPressedRightRaw || (isPressedLeftRaw && isCtrlDown);
     
-    wasDownLeft = isDownLeftRaw; wasDownRight = isDownRightRaw;
     int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
 
     if (m_DiceRoll.active) {
@@ -1368,20 +1463,16 @@ void PixelsGateGame::RenderHUD() {
 // --- Menu Implementations ---
 
 void PixelsGateGame::HandleMenuNavigation(int numOptions, std::function<void(int)> onSelect, std::function<void()> onCancel, int forceSelection) {
-    static bool wasUp = false, wasDown = false, wasEnter = false, wasEsc = false, wasMouseClick = false;
-    bool isUp = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_W) || PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_UP);
-    bool isDown = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_S) || PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_DOWN);
-    bool isEnter = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_RETURN) || PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_SPACE);
-    bool isEsc = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE);
-    bool isMouseClick = PixelsEngine::Input::IsMouseButtonDown(SDL_BUTTON_LEFT);
-
-    bool pressUp = isUp && !wasUp;
-    bool pressDown = isDown && !wasDown;
-    bool pressEnter = isEnter && !wasEnter;
-    bool pressEsc = isEsc && !wasEsc;
-    bool pressMouse = isMouseClick && !wasMouseClick;
-
-    wasUp = isUp; wasDown = isDown; wasEnter = isEnter; wasEsc = isEsc; wasMouseClick = isMouseClick;
+    bool pressUp = PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_W) || PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_UP);
+    bool pressDown = PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_S) || PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_DOWN);
+    bool pressEnter = PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_RETURN) || PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_SPACE);
+    bool pressEsc = PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_ESCAPE);
+    
+    // Mouse click handling (latch logic simplified since Input handles raw state)
+    static bool wasMouse = false;
+    bool isMouse = PixelsEngine::Input::IsMouseButtonDown(SDL_BUTTON_LEFT);
+    bool pressMouse = isMouse && !wasMouse;
+    wasMouse = isMouse;
 
     if (forceSelection != -1) {
         m_MenuSelection = forceSelection;
@@ -1817,11 +1908,12 @@ void PixelsGateGame::HandleInventoryInput() {
     auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
     if (!inv) return;
 
-    static bool wasDown = false;
+    bool pressed = PixelsEngine::Input::IsMouseButtonPressed(SDL_BUTTON_LEFT);
     bool isDown = PixelsEngine::Input::IsMouseButtonDown(SDL_BUTTON_LEFT);
-    bool pressed = isDown && !wasDown;
-    bool released = !isDown && wasDown;
-    wasDown = isDown;
+    
+    static bool wasDownForReleased = false;
+    bool released = !isDown && wasDownForReleased;
+    wasDownForReleased = isDown;
 
     float currentTime = SDL_GetTicks() / 1000.0f;
 
@@ -1837,12 +1929,11 @@ void PixelsGateGame::HandleInventoryInput() {
         // Check for double click or start drag
         int listY = panel.y + 150;
         int itemY = listY + 10;
-        for (int i = 0; i < inv->items.size(); ++i) {
+        for (int i = 0; i < (int)inv->items.size(); ++i) {
             SDL_Rect rowRect = { panel.x + 20, itemY, w - 40, 40 };
             if (mx >= rowRect.x && mx <= rowRect.x + rowRect.w && my >= rowRect.y && my <= rowRect.y + rowRect.h) {
                 // Potential Double Click
                 if (i == m_LastClickedItemIndex && (currentTime - m_LastClickTime) < 0.5f) {
-                    // EQUIP via Double Click
                     PixelsEngine::Item& item = inv->items[i];
                     bool equipped = false;
                     if (item.type == PixelsEngine::ItemType::WeaponMelee) {
@@ -1859,7 +1950,7 @@ void PixelsGateGame::HandleInventoryInput() {
                         item.quantity--;
                         if (item.quantity <= 0) inv->items.erase(inv->items.begin() + i);
                         m_LastClickedItemIndex = -1;
-                        m_DraggingItemIndex = -1; // Reset dragging if equipped
+                        m_DraggingItemIndex = -1; 
                         return;
                     }
                 }
@@ -1886,30 +1977,31 @@ void PixelsGateGame::HandleInventoryInput() {
     }
 
     if (released && m_DraggingItemIndex != -1) {
-        // Handle Drop
-        int startX = panel.x + 50;
-        int startY = panel.y + 60;
-        int slotSize = 40;
-        
-        PixelsEngine::Item& dragItem = inv->items[m_DraggingItemIndex];
-        bool dropped = false;
+        if (m_DraggingItemIndex < (int)inv->items.size()) {
+            int startX = panel.x + 50;
+            int startY = panel.y + 60;
+            int slotSize = 40;
+            
+            PixelsEngine::Item& dragItem = inv->items[m_DraggingItemIndex];
+            bool dropped = false;
 
-        auto CheckDrop = [&](PixelsEngine::Item& slotItem, int x, int y, PixelsEngine::ItemType allowed) {
-            SDL_Rect r = {x, y, slotSize, slotSize};
-            if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h && dragItem.type == allowed) {
-                if (!slotItem.IsEmpty()) inv->AddItemObject(slotItem);
-                slotItem = dragItem; slotItem.quantity = 1;
-                dropped = true;
+            auto CheckDrop = [&](PixelsEngine::Item& slotItem, int x, int y, PixelsEngine::ItemType allowed) {
+                SDL_Rect r = {x, y, slotSize, slotSize};
+                if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h && dragItem.type == allowed) {
+                    if (!slotItem.IsEmpty()) inv->AddItemObject(slotItem);
+                    slotItem = dragItem; slotItem.quantity = 1;
+                    dropped = true;
+                }
+            };
+
+            CheckDrop(inv->equippedMelee, startX, startY, PixelsEngine::ItemType::WeaponMelee);
+            CheckDrop(inv->equippedRanged, startX + 100, startY, PixelsEngine::ItemType::WeaponRanged);
+            CheckDrop(inv->equippedArmor, startX + 200, startY, PixelsEngine::ItemType::Armor);
+
+            if (dropped) {
+                dragItem.quantity--;
+                if (dragItem.quantity <= 0) inv->items.erase(inv->items.begin() + m_DraggingItemIndex);
             }
-        };
-
-        CheckDrop(inv->equippedMelee, startX, startY, PixelsEngine::ItemType::WeaponMelee);
-        CheckDrop(inv->equippedRanged, startX + 100, startY, PixelsEngine::ItemType::WeaponRanged);
-        CheckDrop(inv->equippedArmor, startX + 200, startY, PixelsEngine::ItemType::Armor);
-
-        if (dropped) {
-            dragItem.quantity--;
-            if (dragItem.quantity <= 0) inv->items.erase(inv->items.begin() + m_DraggingItemIndex);
         }
         m_DraggingItemIndex = -1;
     }
@@ -2116,13 +2208,11 @@ void PixelsGateGame::HandleCombatInput() {
         }
     }
     
-    static bool wasDownLeft = false;
     bool isAttackModifierDown = PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::AttackModifier));
     bool isCtrlDown = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_LCTRL) || PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_RCTRL);
     
     bool isDownLeftRaw = PixelsEngine::Input::IsMouseButtonDown(SDL_BUTTON_LEFT);
-    bool isPressedLeftRaw = isDownLeftRaw && !wasDownLeft;
-    wasDownLeft = isDownLeftRaw;
+    bool isPressedLeftRaw = PixelsEngine::Input::IsMouseButtonPressed(SDL_BUTTON_LEFT);
 
     // CTRL + CLICK = Right Click (Context Menu)
     if (isPressedLeftRaw && isCtrlDown) {
@@ -2464,13 +2554,12 @@ void PixelsGateGame::RenderMapScreen() {
 }
 
 void PixelsGateGame::HandleMapInput() {
-    static bool wasEsc = false, wasM = false;
-    bool isEsc = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE);
-    bool isM = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_M);
-    if ((isEsc && !wasEsc) || (isM && !wasM)) {
+    auto escKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Pause);
+    auto mapKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Map);
+    
+    if (PixelsEngine::Input::IsKeyPressed(escKey) || PixelsEngine::Input::IsKeyPressed(mapKey)) {
         m_State = m_ReturnState;
     }
-    wasEsc = isEsc; wasM = isM;
 }
 
 void PixelsGateGame::RenderCharacterScreen() {
@@ -2490,7 +2579,8 @@ void PixelsGateGame::RenderCharacterScreen() {
     if (stats) {
         int x = w/4, y = 120;
         m_TextRenderer->RenderText("Class: " + stats->characterClass, x, y, {255, 255, 255, 255}); y += 40;
-        m_TextRenderer->RenderText("Race: " + stats->race, x, y, {255, 255, 255, 255}); y += 60;
+        m_TextRenderer->RenderText("Race: " + stats->race, x, y, {255, 255, 255, 255}); y += 40;
+        m_TextRenderer->RenderText("Level: " + std::to_string(stats->level) + "  (XP: " + std::to_string(stats->experience) + ")", x, y, {255, 255, 0, 255}); y += 60;
 
         m_TextRenderer->RenderText("STR: " + std::to_string(stats->strength), x, y, {255, 200, 200, 255}); y += 35;
         m_TextRenderer->RenderText("DEX: " + std::to_string(stats->dexterity), x, y, {200, 255, 200, 255}); y += 35;
@@ -2504,13 +2594,12 @@ void PixelsGateGame::RenderCharacterScreen() {
 }
 
 void PixelsGateGame::HandleCharacterInput() {
-    static bool wasEsc = false, wasC = false;
-    bool isEsc = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE);
-    bool isC = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_C);
-    if ((isEsc && !wasEsc) || (isC && !wasC)) {
+    auto escKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Pause);
+    auto chrKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Character);
+    
+    if (PixelsEngine::Input::IsKeyPressed(escKey) || PixelsEngine::Input::IsKeyPressed(chrKey)) {
         m_State = m_ReturnState;
     }
-    wasEsc = isEsc; wasC = isC;
 }
 
 void PixelsGateGame::HandleTargetingInput() {
@@ -2581,12 +2670,9 @@ void PixelsGateGame::HandleTargetingInput() {
 
 
 
-    if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE)) {
-
-        m_State = GameState::Magic; // Cancel back to spellbook
-
+    if (PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_ESCAPE)) {
+        m_State = m_ReturnState; // Dismiss spell targeting and return to game
     }
-
 }
 
 
@@ -2811,7 +2897,15 @@ void PixelsGateGame::CastSpell(const std::string& spellName, PixelsEngine::Entit
 
         
 
+        
+
+        
+
             SDL_Renderer* renderer = GetRenderer();
+
+        
+
+        
 
         
 
@@ -2823,7 +2917,27 @@ void PixelsGateGame::CastSpell(const std::string& spellName, PixelsEngine::Entit
 
         
 
+            int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
             // Overlay
+
+        
+
+        
 
         
 
@@ -2831,7 +2945,15 @@ void PixelsGateGame::CastSpell(const std::string& spellName, PixelsEngine::Entit
 
         
 
+        
+
+        
+
             SDL_SetRenderDrawColor(renderer, 20, 40, 20, 230);
+
+        
+
+        
 
         
 
@@ -2839,11 +2961,27 @@ void PixelsGateGame::CastSpell(const std::string& spellName, PixelsEngine::Entit
 
         
 
+        
+
+        
+
             SDL_RenderFillRect(renderer, &screenRect);
 
         
 
+        
+
+        
+
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+
+        
+
+        
+
+        
+
+        
 
         
 
@@ -2859,11 +2997,19 @@ void PixelsGateGame::CastSpell(const std::string& spellName, PixelsEngine::Entit
 
         
 
-            // Simple Trade UI: Player Inventory Left, NPC Inventory Right
+        
+
+        
+
+        
 
         
 
             auto* pInv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+
+        
+
+        
 
         
 
@@ -2875,11 +3021,27 @@ void PixelsGateGame::CastSpell(const std::string& spellName, PixelsEngine::Entit
 
         
 
+        
+
+        
+
+        
+
+        
+
             if (pInv) {
 
         
 
-                m_TextRenderer->RenderText("Your Items", w/4 - 50, 100, {255, 255, 255, 255});
+        
+
+        
+
+                m_TextRenderer->RenderText("Your Items", w/4 - 100, 100, {255, 255, 255, 255});
+
+        
+
+        
 
         
 
@@ -2887,11 +3049,127 @@ void PixelsGateGame::CastSpell(const std::string& spellName, PixelsEngine::Entit
 
         
 
-                for (const auto& item : pInv->items) {
+        
 
         
 
-                    m_TextRenderer->RenderText(item.name + " (x" + std::to_string(item.quantity) + ")", w/4 - 100, y, {200, 200, 200, 255});
+                for (int i = 0; i < pInv->items.size(); ++i) {
+
+        
+
+        
+
+        
+
+                    auto& item = pInv->items[i];
+
+        
+
+        
+
+        
+
+                    if (item.name == "Coins") continue;
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+                    SDL_Rect row = { w/4 - 110, y - 5, 250, 30 };
+
+        
+
+        
+
+        
+
+                    bool hover = (mx >= row.x && mx <= row.x + row.w && my >= row.y && my <= row.y + row.h);
+
+        
+
+        
+
+        
+
+                    if (hover) {
+
+        
+
+        
+
+        
+
+                        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
+        
+
+        
+
+        
+
+                        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 50);
+
+        
+
+        
+
+        
+
+                        SDL_RenderFillRect(renderer, &row);
+
+        
+
+        
+
+        
+
+                        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+
+        
+
+        
+
+        
+
+                    }
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+                    m_TextRenderer->RenderText(item.name + " (x" + std::to_string(item.quantity) + ")", row.x + 10, y, {200, 200, 200, 255});
+
+        
+
+        
+
+        
+
+                    m_TextRenderer->RenderText("Sell: " + std::to_string(item.value) + "g", row.x + 160, y, {255, 215, 0, 255});
+
+        
+
+        
 
         
 
@@ -2899,11 +3177,67 @@ void PixelsGateGame::CastSpell(const std::string& spellName, PixelsEngine::Entit
 
         
 
+        
+
+        
+
                 }
 
         
 
+        
+
+        
+
+                
+
+        
+
+        
+
+        
+
+                // Show Player Gold
+
+        
+
+        
+
+        
+
+                int gold = 0;
+
+        
+
+        
+
+        
+
+                for (auto& it : pInv->items) if (it.name == "Coins") gold = it.quantity;
+
+        
+
+        
+
+        
+
+                m_TextRenderer->RenderText("Your Gold: " + std::to_string(gold) + "g", w/4 - 100, h - 100, {255, 255, 0, 255});
+
+        
+
+        
+
+        
+
             }
+
+        
+
+        
+
+        
+
+        
 
         
 
@@ -2915,7 +3249,15 @@ void PixelsGateGame::CastSpell(const std::string& spellName, PixelsEngine::Entit
 
         
 
-                m_TextRenderer->RenderText("Trader Items", 3*w/4 - 50, 100, {255, 255, 255, 255});
+        
+
+        
+
+                m_TextRenderer->RenderText("Trader Items", 3*w/4 - 100, 100, {255, 255, 255, 255});
+
+        
+
+        
 
         
 
@@ -2923,11 +3265,127 @@ void PixelsGateGame::CastSpell(const std::string& spellName, PixelsEngine::Entit
 
         
 
-                for (const auto& item : nInv->items) {
+        
 
         
 
-                    m_TextRenderer->RenderText(item.name + " (x" + std::to_string(item.quantity) + ")", 3*w/4 - 100, y, {200, 200, 200, 255});
+                for (int i = 0; i < nInv->items.size(); ++i) {
+
+        
+
+        
+
+        
+
+                    auto& item = nInv->items[i];
+
+        
+
+        
+
+        
+
+                    if (item.name == "Coins") continue;
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+                    SDL_Rect row = { 3*w/4 - 110, y - 5, 250, 30 };
+
+        
+
+        
+
+        
+
+                    bool hover = (mx >= row.x && mx <= row.x + row.w && my >= row.y && my <= row.y + row.h);
+
+        
+
+        
+
+        
+
+                    if (hover) {
+
+        
+
+        
+
+        
+
+                        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
+        
+
+        
+
+        
+
+                        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 50);
+
+        
+
+        
+
+        
+
+                        SDL_RenderFillRect(renderer, &row);
+
+        
+
+        
+
+        
+
+                        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+
+        
+
+        
+
+        
+
+                    }
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+                    m_TextRenderer->RenderText(item.name + " (x" + std::to_string(item.quantity) + ")", row.x + 10, y, {200, 200, 200, 255});
+
+        
+
+        
+
+        
+
+                    m_TextRenderer->RenderText("Buy: " + std::to_string(item.value) + "g", row.x + 160, y, {255, 215, 0, 255});
+
+        
+
+        
 
         
 
@@ -2935,7 +3393,55 @@ void PixelsGateGame::CastSpell(const std::string& spellName, PixelsEngine::Entit
 
         
 
+        
+
+        
+
                 }
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+                // Show Trader Gold
+
+        
+
+        
+
+        
+
+                int gold = 0;
+
+        
+
+        
+
+        
+
+                for (auto& it : nInv->items) if (it.name == "Coins") gold = it.quantity;
+
+        
+
+        
+
+        
+
+                m_TextRenderer->RenderText("Trader Gold: " + std::to_string(gold) + "g", 3*w/4 - 100, h - 100, {255, 255, 0, 255});
+
+        
+
+        
 
         
 
@@ -2943,7 +3449,15 @@ void PixelsGateGame::CastSpell(const std::string& spellName, PixelsEngine::Entit
 
         
 
+        
+
+        
+
                 m_TextRenderer->RenderTextCentered("This NPC has nothing to trade.", 3*w/4, h/2, {150, 150, 150, 255});
+
+        
+
+        
 
         
 
@@ -2955,7 +3469,19 @@ void PixelsGateGame::CastSpell(const std::string& spellName, PixelsEngine::Entit
 
         
 
-            m_TextRenderer->RenderTextCentered("Trading is a work in progress. Press ESC to Close.", w / 2, h - 50, {150, 150, 150, 255});
+        
+
+        
+
+        
+
+        
+
+            m_TextRenderer->RenderTextCentered("Click item to buy/sell. Press ESC to Close.", w / 2, h - 50, {150, 150, 150, 255});
+
+        
+
+        
 
         
 
@@ -2971,7 +3497,23 @@ void PixelsGateGame::CastSpell(const std::string& spellName, PixelsEngine::Entit
 
         
 
-            if (PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Pause))) {
+        
+
+        
+
+            auto escKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Pause);
+
+        
+
+        
+
+        
+
+            if (PixelsEngine::Input::IsKeyPressed(escKey)) {
+
+        
+
+        
 
         
 
@@ -2979,7 +3521,615 @@ void PixelsGateGame::CastSpell(const std::string& spellName, PixelsEngine::Entit
 
         
 
+        
+
+        
+
+                return;
+
+        
+
+        
+
+        
+
             }
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+            int w, h; SDL_GetWindowSize(m_Window, &w, &h);
+
+        
+
+        
+
+        
+
+            int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
+
+        
+
+        
+
+        
+
+            bool isClick = PixelsEngine::Input::IsMouseButtonPressed(SDL_BUTTON_LEFT);
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+            if (isClick) {
+
+        
+
+        
+
+        
+
+                auto* pInv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+
+        
+
+        
+
+        
+
+                auto* nInv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_TradingWith);
+
+        
+
+        
+
+        
+
+                if (!pInv || !nInv) return;
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+                // Helper to find gold
+
+        
+
+        
+
+        
+
+                auto getGold = [](PixelsEngine::InventoryComponent* inv) -> int {
+
+        
+
+        
+
+        
+
+                    for (auto& item : inv->items) if (item.name == "Coins") return item.quantity;
+
+        
+
+        
+
+        
+
+                    return 0;
+
+        
+
+        
+
+        
+
+                };
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+                // 1. Check Selling (Player Inventory)
+
+        
+
+        
+
+        
+
+                int y = 140;
+
+        
+
+        
+
+        
+
+                for (size_t i = 0; i < pInv->items.size(); ++i) {
+
+        
+
+        
+
+        
+
+                    auto& item = pInv->items[i];
+
+        
+
+        
+
+        
+
+                    if (item.name == "Coins") continue;
+
+        
+
+        
+
+        
+
+                    SDL_Rect row = { w/4 - 110, y - 5, 250, 30 };
+
+        
+
+        
+
+        
+
+                    if (mx >= row.x && mx <= row.x + row.w && my >= row.y && my <= row.y + row.h) {
+
+        
+
+        
+
+        
+
+                        // Sell 1
+
+        
+
+        
+
+        
+
+                        int traderGold = getGold(nInv);
+
+        
+
+        
+
+        
+
+                        if (traderGold >= item.value) {
+
+        
+
+        
+
+        
+
+                            PixelsEngine::Item soldItem = item;
+
+        
+
+        
+
+        
+
+                            soldItem.quantity = 1;
+
+        
+
+        
+
+        
+
+                            
+
+        
+
+        
+
+        
+
+                            nInv->AddItemObject(soldItem);
+
+        
+
+        
+
+        
+
+                            nInv->AddItem("Coins", -item.value); // Remove gold from trader
+
+        
+
+        
+
+        
+
+                            
+
+        
+
+        
+
+        
+
+                            pInv->AddItem("Coins", item.value); // Add gold to player
+
+        
+
+        
+
+        
+
+                            item.quantity--;
+
+        
+
+        
+
+        
+
+                            if (item.quantity <= 0) pInv->items.erase(pInv->items.begin() + i);
+
+        
+
+        
+
+        
+
+                            
+
+        
+
+        
+
+        
+
+                            SpawnFloatingText(0, 0, "Sold " + soldItem.name, {255, 215, 0, 255});
+
+        
+
+        
+
+        
+
+                        } else {
+
+        
+
+        
+
+        
+
+                            SpawnFloatingText(0, 0, "Trader needs more gold!", {255, 0, 0, 255});
+
+        
+
+        
+
+        
+
+                        }
+
+        
+
+        
+
+        
+
+                        return;
+
+        
+
+        
+
+        
+
+                    }
+
+        
+
+        
+
+        
+
+                    y += 35;
+
+        
+
+        
+
+        
+
+                }
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+                // 2. Check Buying (NPC Inventory)
+
+        
+
+        
+
+        
+
+                y = 140;
+
+        
+
+        
+
+        
+
+                for (size_t i = 0; i < nInv->items.size(); ++i) {
+
+        
+
+        
+
+        
+
+                    auto& item = nInv->items[i];
+
+        
+
+        
+
+        
+
+                    if (item.name == "Coins") continue;
+
+        
+
+        
+
+        
+
+                    SDL_Rect row = { 3*w/4 - 110, y - 5, 250, 30 };
+
+        
+
+        
+
+        
+
+                    if (mx >= row.x && mx <= row.x + row.w && my >= row.y && my <= row.y + row.h) {
+
+        
+
+        
+
+        
+
+                        // Buy 1
+
+        
+
+        
+
+        
+
+                        int playerGold = getGold(pInv);
+
+        
+
+        
+
+        
+
+                        if (playerGold >= item.value) {
+
+        
+
+        
+
+        
+
+                            PixelsEngine::Item boughtItem = item;
+
+        
+
+        
+
+        
+
+                            boughtItem.quantity = 1;
+
+        
+
+        
+
+        
+
+                            
+
+        
+
+        
+
+        
+
+                            pInv->AddItemObject(boughtItem);
+
+        
+
+        
+
+        
+
+                            pInv->AddItem("Coins", -item.value); // Remove gold from player
+
+        
+
+        
+
+        
+
+                            
+
+        
+
+        
+
+        
+
+                            nInv->AddItem("Coins", item.value); // Add gold to trader
+
+        
+
+        
+
+        
+
+                            item.quantity--;
+
+        
+
+        
+
+        
+
+                            if (item.quantity <= 0) nInv->items.erase(nInv->items.begin() + i);
+
+        
+
+        
+
+        
+
+                            
+
+        
+
+        
+
+        
+
+                            SpawnFloatingText(0, 0, "Bought " + boughtItem.name, {255, 215, 0, 255});
+
+        
+
+        
+
+        
+
+                        } else {
+
+        
+
+        
+
+        
+
+                            SpawnFloatingText(0, 0, "You need more gold!", {255, 0, 0, 255});
+
+        
+
+        
+
+        
+
+                        }
+
+        
+
+        
+
+        
+
+                        return;
+
+        
+
+        
+
+        
+
+                    }
+
+        
+
+        
+
+        
+
+                    y += 35;
+
+        
+
+        
+
+        
+
+                }
+
+        
+
+        
+
+        
+
+            }
+
+        
+
+        
 
         
 
@@ -3243,27 +4393,7 @@ void PixelsGateGame::CastSpell(const std::string& spellName, PixelsEngine::Entit
 
         
 
-            int numOptions = 11;
-
-        
-
-            static bool wasUp = false, wasDown = false, wasEnter = false, wasEsc = false;
-
-        
-
-            bool isUp = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_W);
-
-        
-
-            bool isDown = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_S);
-
-        
-
-            bool isEnter = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_RETURN);
-
-        
-
-            bool isEsc = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE);
+                int numOptions = 11;
 
         
 
@@ -3271,19 +4401,7 @@ void PixelsGateGame::CastSpell(const std::string& spellName, PixelsEngine::Entit
 
         
 
-            if (isUp && !wasUp) { m_MenuSelection--; if (m_MenuSelection < 0) m_MenuSelection = numOptions - 1; }
-
-        
-
-            if (isDown && !wasDown) { m_MenuSelection++; if (m_MenuSelection >= numOptions) m_MenuSelection = 0; }
-
-        
-
-            if (isEnter && !wasEnter) { m_IsWaitingForKey = true; }
-
-        
-
-            if (isEsc && !wasEsc) { m_State = GameState::Paused; m_MenuSelection = 0; }
+                bool isUp = PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_W);
 
         
 
@@ -3291,11 +4409,71 @@ void PixelsGateGame::CastSpell(const std::string& spellName, PixelsEngine::Entit
 
         
 
-            wasUp = isUp; wasDown = isDown; wasEnter = isEnter; wasEsc = isEsc;
+                bool isDown = PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_S);
 
         
 
-        }
+        
+
+        
+
+                bool isEnter = PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_RETURN);
+
+        
+
+        
+
+        
+
+                bool isEsc = PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_ESCAPE);
+
+        
+
+        
+
+        
+
+            
+
+        
+
+        
+
+        
+
+                if (isUp) { m_MenuSelection--; if (m_MenuSelection < 0) m_MenuSelection = numOptions - 1; }
+
+        
+
+        
+
+        
+
+                if (isDown) { m_MenuSelection++; if (m_MenuSelection >= numOptions) m_MenuSelection = 0; }
+
+        
+
+        
+
+        
+
+                if (isEnter) { m_IsWaitingForKey = true; }
+
+        
+
+        
+
+        
+
+                if (isEsc) { m_State = GameState::Paused; m_MenuSelection = 0; }
+
+        
+
+        
+
+        
+
+            }
 
         
 
@@ -3316,7 +4494,7 @@ void PixelsGateGame::HandleMagicInput() {
         int x = w / 4, y = 120;
         std::string spellNames[] = {"Fireball", "Heal", "Magic Missile", "Shield"};
         for (int i = 0; i < 4; ++i) {
-            SDL_Rect row = { x, y, w / 2, 40 };
+            SDL_Rect row = { x - 20, y, w / 2 + 180, 40 };
             if (mx >= row.x && mx <= row.x + row.w && my >= row.y && my <= row.y + row.h) {
                 m_PendingSpellName = spellNames[i];
                 m_State = GameState::Targeting;
@@ -3326,13 +4504,12 @@ void PixelsGateGame::HandleMagicInput() {
         }
     }
 
-    static bool wasEsc = false, wasK = false;
-    bool isEsc = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE);
-    bool isK = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_K);
-    if ((isEsc && !wasEsc) || (isK && !wasK)) {
+    auto escKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Pause);
+    auto magKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Magic);
+    
+    if (PixelsEngine::Input::IsKeyPressed(escKey) || PixelsEngine::Input::IsKeyPressed(magKey)) {
         m_State = m_ReturnState;
     }
-    wasEsc = isEsc; wasK = isK;
 }
 
 void PixelsGateGame::RenderMagicScreen() {
@@ -3359,7 +4536,7 @@ void PixelsGateGame::RenderMagicScreen() {
 
     int x = w / 4, y = 120;
     for (int i = 0; i < spells.size(); ++i) {
-        SDL_Rect row = { x, y, w / 2, 40 };
+        SDL_Rect row = { x - 20, y, w / 2 + 180, 40 };
         bool hover = (mx >= row.x && mx <= row.x + row.w && my >= row.y && my <= row.y + row.h);
         
         if (hover) {
@@ -3369,8 +4546,8 @@ void PixelsGateGame::RenderMagicScreen() {
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
 
             // Add arrows
-            m_TextRenderer->RenderTextCentered(">", x - 20, y + 20, {50, 255, 50, 255});
-            m_TextRenderer->RenderTextCentered("<", x + (w / 2) + 20, y + 20, {50, 255, 50, 255});
+            m_TextRenderer->RenderTextCentered(">", row.x - 20, y + 20, {50, 255, 50, 255});
+            m_TextRenderer->RenderTextCentered("<", row.x + row.w + 20, y + 20, {50, 255, 50, 255});
         }
 
         m_TextRenderer->RenderText(spells[i].first, x + 10, y + 10, {255, 255, 255, 255});
