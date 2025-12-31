@@ -952,8 +952,8 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
                             if (interaction->dialogueText == "Gold Orb") {
                                 auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
                                 if (inv) { inv->AddItem("Gold Orb", 1); GetRegistry().RemoveComponent<PixelsEngine::SpriteComponent>(m_SelectedNPC); }
-                            } else if (interaction->dialogueText == "Loot") {
-                                // Loot Bag
+                            } else if (interaction->dialogueText == "Loot" || interaction->dialogueText == "Chest Key" || interaction->dialogueText == "Thieves' Tools") {
+                                // Loot Bag or Item Pickup
                                 auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
                                 auto* loot = GetRegistry().GetComponent<PixelsEngine::LootComponent>(m_SelectedNPC);
                                 if (inv && loot) {
@@ -961,7 +961,7 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
                                         inv->AddItemObject(item);
                                         SpawnFloatingText(transform->x, transform->y, "+ " + item.name, {255, 255, 0, 255});
                                     }
-                                    GetRegistry().DestroyEntity(m_SelectedNPC); // Destroy bag
+                                    GetRegistry().DestroyEntity(m_SelectedNPC); // Destroy bag or item
                                 }
                             } else {
                                 auto* quest = GetRegistry().GetComponent<PixelsEngine::QuestComponent>(m_SelectedNPC);
