@@ -55,12 +55,14 @@ private:
         Magic,
         Targeting,
         Trading,
-        KeybindSettings
+        KeybindSettings,
+        Looting
     };
     GameState m_State = GameState::MainMenu;
     GameState m_ReturnState = GameState::Playing; 
 
     PixelsEngine::Entity m_TradingWith = PixelsEngine::INVALID_ENTITY;
+    PixelsEngine::Entity m_LootingEntity = PixelsEngine::INVALID_ENTITY;
     PixelsEngine::GameAction m_BindingAction = PixelsEngine::GameAction::Pause;
     bool m_IsWaitingForKey = false;
 
@@ -81,6 +83,7 @@ private:
         PixelsEngine::Entity entity;
         int initiative;
         bool isPlayer;
+        bool isSurprised = false;
     };
     std::vector<CombatTurn> m_TurnOrder;
     int m_CurrentTurnIndex = -1;
@@ -125,6 +128,7 @@ private:
     void RenderMagicScreen();
     void RenderTradeScreen();
     void RenderKeybindSettings();
+    void RenderLootScreen();
 
     // Menu Input Handlers
     void HandleMainMenuInput();
@@ -136,7 +140,9 @@ private:
     void HandleTargetingInput();
     void HandleTradeInput();
     void HandleKeybindInput();
+    void HandleLootInput();
     void CastSpell(const std::string& spellName, PixelsEngine::Entity target);
+    bool IsInTurnOrder(PixelsEngine::Entity entity);
     void HandleMenuNavigation(int numOptions, std::function<void(int)> onSelect, std::function<void()> onCancel = nullptr, int forceSelection = -1);
 
     void ShowSaveMessage() { m_SaveMessageTimer = 2.0f; }
@@ -147,6 +153,7 @@ private:
     }
 
     // --- New Features ---
+    float m_EnvironmentDamageTimer = 0.0f;
     struct FloatingText {
         float x, y;
         std::string text;
