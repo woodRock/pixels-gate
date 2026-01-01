@@ -6361,7 +6361,7 @@ void PixelsGateGame::RenderTradeScreen() {
       if (item.name == "Coins")
         continue;
 
-      SDL_Rect row = {w / 4 - 110, y - 5, 250, 30};
+      SDL_Rect row = {w / 4 - 130, y - 5, 300, 30};
 
       bool hover = (mx >= row.x && mx <= row.x + row.w && my >= row.y &&
                     my <= row.y + row.h);
@@ -6382,7 +6382,7 @@ void PixelsGateGame::RenderTradeScreen() {
                                  row.x + 10, y, {200, 200, 200, 255});
 
       m_TextRenderer->RenderText("Sell: " + std::to_string(item.value) + "g",
-                                 row.x + 160, y, {255, 215, 0, 255});
+                                 row.x + 210, y, {255, 215, 0, 255});
 
       y += 35;
     }
@@ -6413,7 +6413,7 @@ void PixelsGateGame::RenderTradeScreen() {
       if (item.name == "Coins")
         continue;
 
-      SDL_Rect row = {3 * w / 4 - 110, y - 5, 250, 30};
+      SDL_Rect row = {3 * w / 4 - 130, y - 5, 300, 30};
 
       bool hover = (mx >= row.x && mx <= row.x + row.w && my >= row.y &&
                     my <= row.y + row.h);
@@ -6434,7 +6434,7 @@ void PixelsGateGame::RenderTradeScreen() {
                                  row.x + 10, y, {200, 200, 200, 255});
 
       m_TextRenderer->RenderText("Buy: " + std::to_string(item.value) + "g",
-                                 row.x + 160, y, {255, 215, 0, 255});
+                                 row.x + 210, y, {255, 215, 0, 255});
 
       y += 35;
     }
@@ -6513,7 +6513,7 @@ void PixelsGateGame::HandleTradeInput() {
       if (item.name == "Coins")
         continue;
 
-      SDL_Rect row = {w / 4 - 110, y - 5, 250, 30};
+      SDL_Rect row = {w / 4 - 130, y - 5, 300, 30};
 
       if (mx >= row.x && mx <= row.x + row.w && my >= row.y &&
           my <= row.y + row.h) {
@@ -6563,7 +6563,7 @@ void PixelsGateGame::HandleTradeInput() {
       if (item.name == "Coins")
         continue;
 
-      SDL_Rect row = {3 * w / 4 - 110, y - 5, 250, 30};
+      SDL_Rect row = {3 * w / 4 - 130, y - 5, 300, 30};
 
       if (mx >= row.x && mx <= row.x + row.w && my >= row.y &&
           my <= row.y + row.h) {
