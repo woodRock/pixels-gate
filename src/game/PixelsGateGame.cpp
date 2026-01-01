@@ -185,12 +185,6 @@ void PixelsGateGame::OnStart() {
       GetRegistry().AddComponent(m_Player, PixelsEngine::InventoryComponent{});
   inv.AddItem("Potion", 3, PixelsEngine::ItemType::Consumable, 0,
               "assets/ui/item_potion.png", 50);
-  inv.AddItem("Sword", 1, PixelsEngine::ItemType::WeaponMelee, 10,
-              "assets/sword.png", 150);
-  inv.AddItem("Leather Armor", 1, PixelsEngine::ItemType::Armor, 5,
-              "assets/armor.png", 200);
-  inv.AddItem("Shortbow", 1, PixelsEngine::ItemType::WeaponRanged, 8,
-              "assets/bow.png", 120);
   inv.AddItem("Thieves' Tools", 1, PixelsEngine::ItemType::Tool, 0,
               "assets/thieves_tools.png", 25);
 
@@ -850,7 +844,12 @@ void PixelsGateGame::PerformAttack(PixelsEngine::Entity forcedTarget) {
   if (target != PixelsEngine::INVALID_ENTITY) {
     // If not in combat, start combat!
     if (m_State == GameState::Playing) {
-      StartCombat(target);
+      auto *ai = GetRegistry().GetComponent<PixelsEngine::AIComponent>(target);
+      if (ai) {
+        StartCombat(target);
+      } else {
+        StartCombat(PixelsEngine::INVALID_ENTITY);
+      }
     }
 
     auto *targetStats =
@@ -3620,12 +3619,6 @@ void PixelsGateGame::HandleMainMenuInput() {
             inv->equippedArmor = {"", "", 0, PixelsEngine::ItemType::Armor, 0};
             inv->AddItem("Potion", 3, PixelsEngine::ItemType::Consumable, 0,
                          "assets/ui/item_potion.png", 50);
-            inv->AddItem("Sword", 1, PixelsEngine::ItemType::WeaponMelee, 10,
-                         "assets/sword.png");
-            inv->AddItem("Leather Armor", 1, PixelsEngine::ItemType::Armor, 5,
-                         "assets/armor.png");
-            inv->AddItem("Shortbow", 1, PixelsEngine::ItemType::WeaponRanged, 8,
-                         "assets/bow.png");
             inv->AddItem("Thieves' Tools", 1, PixelsEngine::ItemType::Tool, 0,
                          "assets/thieves_tools.png", 25);
           }
@@ -5929,7 +5922,12 @@ void PixelsGateGame::HandleDialogueInput() {
                 ++it;
             }
             // Rewards
-            inv->AddItem("Coins", 50);
+            int rewardGold = 50;
+            if (q->questId == "FetchOrb")
+              rewardGold = 500;
+            if (q->questId == "HuntBoars")
+              rewardGold = 100;
+            inv->AddItem("Coins", rewardGold);
             auto *pStats =
                 GetRegistry().GetComponent<PixelsEngine::StatsComponent>(
                     m_Player);
@@ -6256,7 +6254,13 @@ void PixelsGateGame::CastSpell(const std::string &spellName,
              m_ReturnState == GameState::Playing) &&
             target != m_Player) {
 
-          StartCombat(target);
+          auto *ai =
+              GetRegistry().GetComponent<PixelsEngine::AIComponent>(target);
+          if (ai) {
+            StartCombat(target);
+          } else {
+            StartCombat(PixelsEngine::INVALID_ENTITY);
+          }
         }
       }
     }
@@ -7315,23 +7319,7 @@ void PixelsGateGame::SpawnWorldEntities() {
   GetRegistry().AddComponent(chest,
                              PixelsEngine::StatsComponent{20, 20, 0, false});
 
-  // 7. Spawn Items (Key and Tools)
-  auto keyEnt = GetRegistry().CreateEntity();
-  GetRegistry().AddComponent(keyEnt,
-                             PixelsEngine::TransformComponent{25.0f, 25.0f});
-  auto keyTex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(),
-                                                          "assets/key.png");
-  GetRegistry().AddComponent(
-      keyEnt, PixelsEngine::SpriteComponent{keyTex, {0, 0, 32, 32}, 16, 16});
-  GetRegistry().AddComponent(keyEnt, PixelsEngine::InteractionComponent{
-                                         "Chest Key", "item_key", false, 0.0f});
-  GetRegistry().AddComponent(keyEnt,
-                             PixelsEngine::StatsComponent{5, 5, 0, false});
-  GetRegistry().AddComponent(
-      keyEnt, PixelsEngine::LootComponent{std::vector<PixelsEngine::Item>{
-                  {"Chest Key", "assets/key.png", 1,
-                   PixelsEngine::ItemType::Misc, 0, 0}}});
-
+  // 7. Spawn Items (Tools)
   auto toolsEnt = GetRegistry().CreateEntity();
   GetRegistry().AddComponent(toolsEnt,
                              PixelsEngine::TransformComponent{21.0f, 25.0f});
@@ -7453,4 +7441,17 @@ void PixelsGateGame::SpawnWorldEntities() {
 
   auto &tInv =
       GetRegistry().AddComponent(trader, PixelsEngine::InventoryComponent{});
+  tInv.AddItem("Coins", 1000);
+  tInv.AddItem("Potion", 5, PixelsEngine::ItemType::Consumable, 0,
+               "assets/ui/item_potion.png", 50);
+  tInv.AddItem("Bread", 5, PixelsEngine::ItemType::Consumable, 0,
+               "assets/ui/item_bread.png", 10);
+  tInv.AddItem("Sword", 1, PixelsEngine::ItemType::WeaponMelee, 10,
+               "assets/sword.png", 150);
+  tInv.AddItem("Leather Armor", 1, PixelsEngine::ItemType::Armor, 5,
+               "assets/armor.png", 200);
+  tInv.AddItem("Shortbow", 1, PixelsEngine::ItemType::WeaponRanged, 8,
+               "assets/bow.png", 120);
+  tInv.AddItem("Chest Key", 1, PixelsEngine::ItemType::Misc, 0,
+               "assets/key.png", 50);
 }
