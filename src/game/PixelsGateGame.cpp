@@ -204,6 +204,16 @@ void PixelsGateGame::OnStart() {
   anim.AddAnimation("WalkUp", 0, 0, 32, 32, 1);
   anim.AddAnimation("WalkLeft", 0, 0, 32, 32, 1);
 
+  // Load NPC Textures
+  auto innkeeperTex = PixelsEngine::TextureManager::LoadTexture(
+      GetRenderer(), "assets/npc_innkeeper.png");
+  auto guardianTex = PixelsEngine::TextureManager::LoadTexture(
+      GetRenderer(), "assets/npc_guardian.png");
+  auto companionTex = PixelsEngine::TextureManager::LoadTexture(
+      GetRenderer(), "assets/npc_companion.png");
+  auto traderTex = PixelsEngine::TextureManager::LoadTexture(
+      GetRenderer(), "assets/npc_trader.png");
+
   // 3. Spawn Boars (Far from Inn)
   CreateBoar(35.0f, 35.0f);
   CreateBoar(32.0f, 5.0f);
@@ -370,10 +380,10 @@ void PixelsGateGame::OnStart() {
   n1Inv.AddItem("Potion", 1, PixelsEngine::ItemType::Consumable, 0, "", 50);
 
   auto npc2 = GetRegistry().CreateEntity();
-  GetRegistry().AddComponent(
-      npc2, PixelsEngine::TransformComponent{20.0f, 25.0f}); // Guarding path
+  GetRegistry().AddComponent(npc2,
+                             PixelsEngine::TransformComponent{20.0f, 25.0f});
   GetRegistry().AddComponent(npc2, PixelsEngine::SpriteComponent{
-                                       playerTexture, {0, 0, 32, 32}, 16, 30});
+                                       guardianTex, {0, 0, 32, 32}, 16, 30});
   GetRegistry().AddComponent(
       npc2, PixelsEngine::InteractionComponent{"Guardian", "npc_guardian",
                                                false, 0.0f});
@@ -481,7 +491,7 @@ void PixelsGateGame::OnStart() {
   GetRegistry().AddComponent(
       comp, PixelsEngine::TransformComponent{21.0f, 21.0f}); // In Inn
   GetRegistry().AddComponent(comp, PixelsEngine::SpriteComponent{
-                                       playerTexture, {0, 0, 32, 32}, 16, 30});
+                                       companionTex, {0, 0, 32, 32}, 16, 30});
   GetRegistry().AddComponent(
       comp, PixelsEngine::InteractionComponent{"Companion", "npc_companion",
                                                false, 0.0f});
@@ -529,7 +539,7 @@ void PixelsGateGame::OnStart() {
       trader, PixelsEngine::TransformComponent{18.0f, 21.0f}); // In Inn
   GetRegistry().AddComponent(
       trader,
-      PixelsEngine::SpriteComponent{playerTexture, {0, 0, 32, 32}, 16, 30});
+      PixelsEngine::SpriteComponent{traderTex, {0, 0, 32, 32}, 16, 30});
   GetRegistry().AddComponent(trader, PixelsEngine::InteractionComponent{
                                          "Trader", "npc_trader", false, 0.0f});
   GetRegistry().AddComponent(
@@ -7126,6 +7136,16 @@ void PixelsGateGame::SpawnWorldEntities() {
   auto playerTexture = PixelsEngine::TextureManager::LoadTexture(
       GetRenderer(), "assets/knight.png");
 
+  // Load NPC Textures
+  auto innkeeperTex = PixelsEngine::TextureManager::LoadTexture(
+      GetRenderer(), "assets/npc_innkeeper.png");
+  auto guardianTex = PixelsEngine::TextureManager::LoadTexture(
+      GetRenderer(), "assets/npc_guardian.png");
+  auto companionTex = PixelsEngine::TextureManager::LoadTexture(
+      GetRenderer(), "assets/npc_companion.png");
+  auto traderTex = PixelsEngine::TextureManager::LoadTexture(
+      GetRenderer(), "assets/npc_trader.png");
+
   // 3. Spawn Boars
   CreateBoar(35.0f, 35.0f);
   CreateBoar(32.0f, 5.0f);
@@ -7135,8 +7155,8 @@ void PixelsGateGame::SpawnWorldEntities() {
   auto npc1 = GetRegistry().CreateEntity();
   GetRegistry().AddComponent(npc1,
                              PixelsEngine::TransformComponent{19.0f, 19.0f});
-  GetRegistry().AddComponent(npc1, PixelsEngine::SpriteComponent{
-                                       playerTexture, {0, 0, 32, 32}, 16, 30});
+  GetRegistry().AddComponent(
+      npc1, PixelsEngine::SpriteComponent{innkeeperTex, {0, 0, 32, 32}, 16, 30});
   GetRegistry().AddComponent(
       npc1, PixelsEngine::InteractionComponent{"Innkeeper", "npc_innkeeper",
                                                false, 0.0f});
@@ -7238,7 +7258,7 @@ void PixelsGateGame::SpawnWorldEntities() {
   GetRegistry().AddComponent(npc2,
                              PixelsEngine::TransformComponent{20.0f, 25.0f});
   GetRegistry().AddComponent(npc2, PixelsEngine::SpriteComponent{
-                                       playerTexture, {0, 0, 32, 32}, 16, 30});
+                                       guardianTex, {0, 0, 32, 32}, 16, 30});
   GetRegistry().AddComponent(
       npc2, PixelsEngine::InteractionComponent{"Guardian", "npc_guardian",
                                                false, 0.0f});
@@ -7365,7 +7385,7 @@ void PixelsGateGame::SpawnWorldEntities() {
   GetRegistry().AddComponent(
       comp, PixelsEngine::TransformComponent{21.0f, 21.0f}); // In Inn
   GetRegistry().AddComponent(comp, PixelsEngine::SpriteComponent{
-                                       playerTexture, {0, 0, 32, 32}, 16, 30});
+                                       companionTex, {0, 0, 32, 32}, 16, 30});
   GetRegistry().AddComponent(
       comp, PixelsEngine::InteractionComponent{"Traveler", "npc_traveler",
                                                false, 0.0f});
@@ -7413,7 +7433,7 @@ void PixelsGateGame::SpawnWorldEntities() {
       trader, PixelsEngine::TransformComponent{18.0f, 21.0f}); // In Inn
   GetRegistry().AddComponent(
       trader,
-      PixelsEngine::SpriteComponent{playerTexture, {0, 0, 32, 32}, 16, 30});
+      PixelsEngine::SpriteComponent{traderTex, {0, 0, 32, 32}, 16, 30});
   GetRegistry().AddComponent(trader, PixelsEngine::InteractionComponent{
                                          "Trader", "npc_trader", false, 0.0f});
   GetRegistry().AddComponent(
