@@ -1274,8 +1274,7 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
     HandlePauseMenuInput();
     break;
   case GameState::Options:
-    if (PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE))
-      m_State = GameState::MainMenu;
+    HandleOptionsInput();
     break;
   case GameState::Credits:
   case GameState::Controls:
@@ -3656,6 +3655,7 @@ void PixelsGateGame::HandleMainMenuInput() {
             TriggerLoadTransition("../savegame.dat");
           break;
         case 3: // Options
+          m_ReturnState = m_State;
           m_State = GameState::Options;
           m_MenuSelection = 0;
           break;
@@ -3799,6 +3799,7 @@ void PixelsGateGame::HandlePauseMenuInput() {
           m_MenuSelection = 0;
           break;
         case 4: // Options
+          m_ReturnState = m_State;
           m_State = GameState::Options;
           m_MenuSelection = 0;
           break;
@@ -3815,6 +3816,44 @@ void PixelsGateGame::HandlePauseMenuInput() {
       hovered);
 }
 
+void PixelsGateGame::HandleOptionsInput() {
+  int w, h;
+  SDL_GetWindowSize(m_Window, &w, &h);
+  int mx, my;
+  PixelsEngine::Input::GetMousePosition(mx, my);
+
+  int hovered = -1;
+  int y = h / 2 - 40;
+  for (int i = 0; i < 2; ++i) {
+    SDL_Rect itemRect = {(w / 2) - 150, y - 5, 300, 30};
+    if (mx >= itemRect.x && mx <= itemRect.x + itemRect.w && my >= itemRect.y &&
+        my <= itemRect.y + itemRect.h) {
+      hovered = i;
+    }
+    y += 40;
+  }
+
+  HandleMenuNavigation(
+      2,
+      [&](int selection) {
+        if (selection == 0) {
+          ToggleFullScreen();
+        } else if (selection == 1) {
+          if (m_ReturnState != GameState::Options)
+            m_State = m_ReturnState;
+          else
+            m_State = GameState::MainMenu;
+        }
+      },
+      [&]() {
+        if (m_ReturnState != GameState::Options)
+          m_State = m_ReturnState;
+        else
+          m_State = GameState::MainMenu;
+      },
+      hovered);
+}
+
 void PixelsGateGame::RenderOptions() {
   SDL_Renderer *renderer = GetRenderer();
   SDL_SetRenderDrawColor(renderer, 20, 20, 20, 255);
@@ -3824,22 +3863,19 @@ void PixelsGateGame::RenderOptions() {
   SDL_GetWindowSize(m_Window, &w, &h);
   m_TextRenderer->RenderTextCentered("OPTIONS", w / 2, 50,
                                      {255, 255, 255, 255});
-  m_TextRenderer->RenderTextCentered("No options available yet.", w / 2, h / 2,
-                                     {150, 150, 150, 255});
-  m_TextRenderer->RenderTextCentered("Press ESC to Back", w / 2, h - 50,
-                                     {100, 100, 100, 255});
 
-  static bool wasEsc = false;
-  bool isEsc = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_ESCAPE);
-  if (isEsc && !wasEsc) {
-    // Go back to previous state? simplified: go to MainMenu if valid, else
-    // Paused? Actually we don't track previous state easily here. Let's assume
-    // if we came from Pause we want to go back to Pause. A simple hack: We can
-    // check if m_Player is set up? No. Let's just default to MainMenu for now,
-    // or add a 'Back' button.
-    m_State = GameState::MainMenu;
+  std::string options[] = {"Toggle Fullscreen", "Back"};
+  int y = h / 2 - 40;
+  for (int i = 0; i < 2; ++i) {
+    SDL_Color color = (m_MenuSelection == i) ? SDL_Color{50, 255, 50, 255}
+                                             : SDL_Color{200, 200, 200, 255};
+    m_TextRenderer->RenderTextCentered(options[i], w / 2, y, color);
+    if (i == m_MenuSelection) {
+      m_TextRenderer->RenderTextCentered(">", w / 2 - 150, y, color);
+      m_TextRenderer->RenderTextCentered("<", w / 2 + 150, y, color);
+    }
+    y += 40;
   }
-  wasEsc = isEsc;
 }
 
 void PixelsGateGame::RenderCredits() {

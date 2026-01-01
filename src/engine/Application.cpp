@@ -63,6 +63,12 @@ Application::~Application() {
   SDL_Quit();
 }
 
+void Application::ToggleFullScreen() {
+  Uint32 fullscreenFlag = SDL_WINDOW_FULLSCREEN_DESKTOP;
+  bool isFullscreen = SDL_GetWindowFlags(m_Window) & fullscreenFlag;
+  SDL_SetWindowFullscreen(m_Window, isFullscreen ? 0 : fullscreenFlag);
+}
+
 void Application::Run() {
   OnStart();
 

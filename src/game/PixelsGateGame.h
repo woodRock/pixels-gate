@@ -160,6 +160,7 @@ private:
   // Menu Input Handlers
   void HandleMainMenuInput();
   void HandlePauseMenuInput();
+  void HandleOptionsInput();
   void HandleGameOverInput();
   void HandleMapInput();
   void HandleCharacterMenuInput();

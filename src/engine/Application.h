@@ -12,6 +12,7 @@ public:
   virtual ~Application();
 
   void Run();
+  void ToggleFullScreen();
 
   SDL_Renderer *GetRenderer() const { return m_Renderer; }
   Camera &GetCamera() { return *m_Camera; }
