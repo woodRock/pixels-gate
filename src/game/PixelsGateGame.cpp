@@ -26,10 +26,27 @@ void PixelsGateGame::OnStart() {
   // Init Config
   PixelsEngine::Config::Init();
   // Init Font
-  m_TextRenderer = std::make_unique<PixelsEngine::TextRenderer>(
-      GetRenderer(), "assets/font.ttf", 16);
-
-  // 1. Setup Level with New Isometric Tileset
+      m_TextRenderer = std::make_unique<PixelsEngine::TextRenderer>(GetRenderer(), "assets/font.ttf", 16);
+  
+      // Initialize Tooltips
+      m_Tooltips["Atk"] = {"Attack", "Strike an enemy with your equipped weapon.", "Action", "Melee/Ranged", "Weapon Dmg", "None"};
+      m_Tooltips["Jmp"] = {"Jump", "Jump to a target location.", "Bonus Action + 3m", "5m", "Utility", "None"};
+      m_Tooltips["Snk"] = {"Sneak", "Attempt to hide from enemies.", "Action", "Self", "Stealth", "None"};
+      m_Tooltips["Shv"] = {"Shove", "Push a creature away or knock them prone.", "Bonus Action", "Melee", "1.5m Push", "ATH/ACR"};
+      m_Tooltips["Dsh"] = {"Dash", "Double your movement speed for this turn.", "Action", "Self", "Speed x2", "None"};
+      m_Tooltips["End"] = {"End Turn", "Conclude your turn in combat.", "None", "N/A", "None", "None"};
+      
+      m_Tooltips["Fir"] = {"Fireball", "A bright streak flashes from your pointing finger to a point you choose within range and then blossoms with a low roar into an explosion of flame.", "Action", "18m", "8d6 Fire", "DEX Save"};
+      m_Tooltips["Hel"] = {"Heal", "A creature you touch regains a number of hit points equal to 1d8 + your spellcasting ability modifier.", "Action", "Melee", "1d8 + Mod Healing", "None"};
+      m_Tooltips["Mis"] = {"Magic Missile", "You create three glowing darts of magical force. Each dart hits a creature of your choice that you can see within range.", "Action", "18m", "3x (1d4 + 1) Force", "None"};
+      m_Tooltips["Shd"] = {"Shield", "An invisible barrier of magical force appears and protects you.", "Reaction", "Self", "+5 AC", "None"};
+  
+      m_Tooltips["Potion"] = {"Healing Potion", "A character who drinks the magical red liquid in this vial regains 2d4 + 2 hit points.", "Bonus Action", "Self", "2d4 + 2 Healing", "None"};
+      m_Tooltips["Bread"] = {"Bread", "Simple sustenance. Regains 5 hit points when consumed.", "Bonus Action", "Self", "5 Healing", "None"};
+      m_Tooltips["Thieves' Tools"] = {"Thieves' Tools", "Used to pick locks and disarm traps.", "Action", "Melee", "Utility", "DEX Check"};
+  
+      // 1. Setup Level with New Isometric Tileset
+  
   std::string isoTileset = "assets/isometric tileset/spritesheet.png";
   int mapW = 40;
   int mapH = 40;
@@ -1195,13 +1212,22 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
         PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Sneak);
     auto shoveKey =
         PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Shove);
-    auto dashKey =
-        PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Dash);
-    auto toggleKey = PixelsEngine::Config::GetKeybind(
-        PixelsEngine::GameAction::ToggleWeapon);
+            auto dashKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Dash);
+            auto toggleKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::ToggleWeapon);
+            
+            // Tooltip Pinning
+            if (PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_T) && !m_HoveredItemName.empty()) {
+                m_TooltipPinned = !m_TooltipPinned;
+                if (m_TooltipPinned) {
+                    PixelsEngine::Input::GetMousePosition(m_PinnedTooltipX, m_PinnedTooltipY);
+                }
+            }
+            if (m_TooltipPinned && PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_ESCAPE)) {
+                m_TooltipPinned = false;
+            }
 
-    auto *inv =
-        GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+            auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+
 
     if (PixelsEngine::Input::IsKeyPressed(escKey)) {
       if (inv && inv->isOpen) {
@@ -1651,18 +1677,23 @@ void PixelsGateGame::OnRender() {
 
     RenderEnemyCones(camera);
 
-    struct Renderable {
-      int y;
-      PixelsEngine::Entity entity;
-    };
-    std::vector<Renderable> renderQueue;
-    auto &sprites = GetRegistry().View<PixelsEngine::SpriteComponent>();
-    for (auto &[entity, sprite] : sprites) {
-      auto *transform =
-          GetRegistry().GetComponent<PixelsEngine::TransformComponent>(entity);
-      if (transform && currentMap) {
-        // Check Fog of War
-        if (entity != m_Player) {
+            struct Renderable { int y; PixelsEngine::Entity entity; };            std::vector<Renderable> renderQueue;
+            auto& sprites = GetRegistry().View<PixelsEngine::SpriteComponent>();
+            for (auto& [entity, sprite] : sprites) {
+                auto* transform = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(entity);
+                if (transform && currentMap) {
+                    // Filter entities by map state
+                    if (m_State == GameState::Camp) {
+                        if (entity != m_Player) {
+                            auto* tag = GetRegistry().GetComponent<PixelsEngine::TagComponent>(entity);
+                            if (!tag || tag->tag != PixelsEngine::EntityTag::Companion) continue;
+                        }
+                    } else {
+                        // In main world, hide companions if they should be at camp (not implemented yet, so show all)
+                    }
+
+                    // Check Fog of War
+                    if (entity != m_Player) {
           // Always show entities currently in combat turn order
           bool inCombat = IsInTurnOrder(entity);
           if (!inCombat &&
@@ -2732,14 +2763,19 @@ void PixelsGateGame::CheckUIInteraction(int mx, int my) {
 }
 
 void PixelsGateGame::CheckWorldInteraction(int mx, int my) {
-  auto &camera = GetCamera();
-  auto &transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
-  bool clickedEntity = false;
-  for (auto &[entity, transform] : transforms) {
-    if (entity == m_Player)
-      continue;
-    auto *sprite =
-        GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(entity);
+    auto& camera = GetCamera(); auto& transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
+    bool clickedEntity = false;
+    for (auto& [entity, transform] : transforms) {
+        if (entity == m_Player) continue; 
+
+        // Filter entities by map state
+        if (m_State == GameState::Camp) {
+            auto* tag = GetRegistry().GetComponent<PixelsEngine::TagComponent>(entity);
+            if (!tag || tag->tag != PixelsEngine::EntityTag::Companion) continue;
+        }
+
+        auto* sprite = GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(entity);
+
     if (sprite) {
       int screenX, screenY;
       m_Level->GridToScreen(transform.x, transform.y, screenX, screenY);
@@ -2859,6 +2895,8 @@ void PixelsGateGame::RenderHUD() {
   int winW, winH;
   SDL_GetWindowSize(m_Window, &winW, &winH);
 
+  if (!m_TooltipPinned) m_HoveredItemName = "";
+
   // --- 1. Health Bar (Top Left) ---
   auto *stats =
       GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
@@ -2891,102 +2929,89 @@ void PixelsGateGame::RenderHUD() {
     m_TextRenderer->RenderText(hpText, x + 10, y + 25, {255, 255, 255, 255});
   }
 
-  // --- 2. Minimap (Top Right) ---
-  if (m_Level) {
-    int mapW = m_Level->GetWidth();
-    int mapH = m_Level->GetHeight();
-    int tileSize = 4; // Size of each tile on minimap
-    int miniW = mapW * tileSize;
-    int miniH = mapH * tileSize;
-    int mx = winW - miniW - 20;
-    int my = 20;
+    // --- 2. Minimap (Top Right) ---
+    auto* currentMap = (m_State == GameState::Camp) ? m_CampLevel.get() : m_Level.get();
+    if (currentMap) {
+        int mapW = currentMap->GetWidth();
+        int mapH = currentMap->GetHeight();
+        int tileSize = (m_State == GameState::Camp) ? 8 : 4; // Larger tiles for small camp map
+        int miniW = mapW * tileSize;
+        int miniH = mapH * tileSize;
+        int mx = winW - miniW - 20;
+        int my = 20;
 
-    // Background / Border
-    SDL_Rect miniRect = {mx - 2, my - 2, miniW + 4, miniH + 4};
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderFillRect(renderer, &miniRect);
-    SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
-    SDL_RenderDrawRect(renderer, &miniRect);
+        // Background / Border
+        SDL_Rect miniRect = {mx - 2, my - 2, miniW + 4, miniH + 4};
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderFillRect(renderer, &miniRect);
+        SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
+        SDL_RenderDrawRect(renderer, &miniRect);
 
-    // Draw Tiles
-    for (int ty = 0; ty < mapH; ++ty) {
-      for (int tx = 0; tx < mapW; ++tx) {
-        // Check Exploration
-        if (!m_Level->IsExplored(tx, ty))
-          continue;
+        // Draw Tiles
+        for (int ty = 0; ty < mapH; ++ty) {
+            for (int tx = 0; tx < mapW; ++tx) {
+                // Check Exploration
+                if (!currentMap->IsExplored(tx, ty)) continue;
 
-        using namespace PixelsEngine::Tiles;
-        int tileIdx = m_Level->GetTile(tx, ty);
-        SDL_Color c = {0, 0, 0, 255};
+                using namespace PixelsEngine::Tiles;
+                int tileIdx = currentMap->GetTile(tx, ty);
+                SDL_Color c = {0, 0, 0, 255};
 
-        // Detailed Minimap Colors
-        if (tileIdx >= DIRT && tileIdx <= DIRT_VARIANT_18)
-          c = {101, 67, 33, 255}; // Brown
-        else if (tileIdx >= DIRT_WITH_LEAVES_01 &&
-                 tileIdx <= DIRT_WITH_LEAVES_02)
-          c = {85, 107, 47, 255}; // Olive
-        else if (tileIdx >= GRASS && tileIdx <= GRASS_VARIANT_02)
-          c = {34, 139, 34, 255}; // Forest Green
-        else if (tileIdx == DIRT_VARIANT_19 ||
-                 tileIdx == DIRT_WITH_PARTIAL_GRASS)
-          c = {139, 69, 19, 255}; // Saddle Brown
-        else if (tileIdx >= GRASS_BLOCK_FULL &&
-                 tileIdx <= GRASS_BLOCK_FULL_VARIANT_01)
-          c = {0, 128, 0, 255}; // Green
-        else if (tileIdx >= GRASS_WITH_BUSH &&
-                 tileIdx <= GRASS_WITH_BUSH_VARIANT_07)
-          c = {0, 100, 0, 255}; // Dark Green
-        else if (tileIdx >= GRASS_VARIANT_03 && tileIdx <= GRASS_VARIANT_06)
-          c = {50, 205, 50, 255}; // Lime Green
-        else if (tileIdx >= FLOWER && tileIdx <= FLOWERS_WITHOUT_LEAVES)
-          c = {255, 105, 180, 255}; // Pink/Flower
-        else if (tileIdx >= LOG && tileIdx <= LOG_WITH_LEAVES_VARIANT_02)
-          c = {139, 69, 19, 255}; // Log Brown
-        else if (tileIdx >= DIRT_PILE && tileIdx <= DIRT_PILE_VARIANT_07)
-          c = {160, 82, 45, 255}; // Sienna
-        else if (tileIdx >= COBBLESTONE && tileIdx <= SMOOTH_STONE)
-          c = {128, 128, 128, 255}; // Grey
-        else if (tileIdx >= ROCK && tileIdx <= ROCK_VARIANT_03)
-          c = {105, 105, 105, 255}; // Dim Grey
-        else if (tileIdx >= ROCK_ON_WATER &&
-                 tileIdx <= STONES_ON_WATER_VARIANT_11)
-          c = {70, 130, 180, 255}; // Steel Blue
-        else if (tileIdx >= WATER_DROPLETS && tileIdx <= OCEAN_ROUGH)
-          c = {0, 0, 255, 255}; // Blue
-        else
-          c = {100, 100, 100, 255}; // Unknown: Dark Grey
+                // Detailed Minimap Colors
+                if (tileIdx >= DIRT && tileIdx <= DIRT_VARIANT_18) c = {101, 67, 33, 255}; // Brown
+                else if (tileIdx >= DIRT_WITH_LEAVES_01 && tileIdx <= DIRT_WITH_LEAVES_02) c = {85, 107, 47, 255}; // Olive
+                else if (tileIdx >= GRASS && tileIdx <= GRASS_VARIANT_02) c = {34, 139, 34, 255}; // Forest Green
+                else if (tileIdx == DIRT_VARIANT_19 || tileIdx == DIRT_WITH_PARTIAL_GRASS) c = {139, 69, 19, 255}; // Saddle Brown
+                else if (tileIdx >= GRASS_BLOCK_FULL && tileIdx <= GRASS_BLOCK_FULL_VARIANT_01) c = {0, 128, 0, 255}; // Green
+                else if (tileIdx >= GRASS_WITH_BUSH && tileIdx <= GRASS_WITH_BUSH_VARIANT_07) c = {0, 100, 0, 255}; // Dark Green
+                else if (tileIdx >= GRASS_VARIANT_03 && tileIdx <= GRASS_VARIANT_06) c = {50, 205, 50, 255}; // Lime Green
+                else if (tileIdx >= FLOWER && tileIdx <= FLOWERS_WITHOUT_LEAVES) c = {255, 105, 180, 255}; // Pink/Flower
+                else if (tileIdx >= LOG && tileIdx <= LOG_WITH_LEAVES_VARIANT_02) c = {139, 69, 19, 255}; // Log Brown
+                else if (tileIdx >= DIRT_PILE && tileIdx <= DIRT_PILE_VARIANT_07) c = {160, 82, 45, 255}; // Sienna
+                else if (tileIdx >= COBBLESTONE && tileIdx <= SMOOTH_STONE) c = {128, 128, 128, 255}; // Grey
+                else if (tileIdx >= ROCK && tileIdx <= ROCK_VARIANT_03) c = {105, 105, 105, 255}; // Dim Grey
+                else if (tileIdx >= ROCK_ON_WATER && tileIdx <= STONES_ON_WATER_VARIANT_11) c = {70, 130, 180, 255}; // Steel Blue
+                else if (tileIdx >= WATER_DROPLETS && tileIdx <= OCEAN_ROUGH) c = {0, 0, 255, 255}; // Blue
+                else c = {100, 100, 100, 255}; // Unknown: Dark Grey
 
-        SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
-        SDL_Rect tileRect = {mx + tx * tileSize, my + ty * tileSize, tileSize,
-                             tileSize};
-        SDL_RenderFillRect(renderer, &tileRect);
-      }
-    }
-
-    // Helper for circles on minimap
-    auto FillCircle = [&](int cx, int cy, int r, SDL_Color color) {
-      SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
-      for (int dy = -r; dy <= r; dy++) {
-        for (int dx = -r; dx <= r; dx++) {
-          if (dx * dx + dy * dy <= r * r)
-            SDL_RenderDrawPoint(renderer, cx + dx, cy + dy);
+                SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
+                SDL_Rect tileRect = {mx + tx * tileSize, my + ty * tileSize, tileSize, tileSize};
+                SDL_RenderFillRect(renderer, &tileRect);
+            }
         }
-      }
-    };
 
-    // Render all entities on Minimap
-    auto &transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
-    for (auto &[entity, trans] : transforms) {
-      if (!m_Level->IsVisible((int)trans.x, (int)trans.y))
-        continue;
+        // Helper for circles on minimap
+        auto FillCircle = [&](int cx, int cy, int r, SDL_Color color) {
+            SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dx = -r; dx <= r; dx++) {
+                    if (dx*dx + dy*dy <= r*r) SDL_RenderDrawPoint(renderer, cx + dx, cy + dy);
+                }
+            }
+        };
 
-      int px = mx + (int)trans.x * tileSize + tileSize / 2;
-      int py = my + (int)trans.y * tileSize + tileSize / 2;
+        // Render all entities on Minimap
+        auto& transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
+        for (auto& [entity, trans] : transforms) {
+            // Filter entities by map
+            if (m_State == GameState::Camp) {
+                if (entity != m_Player) {
+                    auto* tag = GetRegistry().GetComponent<PixelsEngine::TagComponent>(entity);
+                    if (!tag || tag->tag != PixelsEngine::EntityTag::Companion) continue;
+                }
+            } else {
+                // Don't show companions if they were left at camp? (simplified: show all)
+            }
 
-      if (entity == m_Player) {
-        FillCircle(px, py, 3, {255, 255, 255, 255}); // Player: White Circle
-        continue;
-      }
+            if (!currentMap->IsVisible((int)trans.x, (int)trans.y)) continue;
+
+            int px = mx + (int)trans.x * tileSize + tileSize/2;
+            int py = my + (int)trans.y * tileSize + tileSize/2;
+
+            if (entity == m_Player) {
+                FillCircle(px, py, 3, {255, 255, 255, 255}); // Player: White Circle
+                continue;
+            }
 
       auto *tagComp =
           GetRegistry().GetComponent<PixelsEngine::TagComponent>(entity);
@@ -3031,23 +3056,28 @@ void PixelsGateGame::RenderHUD() {
   SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
   SDL_RenderDrawRect(renderer, &hudRect);
 
-  auto DrawGrid = [&](const std::string &title, int startX,
-                      const std::vector<std::string> &labels,
-                      const std::vector<std::string> &keys,
-                      const std::vector<std::string> &icons,
-                      const std::vector<std::string> &counts, int count) {
-    m_TextRenderer->RenderText(title, startX, winH - barH + 5,
-                               {200, 200, 200, 255});
-    for (int i = 0; i < count; ++i) {
-      int row = i / 3;
-      int col = i % 3;
-      SDL_Rect btn = {startX + col * 45, winH - barH + 25 + row * 35, 40, 30};
-      SDL_SetRenderDrawColor(renderer, 80, 80, 80, 255);
-      SDL_RenderFillRect(renderer, &btn);
-      SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
-      SDL_RenderDrawRect(renderer, &btn);
+    auto DrawGrid = [&](const std::string& title, int startX, const std::vector<std::string>& labels, const std::vector<std::string>& keys, const std::vector<std::string>& icons, const std::vector<std::string>& counts, int count) {
+        m_TextRenderer->RenderText(title, startX, winH - barH + 5, {200, 200, 200, 255});
+        int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
+        
+        for (int i = 0; i < count; ++i) {
+            int row = i / 3;
+            int col = i % 3;
+            SDL_Rect btn = { startX + col * 45, winH - barH + 25 + row * 35, 40, 30 };
+            SDL_SetRenderDrawColor(renderer, 80, 80, 80, 255); SDL_RenderFillRect(renderer, &btn);
+            SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255); SDL_RenderDrawRect(renderer, &btn);
+            
+            // Hover Detection for Tooltips
+            if (mx >= btn.x && mx <= btn.x + btn.w && my >= btn.y && my <= btn.y + btn.h) {
+                if (title == "ACTIONS" || title == "SPELLS") {
+                    if (i < (int)labels.size()) m_HoveredItemName = labels[i];
+                } else if (title == "ITEMS") {
+                    auto hotbarItems = GetHotbarItems();
+                    if (i < (int)hotbarItems.size()) m_HoveredItemName = hotbarItems[i];
+                }
+            }
 
-      bool iconDrawn = false;
+            bool iconDrawn = false;
       if (i < (int)icons.size() && !icons[i].empty()) {
         auto tex =
             PixelsEngine::TextureManager::LoadTexture(renderer, icons[i]);
@@ -3225,12 +3255,46 @@ void PixelsGateGame::RenderHUD() {
         SDL_RenderFillRect(renderer, &bubble);
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderDrawRect(renderer, &bubble);
-        m_TextRenderer->RenderTextWrapped(interact.dialogueText, bubble.x + 5,
-                                          bubble.y + 5, w - 10, {0, 0, 0, 255});
-      }
-    }
-  }
-}
+                         m_TextRenderer->RenderTextWrapped(interact.dialogueText, bubble.x + 5, bubble.y + 5, w - 10, {0, 0, 0, 255});
+                    }
+                }
+            }
+        
+                // Render Tooltip on top of everything
+        
+                if (!m_HoveredItemName.empty()) {
+        
+                    auto it = m_Tooltips.find(m_HoveredItemName);
+        
+                    if (it != m_Tooltips.end()) {
+        
+                        int tx, ty;
+        
+                        if (m_TooltipPinned) {
+        
+                            tx = m_PinnedTooltipX;
+        
+                            ty = m_PinnedTooltipY;
+        
+                        } else {
+        
+                            int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
+        
+                            tx = mx + 15;
+        
+                            ty = my - 150;
+        
+                        }
+        
+                        RenderTooltip(it->second, tx, ty);
+        
+                    }
+        
+                }
+        
+            
+        }
+        
 
 // --- Menu Implementations ---
 
@@ -6674,7 +6738,71 @@ void PixelsGateGame::InitCampMap() {
         else
           tile = DIRT;
       }
-      m_CampLevel->SetTile(x, y, tile);
-    }
-  }
-}
+                  m_CampLevel->SetTile(x, y, tile);
+              }
+          }
+      }
+      
+      void PixelsGateGame::RenderTooltip(const TooltipData& data, int x, int y) {
+          SDL_Renderer* renderer = GetRenderer();
+          int w = 320;
+          
+          // Calculate required height
+          int descHeight = m_TextRenderer->MeasureTextWrapped(data.description, w - 20);
+          // Header (Name+Line): 40
+          // Subheader (Cost+Range): 30
+          // Description: descHeight
+          // Footer (Effect+Save): 35
+          // Pin hint: 25
+          // Padding: 20
+          int totalH = 40 + 30 + descHeight + 35 + 25 + 20;
+          
+          // Adjust if tooltip goes off screen
+          int winW, winH; SDL_GetWindowSize(m_Window, &winW, &winH);
+          if (x + w > winW) x = winW - w - 10;
+          if (x < 10) x = 10;
+          if (y + totalH > winH) y = winH - totalH - 10;
+          if (y < 10) y = 10;
+      
+          SDL_Rect box = {x, y, w, totalH};
+          
+          SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+          SDL_SetRenderDrawColor(renderer, 20, 20, 25, 240);
+          SDL_RenderFillRect(renderer, &box);
+          SDL_SetRenderDrawColor(renderer, 100, 100, 120, 255);
+          SDL_RenderDrawRect(renderer, &box);
+          if (m_TooltipPinned) {
+              SDL_SetRenderDrawColor(renderer, 255, 215, 0, 255);
+              SDL_RenderDrawRect(renderer, &box);
+          }
+      
+          int currentY = y + 10;
+          m_TextRenderer->RenderText(data.name, x + 10, currentY, {255, 255, 255, 255});
+          currentY += 30;
+          
+          SDL_SetRenderDrawColor(renderer, 80, 80, 80, 255);
+          SDL_RenderDrawLine(renderer, x + 10, currentY, x + w - 10, currentY);
+          currentY += 10;
+      
+          SDL_Color costCol = {200, 200, 200, 255};
+          if (data.cost.find("Action") != std::string::npos) costCol = {50, 255, 50, 255};
+          else if (data.cost.find("Bonus") != std::string::npos) costCol = {255, 150, 50, 255};
+          
+          m_TextRenderer->RenderTextSmall("Cost: " + data.cost, x + 10, currentY, costCol);
+          m_TextRenderer->RenderTextSmall("Range: " + data.range, x + 160, currentY, {200, 200, 255, 255});
+          currentY += 30;
+      
+          m_TextRenderer->RenderTextWrapped(data.description, x + 10, currentY, w - 20, {180, 180, 180, 255});
+          currentY += descHeight + 15;
+      
+          m_TextRenderer->RenderTextSmall("Dmg/Effect: " + data.effect, x + 10, currentY, {255, 100, 100, 255});
+          if (data.save != "None") {
+              m_TextRenderer->RenderTextSmall("Save: " + data.save, x + 160, currentY, {255, 255, 100, 255});
+          }
+          currentY += 25;
+      
+          m_TextRenderer->RenderTextSmall(m_TooltipPinned ? "[T] Unpin" : "[T] Pin Tooltip", x + 10, currentY, {100, 100, 100, 255});
+          
+          SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+      }
+      
