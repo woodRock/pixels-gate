@@ -2059,7 +2059,7 @@ void PixelsGateGame::OnRender() {
           screenX -= (int)camera.x;
           screenY -= (int)camera.y;
           SDL_Rect drawRect = {screenX + 16 - sprite->pivotX,
-                               screenY + 16 - sprite->pivotY, sprite->srcRect.w,
+                               screenY + 8 - sprite->pivotY, sprite->srcRect.w,
                                sprite->srcRect.h};
           if (mx >= drawRect.x && mx <= drawRect.x + drawRect.w &&
               my >= drawRect.y && my <= drawRect.y + drawRect.h) {
@@ -2523,17 +2523,29 @@ void PixelsGateGame::HandleInput() {auto *currentMap = (m_State == GameState::Ca
       PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(
           PixelsEngine::GameAction::AttackModifier));
   bool isCtrlDown = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_LCTRL) ||
-                    PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_RCTRL);
+                    PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_RCTRL) ||
+                    PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_LGUI) ||
+                    PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_RGUI);
 
-  bool isDownLeftRaw = PixelsEngine::Input::IsMouseButtonDown(SDL_BUTTON_LEFT);
   bool isPressedLeftRaw =
       PixelsEngine::Input::IsMouseButtonPressed(SDL_BUTTON_LEFT);
   bool isPressedRightRaw =
       PixelsEngine::Input::IsMouseButtonPressed(SDL_BUTTON_RIGHT);
 
-  // CTRL + CLICK = Right Click (equivalent to isPressedRight)
-  bool isPressedLeft = isPressedLeftRaw && !isCtrlDown;
-  bool isPressedRight = isPressedRightRaw || (isPressedLeftRaw && isCtrlDown);
+  // Determine logical clicks
+  bool isPressedLeft = false;
+  bool isPressedRight = false;
+
+  if (isPressedLeftRaw) {
+    if (isCtrlDown) {
+      isPressedRight = true; // Ctrl + Left Click = Right Click
+    } else {
+      isPressedLeft = true;
+    }
+  }
+  if (isPressedRightRaw) {
+    isPressedRight = true;
+  }
 
   int mx, my;
   PixelsEngine::Input::GetMousePosition(mx, my);
@@ -2704,7 +2716,7 @@ void PixelsGateGame::HandleInput() {auto *currentMap = (m_State == GameState::Ca
             screenX -= (int)camera.x;
             screenY -= (int)camera.y;
             SDL_Rect drawRect = {screenX + 16 - sprite->pivotX,
-                                 screenY + 16 - sprite->pivotY,
+                                 screenY + 8 - sprite->pivotY,
                                  sprite->srcRect.w, sprite->srcRect.h};
             if (mx >= drawRect.x && mx <= drawRect.x + drawRect.w &&
                 my >= drawRect.y && my <= drawRect.y + drawRect.h) {
@@ -2716,10 +2728,6 @@ void PixelsGateGame::HandleInput() {auto *currentMap = (m_State == GameState::Ca
         }
         if (!found)
           CheckWorldInteraction(mx, my); // Fallback to move
-      } else if (isCtrlDown) {
-        // Ctrl + Click handles context menu logic elsewhere or fallback move
-        // here
-        CheckWorldInteraction(mx, my);
       } else {
         CheckWorldInteraction(mx, my);
       }
@@ -2741,7 +2749,7 @@ void PixelsGateGame::HandleInput() {auto *currentMap = (m_State == GameState::Ca
         screenX -= (int)camera.x;
         screenY -= (int)camera.y;
         SDL_Rect drawRect = {screenX + 16 - sprite->pivotX,
-                             screenY + 16 - sprite->pivotY, sprite->srcRect.w,
+                             screenY + 8 - sprite->pivotY, sprite->srcRect.w,
                              sprite->srcRect.h};
         if (mx >= drawRect.x && mx <= drawRect.x + drawRect.w &&
             my >= drawRect.y && my <= drawRect.y + drawRect.h) {
@@ -2946,7 +2954,7 @@ void PixelsGateGame::CheckWorldInteraction(int mx, int my) {
       screenX -= (int)camera.x;
       screenY -= (int)camera.y;
       SDL_Rect drawRect = {screenX + 16 - sprite->pivotX,
-                           screenY + 16 - sprite->pivotY, sprite->srcRect.w,
+                           screenY + 8 - sprite->pivotY, sprite->srcRect.w,
                            sprite->srcRect.h};
       if (mx >= drawRect.x && mx <= drawRect.x + drawRect.w &&
           my >= drawRect.y && my <= drawRect.y + drawRect.h) {
@@ -4876,7 +4884,9 @@ void PixelsGateGame::HandleCombatInput() {auto *currentMap = (m_State == GameSta
       PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(
           PixelsEngine::GameAction::AttackModifier));
   bool isCtrlDown = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_LCTRL) ||
-                    PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_RCTRL);
+                    PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_RCTRL) ||
+                    PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_LGUI) ||
+                    PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_RGUI);
 
   bool isDownLeftRaw = PixelsEngine::Input::IsMouseButtonDown(SDL_BUTTON_LEFT);
   bool isPressedLeftRaw =
@@ -4900,7 +4910,7 @@ void PixelsGateGame::HandleCombatInput() {auto *currentMap = (m_State == GameSta
         screenX -= (int)camera.x;
         screenY -= (int)camera.y;
         SDL_Rect drawRect = {screenX + 16 - sprite->pivotX,
-                             screenY + 16 - sprite->pivotY, sprite->srcRect.w,
+                             screenY + 8 - sprite->pivotY, sprite->srcRect.w,
                              sprite->srcRect.h};
         if (mx >= drawRect.x && mx <= drawRect.x + drawRect.w &&
             my >= drawRect.y && my <= drawRect.y + drawRect.h) {
@@ -4980,7 +4990,7 @@ void PixelsGateGame::HandleCombatInput() {auto *currentMap = (m_State == GameSta
             screenX -= (int)camera.x;
             screenY -= (int)camera.y;
             SDL_Rect drawRect = {screenX + 16 - sprite->pivotX,
-                                 screenY + 16 - sprite->pivotY,
+                                 screenY + 8 - sprite->pivotY,
                                  sprite->srcRect.w, sprite->srcRect.h};
             if (mx >= drawRect.x && mx <= drawRect.x + drawRect.w &&
                 my >= drawRect.y && my <= drawRect.y + drawRect.h) {
@@ -6200,7 +6210,7 @@ void PixelsGateGame::HandleTargetingInput() {auto *currentMap = (m_State == Game
         screenY -= (int)camera.y;
 
         SDL_Rect drawRect = {screenX + 16 - sprite->pivotX,
-                             screenY + 16 - sprite->pivotY, sprite->srcRect.w,
+                             screenY + 8 - sprite->pivotY, sprite->srcRect.w,
                              sprite->srcRect.h};
 
         if (mx >= drawRect.x && mx <= drawRect.x + drawRect.w &&
@@ -7147,7 +7157,7 @@ void PixelsGateGame::HandleTargetingShoveInput() {auto *currentMap = (m_State ==
         screenX -= (int)camera.x;
         screenY -= (int)camera.y;
         SDL_Rect drawRect = {screenX + 16 - sprite->pivotX,
-                             screenY + 16 - sprite->pivotY, sprite->srcRect.w,
+                             screenY + 8 - sprite->pivotY, sprite->srcRect.w,
                              sprite->srcRect.h};
         if (mx >= drawRect.x && mx <= drawRect.x + drawRect.w &&
             my >= drawRect.y && my <= drawRect.y + drawRect.h) {
