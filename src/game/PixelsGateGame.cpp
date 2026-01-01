@@ -96,6 +96,7 @@ void PixelsGateGame::OnStart() {
     inv.AddItem("Sword", 1, PixelsEngine::ItemType::WeaponMelee, 10, "assets/sword.png", 150);
     inv.AddItem("Leather Armor", 1, PixelsEngine::ItemType::Armor, 5, "assets/armor.png", 200);
     inv.AddItem("Shortbow", 1, PixelsEngine::ItemType::WeaponRanged, 8, "assets/bow.png", 120);
+    inv.AddItem("Thieves' Tools", 1, PixelsEngine::ItemType::Tool, 0, "assets/thieves_tools.png", 25);
     
     std::string playerSheet = "assets/Pixel Art Top Down - Basic v1.2.2/Texture/TX Player.png";
     auto playerTexture = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), playerSheet);
@@ -1498,7 +1499,7 @@ void PixelsGateGame::RenderDiceRoll() {
     SDL_Renderer* renderer = GetRenderer();
     int winW, winH; SDL_GetWindowSize(m_Window, &winW, &winH);
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 150); SDL_Rect overlay = {0, 0, winW, winH}; SDL_RenderFillRect(renderer, &overlay);
-    int boxW = 300, boxH = 300; SDL_Rect box = {(winW - boxW)/2, (winH - boxH)/2, boxW, boxH};
+    int boxW = 400, boxH = 300; SDL_Rect box = {(winW - boxW)/2, (winH - boxH)/2, boxW, boxH};
     SDL_SetRenderDrawColor(renderer, 40, 40, 40, 255); SDL_RenderFillRect(renderer, &box);
     SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255); SDL_RenderDrawRect(renderer, &box);
     m_TextRenderer->RenderTextCentered("Skill Check: " + m_DiceRoll.skillName, box.x + boxW/2, box.y + 30, {255, 255, 255, 255});
@@ -1717,8 +1718,11 @@ void PixelsGateGame::HandleInput() {
                     else if (action.type == PixelsEngine::ContextActionType::Lockpick) {
                          auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
                          bool hasTools = false;
+                         
                          if (inv) {
+                             std::cout << "Checking Inventory for Tools:" << std::endl;
                              for(auto& item : inv->items) {
+                                 std::cout << " - Item: '" << item.name << "'" << std::endl;
                                  if (item.name == "Thieves' Tools") hasTools = true;
                              }
                          }
@@ -1726,12 +1730,13 @@ void PixelsGateGame::HandleInput() {
                          if (hasTools) {
                              auto* stats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
                              auto* lock = GetRegistry().GetComponent<PixelsEngine::LockComponent>(m_ContextMenu.targetEntity);
+                             
                              int dc = lock ? lock->dc : 15;
                              int bonus = stats->GetModifier(stats->dexterity) + stats->sleightOfHand;
                              StartDiceRoll(bonus, dc, "Dexterity (Sleight of Hand)", m_ContextMenu.targetEntity, PixelsEngine::ContextActionType::Lockpick);
                          } else {
                              auto* pTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
-                             SpawnFloatingText(pTrans->x, pTrans->y, "Need Thieves' Tools!", {255, 0, 0, 255});
+                             SpawnFloatingText(pTrans->x, pTrans->y, "Missing: Thieves' Tools", {255, 0, 0, 255});
                          }
                     }
                 }
@@ -2309,6 +2314,7 @@ void PixelsGateGame::HandleMainMenuInput() {
                     inv->AddItem("Sword", 1, PixelsEngine::ItemType::WeaponMelee, 10, "assets/sword.png");
                     inv->AddItem("Leather Armor", 1, PixelsEngine::ItemType::Armor, 5, "assets/armor.png");
                     inv->AddItem("Shortbow", 1, PixelsEngine::ItemType::WeaponRanged, 8, "assets/bow.png");
+                    inv->AddItem("Thieves' Tools", 1, PixelsEngine::ItemType::Tool, 0, "assets/thieves_tools.png", 25);
                 }
 
                 // Reset Dialogues
@@ -2994,18 +3000,40 @@ void PixelsGateGame::UpdateCombat(float deltaTime) {
             if (aiTrans && pTrans && aiStats && !aiStats->isDead && aiComp) {
                  float dist = std::sqrt(std::pow(aiTrans->x - pTrans->x, 2) + std::pow(aiTrans->y - pTrans->y, 2));
                  
-                 // Move
+                 // Move with Pathfinding
                  if (dist > aiComp->attackRange && m_MovementLeft > 0) {
-                     float dx = pTrans->x - aiTrans->x;
-                     float dy = pTrans->y - aiTrans->y;
-                     float len = std::sqrt(dx*dx + dy*dy);
-                     if (len > 0) { dx/=len; dy/=len; }
+                     auto path = PixelsEngine::Pathfinding::FindPath(*m_Level, (int)aiTrans->x, (int)aiTrans->y, (int)pTrans->x, (int)pTrans->y);
                      
-                     float moveDist = 1.0f; 
-                     if (m_MovementLeft >= moveDist) {
-                         aiTrans->x += dx * moveDist;
-                         aiTrans->y += dy * moveDist;
-                         m_MovementLeft -= moveDist;
+                     // Path includes start node at index 0
+                     size_t pathIndex = 1;
+                     while (m_MovementLeft > 0.1f && pathIndex < path.size()) {
+                         // Check range again
+                         dist = std::sqrt(std::pow(aiTrans->x - pTrans->x, 2) + std::pow(aiTrans->y - pTrans->y, 2));
+                         if (dist <= aiComp->attackRange) break;
+
+                         float targetX = (float)path[pathIndex].first;
+                         float targetY = (float)path[pathIndex].second;
+                         
+                         float dx = targetX - aiTrans->x;
+                         float dy = targetY - aiTrans->y;
+                         float stepDist = std::sqrt(dx*dx + dy*dy);
+                         
+                         if (stepDist <= 0.01f) {
+                             pathIndex++;
+                             continue;
+                         }
+
+                         if (m_MovementLeft >= stepDist) {
+                             aiTrans->x = targetX;
+                             aiTrans->y = targetY;
+                             m_MovementLeft -= stepDist;
+                             pathIndex++;
+                         } else {
+                             // Partial move
+                             aiTrans->x += (dx / stepDist) * m_MovementLeft;
+                             aiTrans->y += (dy / stepDist) * m_MovementLeft;
+                             m_MovementLeft = 0;
+                         }
                      }
                  }
                  
@@ -3062,9 +3090,22 @@ void PixelsGateGame::HandleCombatInput() {
              auto* transform = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
              auto* anim = GetRegistry().GetComponent<PixelsEngine::AnimationComponent>(m_Player);
              if (transform) {
-                 transform->x += dx * moveCost;
-                 transform->y += dy * moveCost;
-                 m_MovementLeft -= moveCost;
+                 float newX = transform->x + dx * moveCost;
+                 float newY = transform->y + dy * moveCost;
+                 
+                 bool moved = false;
+                 if (m_Level->IsWalkable((int)newX, (int)newY)) {
+                     transform->x = newX;
+                     transform->y = newY;
+                     moved = true;
+                 } else {
+                     // Sliding
+                     if (m_Level->IsWalkable((int)newX, (int)transform->y)) { transform->x = newX; moved = true; }
+                     else if (m_Level->IsWalkable((int)transform->x, (int)newY)) { transform->y = newY; moved = true; }
+                 }
+
+                 if (moved) m_MovementLeft -= moveCost;
+
                  if (anim) {
                      if (dy < 0) anim->Play("WalkUp");
                      else if (dy > 0) anim->Play("WalkDown");
