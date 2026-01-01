@@ -104,6 +104,15 @@ def draw_boarmeat(d, s, c):
     d.ellipse([6, 10, 26, 24], fill=(150, 50, 50))
     d.rectangle([20, 12, 28, 16], fill=(255, 255, 255)) # Bone
 
+def draw_rest(d, s, c):
+    # Campfire
+    # Logs
+    d.rectangle([8, 22, 24, 26], fill=(100, 50, 0))
+    d.rectangle([10, 24, 22, 28], fill=(120, 60, 0))
+    # Flames
+    d.polygon([(16, 4), (10, 22), (22, 22)], fill=(255, 100, 0))
+    d.polygon([(16, 8), (12, 22), (20, 22)], fill=(255, 200, 0))
+
 def main():
     ensure_dir("assets/ui")
     
@@ -114,6 +123,7 @@ def main():
     create_icon("assets/ui/action_shove.png", draw_shove)
     create_icon("assets/ui/action_dash.png", draw_dash)
     create_icon("assets/ui/action_endturn.png", draw_endturn)
+    create_icon("assets/ui/action_rest.png", draw_rest)
     
     # Spells
     create_icon("assets/ui/spell_fireball.png", draw_fireball)
