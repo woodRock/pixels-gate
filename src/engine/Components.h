@@ -102,6 +102,14 @@ struct LockComponent {
   int dc = 10;              // Difficulty Class for lockpicking
 };
 
+struct HazardComponent {
+  enum class Type { Fire };
+  Type type = Type::Fire;
+  int damage = 0;
+  float duration = 10.0f;
+  float tickTimer = 0.0f;
+};
+
 struct DialogueTree;
 
 struct DialogueComponent {

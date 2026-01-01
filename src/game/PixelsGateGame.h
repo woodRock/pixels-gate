@@ -14,6 +14,9 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <algorithm>
+
+#include "GameComponents.h"
 
 class PixelsGateGame : public PixelsEngine::Application {
 public:
@@ -104,19 +107,11 @@ private:
   PixelsEngine::ContextMenu m_ContextMenu;
   PixelsEngine::DiceRollAnimation m_DiceRoll;
 
-  // Combat System
-  struct CombatTurn {
-    PixelsEngine::Entity entity;
-    int initiative;
-    bool isPlayer;
-    bool isSurprised = false;
-  };
-  std::vector<CombatTurn> m_TurnOrder;
-  int m_CurrentTurnIndex = -1;
-  int m_ActionsLeft = 0;
-  int m_BonusActionsLeft = 0;
-  float m_MovementLeft = 0.0f;
-  float m_CombatTurnTimer = 0.0f; // AI delay
+  // --- Components ---
+  CombatManager m_Combat;
+  TimeManager m_Time;
+  FloatingTextManager m_FloatingText;
+
   std::vector<std::pair<int, int>> m_CurrentAIPath;
   int m_CurrentAIPathIndex = -1;
 
@@ -192,17 +187,6 @@ private:
 
   // --- New Features ---
   float m_EnvironmentDamageTimer = 0.0f;
-  struct FloatingText {
-    float x, y;
-    std::string text;
-    float life;
-    SDL_Color color;
-  };
-  std::vector<FloatingText> m_FloatingTexts;
-
-  // Day/Night Cycle (0.0 to 24.0, starts at 8.0)
-  float m_TimeOfDay = 8.0f;
-  const float m_TimeSpeed = 0.1f; // Reduced from 1.0f to slow down the cycle
 
   void UpdateAI(float deltaTime);
   void UpdateDayNight(float deltaTime);
