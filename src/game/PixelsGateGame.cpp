@@ -194,8 +194,7 @@ void PixelsGateGame::OnStart() {
   inv.AddItem("Thieves' Tools", 1, PixelsEngine::ItemType::Tool, 0,
               "assets/thieves_tools.png", 25);
 
-  std::string playerSheet =
-      "assets/Pixel Art Top Down - Basic v1.2.2/Texture/TX Player.png";
+  std::string playerSheet = "assets/knight.png";
   auto playerTexture =
       PixelsEngine::TextureManager::LoadTexture(GetRenderer(), playerSheet);
 
@@ -206,10 +205,10 @@ void PixelsGateGame::OnStart() {
   auto &anim =
       GetRegistry().AddComponent(m_Player, PixelsEngine::AnimationComponent{});
   anim.AddAnimation("Idle", 0, 0, 32, 32, 1);
-  anim.AddAnimation("WalkDown", 0, 0, 32, 32, 4);
-  anim.AddAnimation("WalkRight", 0, 0, 32, 32, 4);
-  anim.AddAnimation("WalkUp", 0, 32, 32, 32, 4);
-  anim.AddAnimation("WalkLeft", 0, 32, 32, 32, 4);
+  anim.AddAnimation("WalkDown", 0, 0, 32, 32, 1);
+  anim.AddAnimation("WalkRight", 0, 0, 32, 32, 1);
+  anim.AddAnimation("WalkUp", 0, 0, 32, 32, 1);
+  anim.AddAnimation("WalkLeft", 0, 0, 32, 32, 1);
 
   // 3. Spawn Boars (Far from Inn)
   CreateBoar(35.0f, 35.0f);
@@ -7008,8 +7007,7 @@ void PixelsGateGame::RenderTooltip(const TooltipData &data, int x, int y) {
 
 void PixelsGateGame::SpawnWorldEntities() {
   auto playerTexture = PixelsEngine::TextureManager::LoadTexture(
-      GetRenderer(),
-      "assets/Pixel Art Top Down - Basic v1.2.2/Texture/TX Player.png");
+      GetRenderer(), "assets/knight.png");
 
   // 3. Spawn Boars
   CreateBoar(35.0f, 35.0f);
