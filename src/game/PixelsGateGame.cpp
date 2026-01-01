@@ -5928,12 +5928,23 @@ void PixelsGateGame::HandleDialogueInput() {
             if (q->questId == "HuntBoars")
               rewardGold = 100;
             inv->AddItem("Coins", rewardGold);
+
+            auto *pTrans =
+                GetRegistry().GetComponent<PixelsEngine::TransformComponent>(
+                    m_Player);
+            float px = pTrans ? pTrans->x : 0.0f;
+            float py = pTrans ? pTrans->y : 0.0f;
+
+            SpawnFloatingText(px, py - 0.5f,
+                              "+" + std::to_string(rewardGold) + " Gold",
+                              {255, 215, 0, 255});
+
             auto *pStats =
                 GetRegistry().GetComponent<PixelsEngine::StatsComponent>(
                     m_Player);
             if (pStats) {
               pStats->experience += 100;
-              SpawnFloatingText(0, 0, "+100 XP", {0, 255, 255, 255});
+              SpawnFloatingText(px, py - 1.5f, "+100 XP", {0, 255, 255, 255});
             }
           }
         }
@@ -7251,6 +7262,9 @@ void PixelsGateGame::SpawnWorldEntities() {
       "I can handle myself. [Charisma DC 10]", "g_check", "Charisma", 10,
       "g_pass", "g_fail"));
   gStart.options.push_back(PixelsEngine::DialogueOption(
+      "What's out there?", "g_info", "None", 0, "", "",
+      PixelsEngine::DialogueAction::None, "", "", false));
+  gStart.options.push_back(PixelsEngine::DialogueOption(
       "I have the Boar Meat.", "g_done", "None", 0, "", "",
       PixelsEngine::DialogueAction::CompleteQuest, "Quest_HuntBoars_Done",
       "Quest_HuntBoars_Done", true, "Quest_HuntBoars_Active", "Boar Meat"));
@@ -7271,6 +7285,17 @@ void PixelsGateGame::SpawnWorldEntities() {
   gFail.npcText = "Ha! Shaking.";
   gFail.options.push_back(PixelsEngine::DialogueOption("[End]", "end"));
   guardTree.nodes["g_fail"] = gFail;
+
+  PixelsEngine::DialogueNode gInfo;
+  gInfo.id = "g_info";
+  gInfo.npcText = "Boars. Big ones. And worse. Stay on the path.";
+  gInfo.options.push_back(PixelsEngine::DialogueOption(
+      "I can help hunt them.", "end", "None", 0, "", "",
+      PixelsEngine::DialogueAction::StartQuest, "Quest_HuntBoars_Active"));
+  gInfo.options.push_back(PixelsEngine::DialogueOption(
+      "Thanks for the warning. [End]", "end", "None", 0, "", "",
+      PixelsEngine::DialogueAction::EndConversation));
+  guardTree.nodes["g_info"] = gInfo;
   PixelsEngine::DialogueNode gDone;
   gDone.id = "g_done";
   gDone.npcText = "Not useless.";
