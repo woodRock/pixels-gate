@@ -29,6 +29,7 @@ namespace PixelsEngine {
 
     struct InteractionComponent {
         std::string dialogueText;
+        std::string uniqueId = ""; // Stable ID for saving/loading
         bool showDialogue = false;
         float dialogueTimer = 0.0f;
     };

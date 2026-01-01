@@ -8,6 +8,8 @@
 #include "../engine/Inventory.h"
 #include "../engine/Config.h"
 #include <memory>
+#include <future>
+#include <chrono>
 
 class PixelsGateGame : public PixelsEngine::Application {
 public:
@@ -59,7 +61,8 @@ private:
         Looting,
         TargetingJump,
         TargetingShove,
-        Dialogue
+        Dialogue,
+        Loading
     };
     GameState m_State = GameState::MainMenu;
     GameState m_ReturnState = GameState::Playing; 
@@ -124,6 +127,7 @@ private:
     };
     FadeState m_FadeState = FadeState::None;
     std::string m_PendingLoadFile;
+    std::future<void> m_LoadFuture;
 
     // Menu Renderers
     void RenderMainMenu();

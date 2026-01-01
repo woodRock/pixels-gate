@@ -120,7 +120,7 @@ void PixelsGateGame::OnStart() {
     auto npc1 = GetRegistry().CreateEntity();
     GetRegistry().AddComponent(npc1, PixelsEngine::TransformComponent{ 19.0f, 19.0f }); // In Inn
     GetRegistry().AddComponent(npc1, PixelsEngine::SpriteComponent{ playerTexture, {0, 0, 32, 32}, 16, 30 });
-    GetRegistry().AddComponent(npc1, PixelsEngine::InteractionComponent{ "Innkeeper", false, 0.0f });
+    GetRegistry().AddComponent(npc1, PixelsEngine::InteractionComponent{ "Innkeeper", "npc_innkeeper", false, 0.0f });
     GetRegistry().AddComponent(npc1, PixelsEngine::StatsComponent{50, 50, 5, false}); 
     GetRegistry().AddComponent(npc1, PixelsEngine::QuestComponent{ "FetchOrb", 0, "Gold Orb" });
     GetRegistry().AddComponent(npc1, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Quest });
@@ -230,7 +230,7 @@ void PixelsGateGame::OnStart() {
     auto npc2 = GetRegistry().CreateEntity();
     GetRegistry().AddComponent(npc2, PixelsEngine::TransformComponent{ 20.0f, 25.0f }); // Guarding path
     GetRegistry().AddComponent(npc2, PixelsEngine::SpriteComponent{ playerTexture, {0, 0, 32, 32}, 16, 30 });
-    GetRegistry().AddComponent(npc2, PixelsEngine::InteractionComponent{ "Guardian", false, 0.0f });
+    GetRegistry().AddComponent(npc2, PixelsEngine::InteractionComponent{ "Guardian", "npc_guardian", false, 0.0f });
     GetRegistry().AddComponent(npc2, PixelsEngine::StatsComponent{50, 50, 5, false}); 
     GetRegistry().AddComponent(npc2, PixelsEngine::QuestComponent{ "HuntBoars", 0, "Boar Meat" });
     GetRegistry().AddComponent(npc2, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Quest });
@@ -286,7 +286,7 @@ void PixelsGateGame::OnStart() {
     auto comp = GetRegistry().CreateEntity();
     GetRegistry().AddComponent(comp, PixelsEngine::TransformComponent{ 21.0f, 21.0f }); // In Inn
     GetRegistry().AddComponent(comp, PixelsEngine::SpriteComponent{ playerTexture, {0, 0, 32, 32}, 16, 30 });
-    GetRegistry().AddComponent(comp, PixelsEngine::InteractionComponent{ "Companion", false, 0.0f });
+    GetRegistry().AddComponent(comp, PixelsEngine::InteractionComponent{ "Companion", "npc_companion", false, 0.0f });
     GetRegistry().AddComponent(comp, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Companion });
     GetRegistry().AddComponent(comp, PixelsEngine::StatsComponent{80, 80, 8, false}); 
     GetRegistry().AddComponent(comp, PixelsEngine::AIComponent{ 10.0f, 1.5f, 2.0f, 0.0f, false });
@@ -313,7 +313,7 @@ void PixelsGateGame::OnStart() {
     auto trader = GetRegistry().CreateEntity();
     GetRegistry().AddComponent(trader, PixelsEngine::TransformComponent{ 18.0f, 21.0f }); // In Inn
     GetRegistry().AddComponent(trader, PixelsEngine::SpriteComponent{ playerTexture, {0, 0, 32, 32}, 16, 30 });
-    GetRegistry().AddComponent(trader, PixelsEngine::InteractionComponent{ "Trader", false, 0.0f });
+    GetRegistry().AddComponent(trader, PixelsEngine::InteractionComponent{ "Trader", "npc_trader", false, 0.0f });
     GetRegistry().AddComponent(trader, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Trader });
     GetRegistry().AddComponent(trader, PixelsEngine::StatsComponent{100, 100, 10, false}); 
     GetRegistry().AddComponent(trader, PixelsEngine::AIComponent{ 8.0f, 1.5f, 2.0f, 0.0f, false, 0.0f, 0.0f, 120.0f });
@@ -348,14 +348,14 @@ void PixelsGateGame::OnStart() {
     GetRegistry().AddComponent(orb, PixelsEngine::SpriteComponent{ 
         orbTexture, {0, 0, 32, 32}, 16, 16 
     });
-    GetRegistry().AddComponent(orb, PixelsEngine::InteractionComponent{ "Gold Orb", false, 0.0f }); 
+    GetRegistry().AddComponent(orb, PixelsEngine::InteractionComponent{ "Gold Orb", "item_gold_orb", false, 0.0f }); 
 
     // 6. Spawn Locked Chest
     auto chest = GetRegistry().CreateEntity();
     GetRegistry().AddComponent(chest, PixelsEngine::TransformComponent{ 22.0f, 22.0f }); // Inside Inn
     auto chestTex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/chest.png");
     GetRegistry().AddComponent(chest, PixelsEngine::SpriteComponent{ chestTex, {0, 0, 32, 32}, 16, 16 });
-    GetRegistry().AddComponent(chest, PixelsEngine::InteractionComponent{ "Old Chest", false, 0.0f });
+    GetRegistry().AddComponent(chest, PixelsEngine::InteractionComponent{ "Old Chest", "obj_chest", false, 0.0f });
     GetRegistry().AddComponent(chest, PixelsEngine::LockComponent{ true, "Chest Key", 15 }); // Locked, DC 15
     
     std::vector<PixelsEngine::Item> chestLoot;
@@ -368,14 +368,14 @@ void PixelsGateGame::OnStart() {
     GetRegistry().AddComponent(keyEnt, PixelsEngine::TransformComponent{ 25.0f, 25.0f });
     auto keyTex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/key.png");
     GetRegistry().AddComponent(keyEnt, PixelsEngine::SpriteComponent{ keyTex, {0, 0, 32, 32}, 16, 16 });
-    GetRegistry().AddComponent(keyEnt, PixelsEngine::InteractionComponent{ "Chest Key", false, 0.0f });
+    GetRegistry().AddComponent(keyEnt, PixelsEngine::InteractionComponent{ "Chest Key", "item_key", false, 0.0f });
     GetRegistry().AddComponent(keyEnt, PixelsEngine::LootComponent{ std::vector<PixelsEngine::Item>{ {"Chest Key", "assets/key.png", 1, PixelsEngine::ItemType::Misc, 0, 0} } });
 
     auto toolsEnt = GetRegistry().CreateEntity();
     GetRegistry().AddComponent(toolsEnt, PixelsEngine::TransformComponent{ 21.0f, 25.0f });
     auto toolsTex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/thieves_tools.png");
     GetRegistry().AddComponent(toolsEnt, PixelsEngine::SpriteComponent{ toolsTex, {0, 0, 32, 32}, 16, 16 });
-    GetRegistry().AddComponent(toolsEnt, PixelsEngine::InteractionComponent{ "Thieves' Tools", false, 0.0f });
+    GetRegistry().AddComponent(toolsEnt, PixelsEngine::InteractionComponent{ "Thieves' Tools", "item_tools", false, 0.0f });
     GetRegistry().AddComponent(toolsEnt, PixelsEngine::LootComponent{ std::vector<PixelsEngine::Item>{ {"Thieves' Tools", "assets/thieves_tools.png", 1, PixelsEngine::ItemType::Tool, 0, 25} } });
 }
 
@@ -681,7 +681,10 @@ void PixelsGateGame::CreateBoar(float x, float y) {
     auto boar = GetRegistry().CreateEntity();
     GetRegistry().AddComponent(boar, PixelsEngine::TransformComponent{ x, y });
     GetRegistry().AddComponent(boar, PixelsEngine::StatsComponent{30, 30, 2, false}); // Reduced damage from 5 to 2
-    GetRegistry().AddComponent(boar, PixelsEngine::InteractionComponent{ "Boar", false, 0.0f });
+    
+    static int boarCount = 0;
+    GetRegistry().AddComponent(boar, PixelsEngine::InteractionComponent{ "Boar", "npc_boar_" + std::to_string(boarCount++), false, 0.0f });
+    
     GetRegistry().AddComponent(boar, PixelsEngine::TagComponent{ PixelsEngine::EntityTag::Hostile });
     // Add AI
     GetRegistry().AddComponent(boar, PixelsEngine::AIComponent{ 8.0f, 1.2f, 2.0f, 0.0f, true });
@@ -700,6 +703,25 @@ void PixelsGateGame::CreateBoar(float x, float y) {
 
 void PixelsGateGame::OnUpdate(float deltaTime) {
     if (m_State == GameState::Creation) { HandleCreationInput(); return; }
+
+    // Check for Load Completion
+    if (m_State == GameState::Loading) {
+        if (m_LoadFuture.valid() && m_LoadFuture.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            m_LoadFuture.get(); // Join thread
+            
+            m_FadeState = FadeState::FadingIn;
+            m_FadeTimer = m_FadeDuration;
+            
+            m_State = GameState::Playing;
+
+            // Ensure player is not marked as dead after loading
+            auto* pStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+            if (pStats && pStats->currentHealth > 0) {
+                pStats->isDead = false;
+            }
+        }
+        return; 
+    }
 
     // Update Timers
     if (m_SaveMessageTimer > 0.0f) m_SaveMessageTimer -= deltaTime;
@@ -738,21 +760,13 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
         m_FadeTimer -= deltaTime;
         if (m_FadeState == FadeState::FadingOut) {
             if (m_FadeTimer <= 0.0f) {
-                PixelsEngine::SaveSystem::LoadGame(m_PendingLoadFile, GetRegistry(), m_Player, *m_Level);
-                PixelsEngine::SaveSystem::LoadWorldFlags(m_PendingLoadFile, m_WorldFlags);
-                m_FadeState = FadeState::FadingIn;
-                m_FadeTimer = m_FadeDuration;
-                
-                // Transition state if loading from a menu or game over
-                if (m_State == GameState::MainMenu || m_State == GameState::GameOver) {
-                    m_State = GameState::Playing;
-                }
-
-                // Ensure player is not marked as dead after loading
-                auto* pStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
-                if (pStats && pStats->currentHealth > 0) {
-                    pStats->isDead = false;
-                }
+                // Start Threaded Load
+                m_State = GameState::Loading;
+                m_LoadFuture = std::async(std::launch::async, [this]() {
+                    PixelsEngine::SaveSystem::LoadGame(m_PendingLoadFile, GetRegistry(), m_Player, *m_Level);
+                    PixelsEngine::SaveSystem::LoadWorldFlags(m_PendingLoadFile, m_WorldFlags);
+                });
+                return;
             }
         } else if (m_FadeState == FadeState::FadingIn) {
             if (m_FadeTimer <= 0.0f) {
@@ -801,6 +815,8 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
             break;
         case GameState::Dialogue:
             HandleDialogueInput();
+            break;
+        case GameState::Loading:
             break;
         case GameState::Targeting:
             HandleTargetingInput();
@@ -951,7 +967,12 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
                             pathComp->isMoving = false; anim->currentFrameIndex = 0; 
                             if (interaction->dialogueText == "Gold Orb") {
                                 auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
-                                if (inv) { inv->AddItem("Gold Orb", 1); GetRegistry().RemoveComponent<PixelsEngine::SpriteComponent>(m_SelectedNPC); }
+                                if (inv) { 
+                                    inv->AddItem("Gold Orb", 1); 
+                                    // Use DestroyEntity to ensure it's removed from the world and save file
+                                    GetRegistry().DestroyEntity(m_SelectedNPC);
+                                    m_SelectedNPC = PixelsEngine::INVALID_ENTITY; 
+                                }
                             } else if (interaction->dialogueText == "Loot" || interaction->dialogueText == "Chest Key" || interaction->dialogueText == "Thieves' Tools") {
                                 // Loot Bag or Item Pickup
                                 auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
@@ -1115,6 +1136,16 @@ void PixelsGateGame::OnRender() {
         case GameState::Controls:
             RenderControls();
             break;
+        case GameState::Loading:
+        {
+            SDL_Renderer* renderer = GetRenderer();
+            int w, h; SDL_GetWindowSize(m_Window, &w, &h);
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+            SDL_Rect screen = {0, 0, w, h};
+            SDL_RenderFillRect(renderer, &screen);
+            m_TextRenderer->RenderTextCentered("Loading...", w/2, h/2, {255, 255, 255, 255});
+        }
+        break;
         case GameState::Paused:
         case GameState::Playing:
         case GameState::Combat:
@@ -2233,14 +2264,30 @@ void PixelsGateGame::HandleMainMenuInput() {
     HandleMenuNavigation(6, [&](int selection) {
         switch (selection) {
             case 0: // Continue
-                if (std::filesystem::exists("savegame.dat")) {
-                    PixelsEngine::SaveSystem::LoadWorldFlags("savegame.dat", m_WorldFlags);
-                    TriggerLoadTransition("savegame.dat");
-                } else if (std::filesystem::exists("quicksave.dat")) {
-                     PixelsEngine::SaveSystem::LoadWorldFlags("quicksave.dat", m_WorldFlags);
-                     TriggerLoadTransition("quicksave.dat");
+            {
+                std::string recentSave = "";
+                namespace fs = std::filesystem;
+                bool hasSave = fs::exists("savegame.dat");
+                bool hasQuick = fs::exists("quicksave.dat");
+
+                if (hasSave && hasQuick) {
+                    if (fs::last_write_time("quicksave.dat") > fs::last_write_time("savegame.dat")) {
+                        recentSave = "quicksave.dat";
+                    } else {
+                        recentSave = "savegame.dat";
+                    }
+                } else if (hasSave) {
+                    recentSave = "savegame.dat";
+                } else if (hasQuick) {
+                    recentSave = "quicksave.dat";
+                }
+
+                if (!recentSave.empty()) {
+                    PixelsEngine::SaveSystem::LoadWorldFlags(recentSave, m_WorldFlags);
+                    TriggerLoadTransition(recentSave);
                 }
                 break;
+            }
             case 1: // New Game
             {
                 // Reset player to default starting state
@@ -2673,7 +2720,7 @@ void PixelsGateGame::SpawnLootBag(float x, float y, const std::vector<PixelsEngi
     GetRegistry().AddComponent(bag, PixelsEngine::TransformComponent{ x, y });
     auto tex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/gold_orb.png"); // Reuse orb sprite for now
     GetRegistry().AddComponent(bag, PixelsEngine::SpriteComponent{ tex, {0, 0, 32, 32}, 16, 16 });
-    GetRegistry().AddComponent(bag, PixelsEngine::InteractionComponent{ "Loot", false, 0.0f });
+    GetRegistry().AddComponent(bag, PixelsEngine::InteractionComponent{ "Loot", "loot_bag", false, 0.0f });
     
     PixelsEngine::LootComponent loot;
     loot.drops = items;
