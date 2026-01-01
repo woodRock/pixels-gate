@@ -88,6 +88,22 @@ def draw_bread(d, s, c):
     d.line([16, 12, 16, 20], fill=(150, 100, 30), width=1)
     d.line([22, 12, 22, 20], fill=(150, 100, 30), width=1)
 
+def draw_raregem(d, s, c):
+    # Gem
+    d.polygon([(16, 4), (28, 12), (16, 28), (4, 12)], fill=(0, 255, 255))
+    d.polygon([(16, 8), (24, 14), (16, 24), (8, 14)], fill=(200, 255, 255))
+
+def draw_coins(d, s, c):
+    # Coins
+    d.ellipse([4, 16, 16, 28], fill=(255, 215, 0), outline=(150, 100, 0))
+    d.ellipse([12, 12, 24, 24], fill=(255, 215, 0), outline=(150, 100, 0))
+    d.ellipse([8, 4, 20, 16], fill=(255, 215, 0), outline=(150, 100, 0))
+
+def draw_boarmeat(d, s, c):
+    # Meat
+    d.ellipse([6, 10, 26, 24], fill=(150, 50, 50))
+    d.rectangle([20, 12, 28, 16], fill=(255, 255, 255)) # Bone
+
 def main():
     ensure_dir("assets/ui")
     
@@ -108,6 +124,9 @@ def main():
     # Items
     create_icon("assets/ui/item_potion.png", draw_potion)
     create_icon("assets/ui/item_bread.png", draw_bread)
+    create_icon("assets/ui/item_raregem.png", draw_raregem)
+    create_icon("assets/ui/item_coins.png", draw_coins)
+    create_icon("assets/ui/item_boarmeat.png", draw_boarmeat)
 
 if __name__ == "__main__":
     main()

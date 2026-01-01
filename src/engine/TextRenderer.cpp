@@ -50,6 +50,21 @@ namespace PixelsEngine {
         SDL_FreeSurface(surface);
     }
 
+    void TextRenderer::RenderTextRightAlignedSmall(const std::string& text, int rightX, int y, SDL_Color color) {
+        if (!m_SmallFont) return;
+
+        SDL_Surface* surface = TTF_RenderText_Solid(m_SmallFont, text.c_str(), color);
+        if (!surface) return;
+
+        SDL_Texture* texture = SDL_CreateTextureFromSurface(m_Renderer, surface);
+        if (texture) {
+            SDL_Rect destRect = { rightX - surface->w, y, surface->w, surface->h };
+            SDL_RenderCopy(m_Renderer, texture, NULL, &destRect);
+            SDL_DestroyTexture(texture);
+        }
+        SDL_FreeSurface(surface);
+    }
+
     int TextRenderer::RenderTextWrapped(const std::string& text, int x, int y, int wrapWidth, SDL_Color color) {
         if (!m_Font) return 0;
 

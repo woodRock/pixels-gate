@@ -10,7 +10,9 @@ namespace PixelsEngine {
         WeaponMelee,
         WeaponRanged,
         Armor,
-        Tool
+        Tool,
+        Scroll,
+        Ammo
     };
 
     struct Item {
