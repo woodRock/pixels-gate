@@ -1109,7 +1109,7 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
       m_FadeState = FadeState::FadingIn;
       m_FadeTimer = m_FadeDuration;
 
-      m_State = GameState::Playing;
+      m_State = m_LoadedIsCamp ? GameState::Camp : GameState::Playing;
 
       // Ensure player is not marked as dead after loading
       auto *pStats =
@@ -1234,8 +1234,12 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
         // Start Threaded Load
         m_State = GameState::Loading;
         m_LoadFuture = std::async(std::launch::async, [this]() {
+          float lx = 0.0f, ly = 0.0f;
           PixelsEngine::SaveSystem::LoadGame(m_PendingLoadFile, GetRegistry(),
-                                             m_Player, *m_Level);
+                                             m_Player, *m_Level, m_LoadedIsCamp,
+                                             lx, ly);
+          m_LastWorldPos.x = lx;
+          m_LastWorldPos.y = ly;
           PixelsEngine::SaveSystem::LoadWorldFlags(m_PendingLoadFile,
                                                    m_WorldFlags);
         });
@@ -2552,8 +2556,9 @@ void PixelsGateGame::HandleInput() {
 
   // Quick Save/Load
   if (PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_F5)) {
-    PixelsEngine::SaveSystem::SaveGame("quicksave.dat", GetRegistry(), m_Player,
-                                       *m_Level);
+    PixelsEngine::SaveSystem::SaveGame(
+        "quicksave.dat", GetRegistry(), m_Player, *m_Level,
+        m_State == GameState::Camp, m_LastWorldPos.x, m_LastWorldPos.y);
     PixelsEngine::SaveSystem::SaveWorldFlags("quicksave.dat", m_WorldFlags);
     ShowSaveMessage();
   }
@@ -3769,8 +3774,9 @@ void PixelsGateGame::HandlePauseMenuInput() {
           m_State = GameState::Playing;
           break;
         case 1: // Save
-          PixelsEngine::SaveSystem::SaveGame("savegame.dat", GetRegistry(),
-                                             m_Player, *m_Level);
+          PixelsEngine::SaveSystem::SaveGame(
+              "savegame.dat", GetRegistry(), m_Player, *m_Level,
+              m_State == GameState::Camp, m_LastWorldPos.x, m_LastWorldPos.y);
           ShowSaveMessage();
           break;
         case 2: // Load
@@ -5567,7 +5573,7 @@ void PixelsGateGame::RenderRestMenu() {
   std::string longRestStr =
       "Long Rest (Supplies: " + std::to_string(supplies) + "/40)";
   std::string campStr =
-      (m_State == GameState::Camp) ? "Leave Camp" : "Go To Camp";
+      (m_ReturnState == GameState::Camp) ? "Leave Camp" : "Go To Camp";
 
   std::string options[] = {shortRestStr, longRestStr, campStr, "Back"};
   int y = box.y + 80;
@@ -5686,7 +5692,7 @@ void PixelsGateGame::HandleRestMenuInput() {
                               {255, 0, 0, 255});
           }
         } else if (selection == 2) { // Go To Camp / Leave Camp
-          if (m_State == GameState::Camp) {
+          if (m_ReturnState == GameState::Camp) {
             // Leave Camp
             if (trans) {
               trans->x = m_LastWorldPos.x;
@@ -5704,12 +5710,6 @@ void PixelsGateGame::HandleRestMenuInput() {
             }
             m_State = GameState::Camp;
           }
-          m_State = (selection == 2 && m_State == GameState::Camp)
-                        ? GameState::Camp
-                        : GameState::Playing;
-          // Wait, logic above handles state. selection logic here should just
-          // close menu. But if we toggle state, we must be careful. Let's rely
-          // on the block above.
         } else {
           m_State = m_ReturnState;
         }

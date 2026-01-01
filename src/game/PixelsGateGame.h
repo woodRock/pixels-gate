@@ -139,6 +139,7 @@ private:
   };
   FadeState m_FadeState = FadeState::None;
   std::string m_PendingLoadFile;
+  bool m_LoadedIsCamp = false;
   std::future<void> m_LoadFuture;
 
   // Menu Renderers

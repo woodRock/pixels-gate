@@ -14,13 +14,18 @@ namespace PixelsEngine {
 class SaveSystem {
 public:
   static void SaveGame(const std::string &filename, Registry &registry,
-                       Entity player, const Tilemap &map) {
+                       Entity player, const Tilemap &map, bool isCamp = false,
+                       float lastX = 0.0f, float lastY = 0.0f) {
     std::cout << "Starting SaveGame to " << filename << std::endl;
     std::ofstream file(filename);
     if (!file.is_open()) {
       std::cerr << "Failed to open save file: " << filename << std::endl;
       return;
     }
+
+    // 0. Game State (New)
+    file << "[GAME_STATE]\n";
+    file << (isCamp ? 1 : 0) << " " << lastX << " " << lastY << "\n";
 
     // 1. Player Transform
     std::cout << "Saving Player Transform..." << std::endl;
@@ -223,18 +228,27 @@ public:
   }
 
   static void LoadGame(const std::string &filename, Registry &registry,
-                       Entity player, Tilemap &map) {
+                       Entity player, Tilemap &map, bool &isCamp, float &lastX,
+                       float &lastY) {
     std::ifstream file(filename);
     if (!file.is_open()) {
       std::cerr << "Failed to open save file: " << filename << std::endl;
       return;
     }
 
+    isCamp = false;
+    lastX = 0.0f;
+    lastY = 0.0f;
+
     bool worldEntitiesFound = false;
 
     std::string line;
     while (std::getline(file, line)) {
-      if (line == "[PLAYER_TRANSFORM]") {
+      if (line == "[GAME_STATE]") {
+        int camp;
+        file >> camp >> lastX >> lastY;
+        isCamp = (camp == 1);
+      } else if (line == "[PLAYER_TRANSFORM]") {
         if (auto *trans = registry.GetComponent<TransformComponent>(player)) {
           file >> trans->x >> trans->y;
         }
