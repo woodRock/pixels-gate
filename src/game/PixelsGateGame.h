@@ -198,4 +198,7 @@ private:
     // Inventory UI Helpers
     void HandleInventoryInput();
     void RenderInventoryItem(const PixelsEngine::Item& item, int x, int y);
+    void UseItem(const std::string& itemName);
+
+    std::string m_HotbarItems[6];
 };

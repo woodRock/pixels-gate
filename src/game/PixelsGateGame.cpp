@@ -98,6 +98,14 @@ void PixelsGateGame::OnStart() {
     inv.AddItem("Shortbow", 1, PixelsEngine::ItemType::WeaponRanged, 8, "assets/bow.png", 120);
     inv.AddItem("Thieves' Tools", 1, PixelsEngine::ItemType::Tool, 0, "assets/thieves_tools.png", 25);
     
+    // Initialize Hotbar
+    m_HotbarItems[0] = "Potion";
+    m_HotbarItems[1] = "Bread";
+    m_HotbarItems[2] = "Sword";
+    m_HotbarItems[3] = "";
+    m_HotbarItems[4] = "";
+    m_HotbarItems[5] = "";
+
     std::string playerSheet = "assets/Pixel Art Top Down - Basic v1.2.2/Texture/TX Player.png";
     auto playerTexture = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), playerSheet);
     
@@ -1866,20 +1874,8 @@ void PixelsGateGame::CheckUIInteraction(int mx, int my) {
 
     // Items Grid (320)
     if (CheckGridClick(320, 6, [&](int i) {
-        // Potions etc
-        auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
-        auto* stats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
-        if (i == 0 && inv && stats) { // Potion
-            for (auto it = inv->items.begin(); it != inv->items.end(); ++it) {
-                if (it->name == "Potion") {
-                    stats->currentHealth = std::min(stats->maxHealth, stats->currentHealth + 20);
-                    it->quantity--;
-                    if (it->quantity <= 0) inv->items.erase(it);
-                    if (m_State == GameState::Combat) m_BonusActionsLeft--;
-                    SpawnFloatingText(0,0,"+20 HP",{0,255,0,255});
-                    break;
-                }
-            }
+        if (!m_HotbarItems[i].empty()) {
+            UseItem(m_HotbarItems[i]);
         }
     })) return;
 
@@ -2130,7 +2126,7 @@ void PixelsGateGame::RenderHUD() {
     SDL_SetRenderDrawColor(renderer, 40, 40, 40, 255); SDL_RenderFillRect(renderer, &hudRect);
     SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255); SDL_RenderDrawRect(renderer, &hudRect);
 
-    auto DrawGrid = [&](const std::string& title, int startX, const std::vector<std::string>& labels, const std::vector<std::string>& keys, int count) {
+    auto DrawGrid = [&](const std::string& title, int startX, const std::vector<std::string>& labels, const std::vector<std::string>& keys, const std::vector<std::string>& icons, int count) {
         m_TextRenderer->RenderText(title, startX, winH - barH + 5, {200, 200, 200, 255});
         for (int i = 0; i < count; ++i) {
             int row = i / 3;
@@ -2139,7 +2135,16 @@ void PixelsGateGame::RenderHUD() {
             SDL_SetRenderDrawColor(renderer, 80, 80, 80, 255); SDL_RenderFillRect(renderer, &btn);
             SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255); SDL_RenderDrawRect(renderer, &btn);
             
-            if (i < (int)labels.size() && !labels[i].empty()) {
+            bool iconDrawn = false;
+            if (i < (int)icons.size() && !icons[i].empty()) {
+                auto tex = PixelsEngine::TextureManager::LoadTexture(renderer, icons[i]);
+                if (tex) {
+                    tex->Render(btn.x + 8, btn.y + 3, 24, 24);
+                    iconDrawn = true;
+                }
+            }
+            
+            if (!iconDrawn && i < (int)labels.size() && !labels[i].empty()) {
                 m_TextRenderer->RenderTextCentered(labels[i], btn.x + 20, btn.y + 15, {255, 255, 255, 255});
             }
 
@@ -2168,15 +2173,55 @@ void PixelsGateGame::RenderHUD() {
     // Actions Grid
     std::vector<std::string> actions = { "Atk", "Jmp", "Snk", "Shv", "Dsh", "End" };
     std::vector<std::string> actionKeys = { "SHT/F", "Z", "C", "V", "B", "SPC" };
-    DrawGrid("ACTIONS", 20, actions, actionKeys, 6);
+    std::vector<std::string> actionIcons = { 
+        "assets/ui/action_attack.png", "assets/ui/action_jump.png", "assets/ui/action_sneak.png", 
+        "assets/ui/action_shove.png", "assets/ui/action_dash.png", "assets/ui/action_endturn.png" 
+    };
+    DrawGrid("ACTIONS", 20, actions, actionKeys, actionIcons, 6);
 
     // Spells Grid (K key opens menu, spells cast via click for now)
     std::vector<std::string> spells = { "Fir", "Hel", "Mis", "Shd", "", "" };
-    DrawGrid("SPELLS", 170, spells, {}, 6);
+    std::vector<std::string> spellIcons = { 
+        "assets/ui/spell_fireball.png", "assets/ui/spell_heal.png", "assets/ui/spell_magicmissile.png", "assets/ui/spell_shield.png", "", "" 
+    };
+    DrawGrid("SPELLS", 170, spells, {}, spellIcons, 6);
 
-    // Items Grid
-    std::vector<std::string> items = { "Pot", "Brd", "", "", "", "" };
-    DrawGrid("ITEMS", 320, items, {}, 6);
+    // Items Grid (Hotbar)
+    auto* playerInv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+    std::vector<std::string> hotbarLabels;
+    std::vector<std::string> hotbarIcons;
+    for (int i = 0; i < 6; ++i) {
+        std::string name = m_HotbarItems[i];
+        std::string label = "";
+        std::string icon = "";
+        if (!name.empty()) {
+            // Find item in inventory to get icon and count
+            PixelsEngine::Item* itemObj = nullptr;
+            if (playerInv) {
+                for (auto& it : playerInv->items) {
+                    if (it.name == name) { itemObj = &it; break; }
+                }
+            }
+            
+            if (itemObj) {
+                label = std::to_string(itemObj->quantity);
+                icon = itemObj->iconPath;
+                // Fallback icons if path is empty but we have some predefined ones
+                if (icon.empty()) {
+                    if (name == "Potion") icon = "assets/ui/item_potion.png";
+                    else if (name == "Bread") icon = "assets/ui/item_bread.png";
+                }
+            } else {
+                label = "0"; // Out of stock
+                // Still show icon but darkened? (simplified: just show icon if we know it)
+                if (name == "Potion") icon = "assets/ui/item_potion.png";
+                else if (name == "Bread") icon = "assets/ui/item_bread.png";
+            }
+        }
+        hotbarLabels.push_back(label);
+        hotbarIcons.push_back(icon);
+    }
+    DrawGrid("ITEMS", 320, hotbarLabels, {}, hotbarIcons, 6);
 
     // System Buttons (Map, Chr, Opt)
     const char* sysLabels[] = { "Map", "Chr", "Opt", "Inv" };
@@ -2315,6 +2360,13 @@ void PixelsGateGame::HandleMainMenuInput() {
                     inv->AddItem("Leather Armor", 1, PixelsEngine::ItemType::Armor, 5, "assets/armor.png");
                     inv->AddItem("Shortbow", 1, PixelsEngine::ItemType::WeaponRanged, 8, "assets/bow.png");
                     inv->AddItem("Thieves' Tools", 1, PixelsEngine::ItemType::Tool, 0, "assets/thieves_tools.png", 25);
+
+                    m_HotbarItems[0] = "Potion";
+                    m_HotbarItems[1] = "Bread";
+                    m_HotbarItems[2] = "Sword";
+                    m_HotbarItems[3] = "";
+                    m_HotbarItems[4] = "";
+                    m_HotbarItems[5] = "";
                 }
 
                 // Reset Dialogues
@@ -2731,6 +2783,76 @@ void PixelsGateGame::SpawnLootBag(float x, float y, const std::vector<PixelsEngi
     PixelsEngine::LootComponent loot;
     loot.drops = items;
     GetRegistry().AddComponent(bag, loot);
+}
+
+void PixelsGateGame::UseItem(const std::string& itemName) {
+    auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+    auto* stats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+    auto* trans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
+    if (!inv || !stats || !trans) return;
+
+    // Find the item
+    PixelsEngine::Item* item = nullptr;
+    size_t itemIndex = 0;
+    for (size_t i = 0; i < inv->items.size(); ++i) {
+        if (inv->items[i].name == itemName) {
+            item = &inv->items[i];
+            itemIndex = i;
+            break;
+        }
+    }
+
+    if (!item) {
+        SpawnFloatingText(trans->x, trans->y - 1.0f, "Out of " + itemName, {200, 200, 200, 255});
+        return;
+    }
+
+    if (m_State == GameState::Combat && m_BonusActionsLeft <= 0) {
+        SpawnFloatingText(trans->x, trans->y - 1.0f, "No Bonus Action!", {255, 0, 0, 255});
+        return;
+    }
+
+    bool used = false;
+    if (item->type == PixelsEngine::ItemType::Consumable) {
+        if (itemName == "Potion") {
+            stats->currentHealth = std::min(stats->maxHealth, stats->currentHealth + 20);
+            SpawnFloatingText(trans->x, trans->y, "+20 HP", {0, 255, 0, 255});
+            used = true;
+        } else if (itemName == "Bread") {
+            stats->currentHealth = std::min(stats->maxHealth, stats->currentHealth + 5);
+            SpawnFloatingText(trans->x, trans->y, "+5 HP", {0, 255, 0, 255});
+            used = true;
+        }
+        
+        if (used) {
+            item->quantity--;
+            if (item->quantity <= 0) inv->items.erase(inv->items.begin() + itemIndex);
+        }
+    } else if (item->type == PixelsEngine::ItemType::WeaponMelee || item->type == PixelsEngine::ItemType::WeaponRanged || item->type == PixelsEngine::ItemType::Armor) {
+        // Toggle Equipment
+        PixelsEngine::Item* slot = nullptr;
+        if (item->type == PixelsEngine::ItemType::WeaponMelee) slot = &inv->equippedMelee;
+        else if (item->type == PixelsEngine::ItemType::WeaponRanged) slot = &inv->equippedRanged;
+        else if (item->type == PixelsEngine::ItemType::Armor) slot = &inv->equippedArmor;
+
+        if (slot) {
+            PixelsEngine::Item oldItem = *slot;
+            *slot = *item;
+            slot->quantity = 1;
+            
+            item->quantity--;
+            if (item->quantity <= 0) inv->items.erase(inv->items.begin() + itemIndex);
+            
+            if (!oldItem.IsEmpty()) inv->AddItemObject(oldItem);
+            
+            SpawnFloatingText(trans->x, trans->y, "Equipped " + itemName, {200, 255, 200, 255});
+            used = true;
+        }
+    }
+
+    if (used && m_State == GameState::Combat) {
+        m_BonusActionsLeft--;
+    }
 }
 
 void PixelsGateGame::HandleInventoryInput() {
