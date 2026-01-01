@@ -22,6 +22,7 @@ public:
   ~Tilemap() = default;
 
   void Render(const Camera &camera) const;
+  void RenderTile(int x, int y, const Camera &camera) const;
   void SetTile(int x, int y, int tileIndex);
   int GetTile(int x, int y) const;
   bool IsWalkable(int x, int y) const;
@@ -43,6 +44,7 @@ public:
   void ScreenToGrid(int screenX, int screenY, int &gridX, int &gridY) const;
 
 private:
+  int GetTileHeight(int x, int y) const;
   std::unique_ptr<Texture> m_Tileset;
   int m_TileWidth;
   int m_TileHeight;

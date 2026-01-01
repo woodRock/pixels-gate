@@ -194,7 +194,7 @@ void PixelsGateGame::OnStart() {
 
   GetRegistry().AddComponent(
       m_Player,
-      PixelsEngine::SpriteComponent{playerTexture, {0, 0, 32, 32}, 16, 30});
+      PixelsEngine::SpriteComponent{playerTexture, {0, 0, 32, 32}, 16, 32});
 
   auto &anim =
       GetRegistry().AddComponent(m_Player, PixelsEngine::AnimationComponent{});
@@ -220,335 +220,336 @@ void PixelsGateGame::OnStart() {
   CreateBoar(5.0f, 32.0f);
 
   // 4. NPCs
-  auto npc1 = GetRegistry().CreateEntity();
-  GetRegistry().AddComponent(
-      npc1, PixelsEngine::TransformComponent{19.0f, 19.0f}); // In Inn
-  GetRegistry().AddComponent(npc1, PixelsEngine::SpriteComponent{
-                                       innkeeperTex, {0, 0, 32, 32}, 16, 30});
-  GetRegistry().AddComponent(
-      npc1, PixelsEngine::InteractionComponent{"Innkeeper", "npc_innkeeper",
-                                               false, 0.0f});
-  GetRegistry().AddComponent(npc1,
-                             PixelsEngine::StatsComponent{50, 50, 5, false});
-  GetRegistry().AddComponent(
-      npc1, PixelsEngine::QuestComponent{"FetchOrb", 0, "Gold Orb"});
-  GetRegistry().AddComponent(
-      npc1, PixelsEngine::TagComponent{PixelsEngine::EntityTag::Quest});
-  GetRegistry().AddComponent(npc1, PixelsEngine::AIComponent{8.0f, 1.5f, 2.0f,
-                                                             0.0f, false, 0.0f,
-                                                             90.0f, 90.0f});
-
-  // --- Build Complex Dialogue Tree for Innkeeper ---
-  PixelsEngine::DialogueTree innTree;
-  innTree.currentEntityName = "Innkeeper";
-  innTree.currentNodeId = "start";
-
-  PixelsEngine::DialogueNode startNode;
-  startNode.id = "start";
-  startNode.npcText =
-      "Welcome to the Pixel Inn! What can I do for you today, traveler?";
-
-  // Work Option: Hidden if work topic is closed (accepted or refused)
-  startNode.options.push_back(PixelsEngine::DialogueOption(
-      "I'm looking for work. [Intelligence DC 10]", "work_check",
-      "Intelligence", 10, "work_success", "work_fail",
-      PixelsEngine::DialogueAction::None, "", "Inn_Work_Topic_Closed", false));
-
-  // Turn In Option: Visible if Quest Active, Not Done, and Has Item
-  startNode.options.push_back(PixelsEngine::DialogueOption(
-      "I found the Gold Orb.", "quest_complete", "None", 0, "", "",
-      PixelsEngine::DialogueAction::CompleteQuest, "Quest_FetchOrb_Done",
-      "Quest_FetchOrb_Done", true, "Quest_FetchOrb_Active", "Gold Orb"));
-
-  // Post-Quest Chatter
-  startNode.options.push_back(PixelsEngine::DialogueOption(
-      "How are things?", "quest_chat", "None", 0, "", "",
-      PixelsEngine::DialogueAction::None, "", "", true, "Quest_FetchOrb_Done"));
-
-  // Standard Options
-  startNode.options.push_back(PixelsEngine::DialogueOption(
-      "Can I get a discount on a room? [Charisma DC 12]", "room_check",
-      "Charisma", 12, "discount_success", "discount_fail",
-      PixelsEngine::DialogueAction::None, "", "discount_active", false));
-  startNode.options.push_back(PixelsEngine::DialogueOption(
-      "I don't like your face. [Attack]", "end", "None", 0, "", "",
-      PixelsEngine::DialogueAction::StartCombat));
-  startNode.options.push_back(PixelsEngine::DialogueOption(
-      "Just looking around. [End]", "end", "None", 0, "", "",
-      PixelsEngine::DialogueAction::EndConversation));
-  innTree.nodes["start"] = startNode;
-
-  PixelsEngine::DialogueNode workSuccess;
-  workSuccess.id = "work_success";
-  workSuccess.npcText = "A sharp eye! Indeed, the local boars have been "
-                        "raiding our stores. Hunt them... wait, actually, I "
-                        "lost my lucky Gold Orb in the woods. Find it for me?";
-  // Start Quest: Sets Active flag AND Work Topic Closed flag (chained via
-  // logic? No, DialogueAction::StartQuest sets ONE flag. I need to set
-  // "Inn_Work_Topic_Closed" manually or map "Quest_FetchOrb_Active" to it?
-  // Actually, I can just use "Quest_FetchOrb_Active" as the exclude flag for
-  // the start option! But what if I refuse? Let's rely on
-  // "Quest_FetchOrb_Active" for acceptance. And "refused_work" for refusal. I
-  // can't exclude on TWO flags. Workaround: "I'll get right on it." sets
-  // "Quest_FetchOrb_Active". AND we can set "Inn_Work_Topic_Closed" via
-  // `actionParam`? No, param is used for the flag name. I will simplify: If
-  // "Quest_FetchOrb_Active" is true, hide it. If "refused_work" is true, hide
-  // it. I can duplicate the option with different exclude flags? No, that shows
-  // two. I will use "Inn_Work_Topic_Closed" as the unified flag. So StartQuest
-  // needs to set "Quest_FetchOrb_Active". And I also need to set
-  // "Inn_Work_Topic_Closed". I can't do two actions. I'll make the "I'm looking
-  // for work" check exclude on "Quest_FetchOrb_Active". If I refuse, I just
-  // won't set "Quest_FetchOrb_Active" and it might show again? That's fine. If
-  // I refuse, maybe I can ask again later. That's actually better game design
-  // (retry). So I will exclude on "Quest_FetchOrb_Active" AND
-  // "Quest_FetchOrb_Done". Wait, I still have the single string limit.
-  // "Quest_FetchOrb_Active" implies I have the job.
-  // "Quest_FetchOrb_Done" implies I finished.
-  // If I finish, "Active" stays true in my logic? Yes.
-  // So excluding "Quest_FetchOrb_Active" covers both phases!
-  // So "I'm looking for work" is hidden if "Quest_FetchOrb_Active" is set.
-
-  // Corrected Start Node logic:
-  // Exclude: "Quest_FetchOrb_Active"
-
-  // Options in workSuccess:
-  // "I'll do it." -> Action: StartQuest, Param: "Quest_FetchOrb_Active".
-  workSuccess.options.push_back(PixelsEngine::DialogueOption(
-      "I'll find it.", "end", "None", 0, "", "",
-      PixelsEngine::DialogueAction::StartQuest, "Quest_FetchOrb_Active"));
-  innTree.nodes["work_success"] = workSuccess;
-
-  PixelsEngine::DialogueNode workFail;
-  workFail.id = "work_fail";
-  workFail.npcText = "You look a bit... slow. I don't have anything for "
-                     "someone who can't tell a boar from a bush.";
-  workFail.options.push_back(PixelsEngine::DialogueOption(
-      "Hmph.", "end", "None", 0, "", "",
-      PixelsEngine::DialogueAction::EndConversation));
-  innTree.nodes["work_fail"] = workFail;
-
-  PixelsEngine::DialogueNode questComplete;
-  questComplete.id = "quest_complete";
-  questComplete.npcText = "My Orb! You found it! Thank you so much.";
-  questComplete.options.push_back(PixelsEngine::DialogueOption(
-      "Happy to help.", "end", "None", 0, "", "",
-      PixelsEngine::DialogueAction::EndConversation));
-  innTree.nodes["quest_complete"] = questComplete;
-
-  PixelsEngine::DialogueNode questChat;
-  questChat.id = "quest_chat";
-  questChat.npcText = "Business is booming thanks to you!";
-  questChat.options.push_back(PixelsEngine::DialogueOption(
-      "Glad to hear it.", "end", "None", 0, "", "",
-      PixelsEngine::DialogueAction::EndConversation));
-  innTree.nodes["quest_chat"] = questChat;
-
-  PixelsEngine::DialogueNode discountSuccess;
-  discountSuccess.id = "discount_success";
-  discountSuccess.npcText =
-      "You have a silver tongue! Fine, half price for you tonight.";
-  discountSuccess.options.push_back(PixelsEngine::DialogueOption(
-      "Much appreciated.", "end", "None", 0, "", "",
-      PixelsEngine::DialogueAction::EndConversation, "discount_active"));
-  innTree.nodes["discount_success"] = discountSuccess;
-
-  PixelsEngine::DialogueNode discountFail;
-  discountFail.id = "discount_fail";
-  discountFail.npcText = "Nice try, but I have a business to run. Full price.";
-  discountFail.options.push_back(PixelsEngine::DialogueOption(
-      "Worth a shot. [End]", "end", "None", 0, "", "",
-      PixelsEngine::DialogueAction::EndConversation));
-  innTree.nodes["discount_fail"] = discountFail;
-
-  PixelsEngine::DialogueNode
-      refusedWork; // Not used anymore if we rely on repeatable=false, but good
-                   // to keep structure
-  refusedWork.id = "refused_work";
-  refusedWork.npcText = "Suit yourself.";
-  refusedWork.options.push_back(PixelsEngine::DialogueOption(
-      "[End]", "end", "None", 0, "", "",
-      PixelsEngine::DialogueAction::EndConversation));
-  innTree.nodes["refused_work"] = refusedWork;
-
-  GetRegistry().AddComponent(
-      npc1, PixelsEngine::DialogueComponent{
-                std::make_shared<PixelsEngine::DialogueTree>(innTree)});
-
-  auto &n1Inv =
-      GetRegistry().AddComponent(npc1, PixelsEngine::InventoryComponent{});
-  n1Inv.AddItem("Coins", 100);
-  n1Inv.AddItem("Potion", 1, PixelsEngine::ItemType::Consumable, 0, "assets/ui/item_potion.png", 50);
-
-  auto npc2 = GetRegistry().CreateEntity();
-  GetRegistry().AddComponent(npc2,
-                             PixelsEngine::TransformComponent{20.0f, 25.0f});
-  GetRegistry().AddComponent(npc2, PixelsEngine::SpriteComponent{
-                                       guardianTex, {0, 0, 32, 32}, 16, 30});
-  GetRegistry().AddComponent(
-      npc2, PixelsEngine::InteractionComponent{"Guardian", "npc_guardian",
-                                               false, 0.0f});
-  GetRegistry().AddComponent(npc2,
-                             PixelsEngine::StatsComponent{50, 50, 5, false});
-  GetRegistry().AddComponent(
-      npc2, PixelsEngine::QuestComponent{"HuntBoars", 0, "Boar Meat"});
-  GetRegistry().AddComponent(
-      npc2, PixelsEngine::TagComponent{PixelsEngine::EntityTag::Quest});
-  GetRegistry().AddComponent(npc2, PixelsEngine::AIComponent{8.0f, 1.5f, 2.0f,
-                                                             0.0f, false, 0.0f,
-                                                             270.0f, 90.0f});
-
-  PixelsEngine::DialogueTree guardTree;
-  guardTree.currentEntityName = "Guardian";
-  guardTree.currentNodeId = "start";
-  PixelsEngine::DialogueNode gStart;
-  gStart.id = "start";
-  gStart.npcText = "The road ahead is dangerous. You'll need more than that "
-                   "look on your face to survive.";
-  gStart.options.push_back(PixelsEngine::DialogueOption(
-      "I can handle myself. [Intimidate DC 10]", "g_check", "Charisma", 10,
-      "g_pass", "g_fail", PixelsEngine::DialogueAction::None, "", "", false));
-  gStart.options.push_back(PixelsEngine::DialogueOption(
-      "What's out there?", "g_info", "None", 0, "", "",
-      PixelsEngine::DialogueAction::None, "", "", false)); // Lore
-
-  // Turn In
-  gStart.options.push_back(PixelsEngine::DialogueOption(
-      "I have the Boar Meat.", "g_done", "None", 0, "", "",
-      PixelsEngine::DialogueAction::CompleteQuest, "Quest_HuntBoars_Done",
-      "Quest_HuntBoars_Done", true, "Quest_HuntBoars_Active", "Boar Meat"));
-
-  // Post-Quest
-  gStart.options.push_back(PixelsEngine::DialogueOption(
-      "The boars are thinning out.", "g_chat", "None", 0, "", "",
-      PixelsEngine::DialogueAction::None, "", "", true,
-      "Quest_HuntBoars_Done"));
-
-  gStart.options.push_back(
-      PixelsEngine::DialogueOption("[Attack]", "end", "None", 0, "", "",
-                                   PixelsEngine::DialogueAction::StartCombat));
-  gStart.options.push_back(PixelsEngine::DialogueOption(
-      "Just passing through. [End]", "end", "None", 0, "", "",
-      PixelsEngine::DialogueAction::EndConversation));
-  guardTree.nodes["start"] = gStart;
-
-  PixelsEngine::DialogueNode gPass;
-  gPass.id = "g_pass";
-  gPass.npcText = "Fine, go die then. Don't say I didn't warn you.";
-  gPass.options.push_back(PixelsEngine::DialogueOption(
-      "[End]", "end", "None", 0, "", "",
-      PixelsEngine::DialogueAction::EndConversation));
-  guardTree.nodes["g_pass"] = gPass;
-
-  PixelsEngine::DialogueNode gFail;
-  gFail.id = "g_fail";
-  gFail.npcText =
-      "Ha! You're shaking like a leaf. Get inside before a boar eats you.";
-  gFail.options.push_back(PixelsEngine::DialogueOption(
-      "[End]", "end", "None", 0, "", "",
-      PixelsEngine::DialogueAction::EndConversation));
-  guardTree.nodes["g_fail"] = gFail;
-
-  PixelsEngine::DialogueNode gInfo;
-  gInfo.id = "g_info";
-  gInfo.npcText =
-      "Boars. Big ones. And worse. Stay on the path if you value your hide.";
-  gInfo.options.push_back(PixelsEngine::DialogueOption(
-      "I can help hunt them.", "end", "None", 0, "", "",
-      PixelsEngine::DialogueAction::StartQuest, "Quest_HuntBoars_Active"));
-  gInfo.options.push_back(PixelsEngine::DialogueOption(
-      "Thanks for the warning. [End]", "end", "None", 0, "", "",
-      PixelsEngine::DialogueAction::EndConversation));
-  guardTree.nodes["g_info"] = gInfo;
-
-  PixelsEngine::DialogueNode gDone;
-  gDone.id = "g_done";
-  gDone.npcText =
-      "You actually killed one? Hmph. Maybe you're not useless after all.";
-  gDone.options.push_back(PixelsEngine::DialogueOption(
-      "Told you.", "end", "None", 0, "", "",
-      PixelsEngine::DialogueAction::EndConversation));
-  guardTree.nodes["g_done"] = gDone;
-
-  PixelsEngine::DialogueNode gChat;
-  gChat.id = "g_chat";
-  gChat.npcText = "Keep up the good work.";
-  gChat.options.push_back(PixelsEngine::DialogueOption(
-      "[End]", "end", "None", 0, "", "",
-      PixelsEngine::DialogueAction::EndConversation));
-  guardTree.nodes["g_chat"] = gChat;
-
-  GetRegistry().AddComponent(
-      npc2, PixelsEngine::DialogueComponent{
-                std::make_shared<PixelsEngine::DialogueTree>(guardTree)});
-
-  auto &n2Inv =
-      GetRegistry().AddComponent(npc2, PixelsEngine::InventoryComponent{});
-  n2Inv.AddItem("Coins", 50);
-  n2Inv.AddItem("Bread", 5, PixelsEngine::ItemType::Consumable, 0, "", 10);
-
-  // Add a Companion
-  auto comp = GetRegistry().CreateEntity();
-  GetRegistry().AddComponent(
-      comp, PixelsEngine::TransformComponent{21.0f, 21.0f}); // In Inn
-  GetRegistry().AddComponent(comp, PixelsEngine::SpriteComponent{
-                                       companionTex, {0, 0, 32, 32}, 16, 30});
-  GetRegistry().AddComponent(
-      comp, PixelsEngine::InteractionComponent{"Traveler", "npc_traveler",
-                                               false, 0.0f});
-  GetRegistry().AddComponent(
-      comp, PixelsEngine::TagComponent{PixelsEngine::EntityTag::Companion});
-  GetRegistry().AddComponent(comp,
-                             PixelsEngine::StatsComponent{80, 80, 8, false});
-  GetRegistry().AddComponent(
-      comp, PixelsEngine::AIComponent{10.0f, 1.5f, 2.0f, 0.0f, false});
-
-  PixelsEngine::DialogueTree compTree;
-  compTree.currentEntityName = "Traveler";
-  compTree.currentNodeId = "start";
-  PixelsEngine::DialogueNode cStart;
-  cStart.id = "start";
-  cStart.npcText = "Quiet night, isn't it? Thinking of heading out?";
-  cStart.options.push_back(PixelsEngine::DialogueOption(
-      "Who are you?", "c_info", "None", 0, "", "",
-      PixelsEngine::DialogueAction::None, "", "", false));
-  cStart.options.push_back(PixelsEngine::DialogueOption(
-      "[End]", "end", "None", 0, "", "",
-      PixelsEngine::DialogueAction::EndConversation));
-  compTree.nodes["start"] = cStart;
-
-  PixelsEngine::DialogueNode cInfo;
-  cInfo.id = "c_info";
-  cInfo.npcText =
-      "Just a wanderer, like you. I've seen things you wouldn't believe.";
-  cInfo.options.push_back(PixelsEngine::DialogueOption(
-      "Interesting. [End]", "end", "None", 0, "", "",
-      PixelsEngine::DialogueAction::EndConversation));
-  compTree.nodes["c_info"] = cInfo;
-
-  GetRegistry().AddComponent(
-      comp, PixelsEngine::DialogueComponent{
-                std::make_shared<PixelsEngine::DialogueTree>(compTree)});
-
-  auto &cInv =
-      GetRegistry().AddComponent(comp, PixelsEngine::InventoryComponent{});
-  cInv.AddItem("Coins", 10);
-
-  // Add a Trader
-  auto trader = GetRegistry().CreateEntity();
-  GetRegistry().AddComponent(
-      trader, PixelsEngine::TransformComponent{18.0f, 21.0f}); // In Inn
-  GetRegistry().AddComponent(
-      trader,
-      PixelsEngine::SpriteComponent{traderTex, {0, 0, 32, 32}, 16, 30});
-  GetRegistry().AddComponent(trader, PixelsEngine::InteractionComponent{
-                                         "Trader", "npc_trader", false, 0.0f});
-  GetRegistry().AddComponent(
-      trader, PixelsEngine::TagComponent{PixelsEngine::EntityTag::Trader});
-  GetRegistry().AddComponent(trader,
-                             PixelsEngine::StatsComponent{100, 100, 10, false});
-  GetRegistry().AddComponent(
-      trader, PixelsEngine::AIComponent{8.0f, 1.5f, 2.0f, 0.0f, false, 0.0f,
-                                        0.0f, 120.0f});
+    auto npc1 = GetRegistry().CreateEntity();
+    GetRegistry().AddComponent(
+        npc1, PixelsEngine::TransformComponent{19.0f, 19.0f}); // In Inn
+    GetRegistry().AddComponent(npc1, PixelsEngine::SpriteComponent{
+                                         innkeeperTex, {0, 0, 32, 32}, 16, 32});
+    GetRegistry().AddComponent(
+        npc1, PixelsEngine::InteractionComponent{"Innkeeper", "npc_innkeeper",
+                                                 false, 0.0f});
+    GetRegistry().AddComponent(npc1,
+                               PixelsEngine::StatsComponent{50, 50, 5, false});
+    GetRegistry().AddComponent(
+        npc1, PixelsEngine::QuestComponent{"FetchOrb", 0, "Gold Orb"});
+    GetRegistry().AddComponent(
+        npc1, PixelsEngine::TagComponent{PixelsEngine::EntityTag::Quest});
+    GetRegistry().AddComponent(npc1, PixelsEngine::AIComponent{8.0f, 1.5f, 2.0f,
+                                                               0.0f, false, 0.0f,
+                                                               90.0f, 90.0f});
+  
+    // --- Build Complex Dialogue Tree for Innkeeper ---
+    PixelsEngine::DialogueTree innTree;
+    innTree.currentEntityName = "Innkeeper";
+    innTree.currentNodeId = "start";
+  
+    PixelsEngine::DialogueNode startNode;
+    startNode.id = "start";
+    startNode.npcText =
+        "Welcome to the Pixel Inn! What can I do for you today, traveler?";
+  
+    // Work Option: Hidden if work topic is closed (accepted or refused)
+    startNode.options.push_back(PixelsEngine::DialogueOption(
+        "I'm looking for work. [Intelligence DC 10]", "work_check",
+        "Intelligence", 10, "work_success", "work_fail",
+        PixelsEngine::DialogueAction::None, "", "Inn_Work_Topic_Closed", false));
+  
+    // Turn In Option: Visible if Quest Active, Not Done, and Has Item
+    startNode.options.push_back(PixelsEngine::DialogueOption(
+        "I found the Gold Orb.", "quest_complete", "None", 0, "", "",
+        PixelsEngine::DialogueAction::CompleteQuest, "Quest_FetchOrb_Done",
+        "Quest_FetchOrb_Done", true, "Quest_FetchOrb_Active", "Gold Orb"));
+  
+    // Post-Quest Chatter
+    startNode.options.push_back(PixelsEngine::DialogueOption(
+        "How are things?", "quest_chat", "None", 0, "", "",
+        PixelsEngine::DialogueAction::None, "", "", true, "Quest_FetchOrb_Done"));
+  
+    // Standard Options
+    startNode.options.push_back(PixelsEngine::DialogueOption(
+        "Can I get a discount on a room? [Charisma DC 12]", "room_check",
+        "Charisma", 12, "discount_success", "discount_fail",
+        PixelsEngine::DialogueAction::None, "", "discount_active", false));
+    startNode.options.push_back(PixelsEngine::DialogueOption(
+        "I don't like your face. [Attack]", "end", "None", 0, "", "",
+        PixelsEngine::DialogueAction::StartCombat));
+    startNode.options.push_back(PixelsEngine::DialogueOption(
+        "Just looking around. [End]", "end", "None", 0, "", "",
+        PixelsEngine::DialogueAction::EndConversation));
+    innTree.nodes["start"] = startNode;
+  
+    PixelsEngine::DialogueNode workSuccess;
+    workSuccess.id = "work_success";
+    workSuccess.npcText = "A sharp eye! Indeed, the local boars have been "
+                          "raiding our stores. Hunt them... wait, actually, I "
+                          "lost my lucky Gold Orb in the woods. Find it for me?";
+    // Start Quest: Sets Active flag AND Work Topic Closed flag (chained via
+    // logic? No, DialogueAction::StartQuest sets ONE flag. I need to set
+    // "Inn_Work_Topic_Closed" manually or map "Quest_FetchOrb_Active" to it?
+    // Actually, I can just use "Quest_FetchOrb_Active" as the exclude flag for
+    // the start option! But what if I refuse? Let's rely on
+    // "Quest_FetchOrb_Active" for acceptance. And "refused_work" for refusal. I
+    // can't exclude on TWO flags. Workaround: "I'll get right on it." sets
+    // "Quest_FetchOrb_Active". AND we can set "Inn_Work_Topic_Closed" via
+    // `actionParam`? No, param is used for the flag name. I will simplify: If
+    // "Quest_FetchOrb_Active" is true, hide it. If "refused_work" is true, hide
+    // it. I can duplicate the option with different exclude flags? No, that shows
+    // two. I will use "Inn_Work_Topic_Closed" as the unified flag. So StartQuest
+    // needs to set "Quest_FetchOrb_Active". And I also need to set
+    // "Inn_Work_Topic_Closed". I can't do two actions. I'll make the "I'm looking
+    // for work" check exclude on "Quest_FetchOrb_Active". If I refuse, I just
+    // won't set "Quest_FetchOrb_Active" and it might show again? That's fine. If
+    // I refuse, maybe I can ask again later. That's actually better game design
+    // (retry). So I will exclude on "Quest_FetchOrb_Active" AND
+    // "Quest_FetchOrb_Done". Wait, I still have the single string limit.
+    // "Quest_FetchOrb_Active" implies I have the job.
+    // "Quest_FetchOrb_Done" implies I finished.
+    // If I finish, "Active" stays true in my logic? Yes.
+    // So excluding "Quest_FetchOrb_Active" covers both phases!
+    // So "I'm looking for work" is hidden if "Quest_FetchOrb_Active" is set.
+  
+    // Corrected Start Node logic:
+    // Exclude: "Quest_FetchOrb_Active"
+  
+    // Options in workSuccess:
+    // "I'll do it." -> Action: StartQuest, Param: "Quest_FetchOrb_Active".
+    workSuccess.options.push_back(PixelsEngine::DialogueOption(
+        "I'll find it.", "end", "None", 0, "", "",
+        PixelsEngine::DialogueAction::StartQuest, "Quest_FetchOrb_Active"));
+    innTree.nodes["work_success"] = workSuccess;
+  
+    PixelsEngine::DialogueNode workFail;
+    workFail.id = "work_fail";
+    workFail.npcText = "You look a bit... slow. I don't have anything for "
+                       "someone who can't tell a boar from a bush.";
+    workFail.options.push_back(PixelsEngine::DialogueOption(
+        "Hmph.", "end", "None", 0, "", "",
+        PixelsEngine::DialogueAction::EndConversation));
+    innTree.nodes["work_fail"] = workFail;
+  
+    PixelsEngine::DialogueNode questComplete;
+    questComplete.id = "quest_complete";
+    questComplete.npcText = "My Orb! You found it! Thank you so much.";
+    questComplete.options.push_back(PixelsEngine::DialogueOption(
+        "Happy to help.", "end", "None", 0, "", "",
+        PixelsEngine::DialogueAction::EndConversation));
+    innTree.nodes["quest_complete"] = questComplete;
+  
+    PixelsEngine::DialogueNode questChat;
+    questChat.id = "quest_chat";
+    questChat.npcText = "Business is booming thanks to you!";
+    questChat.options.push_back(PixelsEngine::DialogueOption(
+        "Glad to hear it.", "end", "None", 0, "", "",
+        PixelsEngine::DialogueAction::EndConversation));
+    innTree.nodes["quest_chat"] = questChat;
+  
+    PixelsEngine::DialogueNode discountSuccess;
+    discountSuccess.id = "discount_success";
+    discountSuccess.npcText =
+        "You have a silver tongue! Fine, half price for you tonight.";
+    discountSuccess.options.push_back(PixelsEngine::DialogueOption(
+        "Much appreciated.", "end", "None", 0, "", "",
+        PixelsEngine::DialogueAction::EndConversation, "discount_active"));
+    innTree.nodes["discount_success"] = discountSuccess;
+  
+    PixelsEngine::DialogueNode discountFail;
+    discountFail.id = "discount_fail";
+    discountFail.npcText = "Nice try, but I have a business to run. Full price.";
+    discountFail.options.push_back(PixelsEngine::DialogueOption(
+        "Worth a shot. [End]", "end", "None", 0, "", "",
+        PixelsEngine::DialogueAction::EndConversation));
+    innTree.nodes["discount_fail"] = discountFail;
+  
+    PixelsEngine::DialogueNode
+        refusedWork; // Not used anymore if we rely on repeatable=false, but good
+                     // to keep structure
+    refusedWork.id = "refused_work";
+    refusedWork.npcText = "Suit yourself.";
+    refusedWork.options.push_back(PixelsEngine::DialogueOption(
+        "[End]", "end", "None", 0, "", "",
+        PixelsEngine::DialogueAction::EndConversation));
+    innTree.nodes["refused_work"] = refusedWork;
+  
+    GetRegistry().AddComponent(
+        npc1, PixelsEngine::DialogueComponent{
+                  std::make_shared<PixelsEngine::DialogueTree>(innTree)});
+  
+    auto &n1Inv =
+        GetRegistry().AddComponent(npc1, PixelsEngine::InventoryComponent{});
+    n1Inv.AddItem("Coins", 100);
+    n1Inv.AddItem("Potion", 1, PixelsEngine::ItemType::Consumable, 0,
+                  "assets/ui/item_potion.png", 50);
+  
+    auto npc2 = GetRegistry().CreateEntity();
+    GetRegistry().AddComponent(npc2,
+                               PixelsEngine::TransformComponent{20.0f, 25.0f});
+    GetRegistry().AddComponent(npc2, PixelsEngine::SpriteComponent{
+                                         guardianTex, {0, 0, 32, 32}, 16, 32});
+    GetRegistry().AddComponent(
+        npc2, PixelsEngine::InteractionComponent{"Guardian", "npc_guardian",
+                                                 false, 0.0f});
+    GetRegistry().AddComponent(npc2,
+                               PixelsEngine::StatsComponent{50, 50, 5, false});
+    GetRegistry().AddComponent(
+        npc2, PixelsEngine::QuestComponent{"HuntBoars", 0, "Boar Meat"});
+    GetRegistry().AddComponent(
+        npc2, PixelsEngine::TagComponent{PixelsEngine::EntityTag::Quest});
+    GetRegistry().AddComponent(npc2, PixelsEngine::AIComponent{8.0f, 1.5f, 2.0f,
+                                                               0.0f, false, 0.0f,
+                                                               270.0f, 90.0f});
+  
+    PixelsEngine::DialogueTree guardTree;
+    guardTree.currentEntityName = "Guardian";
+    guardTree.currentNodeId = "start";
+    PixelsEngine::DialogueNode gStart;
+    gStart.id = "start";
+    gStart.npcText = "The road ahead is dangerous. You'll need more than that "
+                     "look on your face to survive.";
+    gStart.options.push_back(PixelsEngine::DialogueOption(
+        "I can handle myself. [Intimidate DC 10]", "g_check", "Charisma", 10,
+        "g_pass", "g_fail", PixelsEngine::DialogueAction::None, "", "", false));
+    gStart.options.push_back(PixelsEngine::DialogueOption(
+        "What's out there?", "g_info", "None", 0, "", "",
+        PixelsEngine::DialogueAction::None, "", "", false)); // Lore
+  
+    // Turn In
+    gStart.options.push_back(PixelsEngine::DialogueOption(
+        "I have the Boar Meat.", "g_done", "None", 0, "", "",
+        PixelsEngine::DialogueAction::CompleteQuest, "Quest_HuntBoars_Done",
+        "Quest_HuntBoars_Done", true, "Quest_HuntBoars_Active", "Boar Meat"));
+  
+    // Post-Quest
+    gStart.options.push_back(PixelsEngine::DialogueOption(
+        "The boars are thinning out.", "g_chat", "None", 0, "", "",
+        PixelsEngine::DialogueAction::None, "", "", true,
+        "Quest_HuntBoars_Done"));
+  
+    gStart.options.push_back(
+        PixelsEngine::DialogueOption("[Attack]", "end", "None", 0, "", "",
+                                     PixelsEngine::DialogueAction::StartCombat));
+    gStart.options.push_back(PixelsEngine::DialogueOption(
+        "Just passing through. [End]", "end", "None", 0, "", "",
+        PixelsEngine::DialogueAction::EndConversation));
+    guardTree.nodes["start"] = gStart;
+  
+    PixelsEngine::DialogueNode gPass;
+    gPass.id = "g_pass";
+    gPass.npcText = "Fine, go die then. Don't say I didn't warn you.";
+    gPass.options.push_back(PixelsEngine::DialogueOption(
+        "[End]", "end", "None", 0, "", "",
+        PixelsEngine::DialogueAction::EndConversation));
+    guardTree.nodes["g_pass"] = gPass;
+  
+    PixelsEngine::DialogueNode gFail;
+    gFail.id = "g_fail";
+    gFail.npcText =
+        "Ha! You're shaking like a leaf. Get inside before a boar eats you.";
+    gFail.options.push_back(PixelsEngine::DialogueOption(
+        "[End]", "end", "None", 0, "", "",
+        PixelsEngine::DialogueAction::EndConversation));
+    guardTree.nodes["g_fail"] = gFail;
+  
+    PixelsEngine::DialogueNode gInfo;
+    gInfo.id = "g_info";
+    gInfo.npcText =
+        "Boars. Big ones. And worse. Stay on the path if you value your hide.";
+    gInfo.options.push_back(PixelsEngine::DialogueOption(
+        "I can help hunt them.", "end", "None", 0, "", "",
+        PixelsEngine::DialogueAction::StartQuest, "Quest_HuntBoars_Active"));
+    gInfo.options.push_back(PixelsEngine::DialogueOption(
+        "Thanks for the warning. [End]", "end", "None", 0, "", "",
+        PixelsEngine::DialogueAction::EndConversation));
+    guardTree.nodes["g_info"] = gInfo;
+  
+    PixelsEngine::DialogueNode gDone;
+    gDone.id = "g_done";
+    gDone.npcText =
+        "You actually killed one? Hmph. Maybe you're not useless after all.";
+    gDone.options.push_back(PixelsEngine::DialogueOption(
+        "Told you.", "end", "None", 0, "", "",
+        PixelsEngine::DialogueAction::EndConversation));
+    guardTree.nodes["g_done"] = gDone;
+  
+    PixelsEngine::DialogueNode gChat;
+    gChat.id = "g_chat";
+    gChat.npcText = "Keep up the good work.";
+    gChat.options.push_back(PixelsEngine::DialogueOption(
+        "[End]", "end", "None", 0, "", "",
+        PixelsEngine::DialogueAction::EndConversation));
+    guardTree.nodes["g_chat"] = gChat;
+  
+    GetRegistry().AddComponent(
+        npc2, PixelsEngine::DialogueComponent{
+                  std::make_shared<PixelsEngine::DialogueTree>(guardTree)});
+  
+    auto &n2Inv =
+        GetRegistry().AddComponent(npc2, PixelsEngine::InventoryComponent{});
+    n2Inv.AddItem("Coins", 50);
+    n2Inv.AddItem("Bread", 5, PixelsEngine::ItemType::Consumable, 0, "", 10);
+  
+    // Add a Companion
+    auto comp = GetRegistry().CreateEntity();
+    GetRegistry().AddComponent(
+        comp, PixelsEngine::TransformComponent{21.0f, 21.0f}); // In Inn
+    GetRegistry().AddComponent(comp, PixelsEngine::SpriteComponent{
+                                         companionTex, {0, 0, 32, 32}, 16, 32});
+    GetRegistry().AddComponent(
+        comp, PixelsEngine::InteractionComponent{"Traveler", "npc_traveler",
+                                                 false, 0.0f});
+    GetRegistry().AddComponent(
+        comp, PixelsEngine::TagComponent{PixelsEngine::EntityTag::Companion});
+    GetRegistry().AddComponent(comp,
+                               PixelsEngine::StatsComponent{80, 80, 8, false});
+    GetRegistry().AddComponent(
+        comp, PixelsEngine::AIComponent{10.0f, 1.5f, 2.0f, 0.0f, false});
+  
+    PixelsEngine::DialogueTree compTree;
+    compTree.currentEntityName = "Traveler";
+    compTree.currentNodeId = "start";
+    PixelsEngine::DialogueNode cStart;
+    cStart.id = "start";
+    cStart.npcText = "Quiet night, isn't it? Thinking of heading out?";
+    cStart.options.push_back(PixelsEngine::DialogueOption(
+        "Who are you?", "c_info", "None", 0, "", "",
+        PixelsEngine::DialogueAction::None, "", "", false));
+    cStart.options.push_back(PixelsEngine::DialogueOption(
+        "[End]", "end", "None", 0, "", "",
+        PixelsEngine::DialogueAction::EndConversation));
+    compTree.nodes["start"] = cStart;
+  
+    PixelsEngine::DialogueNode cInfo;
+    cInfo.id = "c_info";
+    cInfo.npcText =
+        "Just a wanderer, like you. I've seen things you wouldn't believe.";
+    cInfo.options.push_back(PixelsEngine::DialogueOption(
+        "Interesting. [End]", "end", "None", 0, "", "",
+        PixelsEngine::DialogueAction::EndConversation));
+    compTree.nodes["c_info"] = cInfo;
+  
+    GetRegistry().AddComponent(
+        comp, PixelsEngine::DialogueComponent{
+                  std::make_shared<PixelsEngine::DialogueTree>(compTree)});
+  
+    auto &cInv =
+        GetRegistry().AddComponent(comp, PixelsEngine::InventoryComponent{});
+    cInv.AddItem("Coins", 10);
+  
+    // Add a Trader
+    auto trader = GetRegistry().CreateEntity();
+    GetRegistry().AddComponent(
+        trader, PixelsEngine::TransformComponent{18.0f, 21.0f}); // In Inn
+    GetRegistry().AddComponent(
+        trader,
+        PixelsEngine::SpriteComponent{traderTex, {0, 0, 32, 32}, 16, 32});
+    GetRegistry().AddComponent(trader, PixelsEngine::InteractionComponent{
+                                           "Trader", "npc_trader", false, 0.0f});
+    GetRegistry().AddComponent(
+        trader, PixelsEngine::TagComponent{PixelsEngine::EntityTag::Trader});
+    GetRegistry().AddComponent(trader,
+                               PixelsEngine::StatsComponent{100, 100, 10, false});
+    GetRegistry().AddComponent(
+        trader, PixelsEngine::AIComponent{8.0f, 1.5f, 2.0f, 0.0f, false, 0.0f,
+                                          0.0f, 120.0f});
 
   PixelsEngine::DialogueTree tradeTree;
   tradeTree.currentEntityName = "Trader";
@@ -1072,6 +1073,7 @@ void PixelsGateGame::PerformAttack(PixelsEngine::Entity forcedTarget) {
 }
 
 void PixelsGateGame::CreateBoar(float x, float y) {
+  std::cout << "Spawning Boar at " << x << ", " << y << std::endl;
   auto boar = GetRegistry().CreateEntity();
   GetRegistry().AddComponent(boar, PixelsEngine::TransformComponent{x, y});
   GetRegistry().AddComponent(
@@ -1807,16 +1809,31 @@ void PixelsGateGame::OnRender() {
     auto &camera = GetCamera();
     auto *currentMap =
         (m_State == GameState::Camp) ? m_CampLevel.get() : m_Level.get();
-    if (currentMap)
-      currentMap->Render(camera);
 
     RenderEnemyCones(camera);
 
     struct Renderable {
-      int y;
-      PixelsEngine::Entity entity;
+      float depth;
+      PixelsEngine::Entity entity = PixelsEngine::INVALID_ENTITY;
+      int tileX = -1, tileY = -1;
+      bool isTile = false;
     };
     std::vector<Renderable> renderQueue;
+
+    // 1. Collect Visible Tiles
+    if (currentMap) {
+      int mapW = currentMap->GetWidth();
+      int mapH = currentMap->GetHeight();
+      for (int y = 0; y < mapH; ++y) {
+        for (int x = 0; x < mapW; ++x) {
+          // Visibility optimization (could be more aggressive but x+y is safe)
+          renderQueue.push_back(
+              {(float)(x + y), PixelsEngine::INVALID_ENTITY, x, y, true});
+        }
+      }
+    }
+
+    // 2. Collect Entities
     auto &sprites = GetRegistry().View<PixelsEngine::SpriteComponent>();
     for (auto &[entity, sprite] : sprites) {
       auto *transform =
@@ -1830,87 +1847,86 @@ void PixelsGateGame::OnRender() {
             if (!tag || tag->tag != PixelsEngine::EntityTag::Companion)
               continue;
           }
-        } else {
-          // In main world, hide companions if they should be at camp (not
-          // implemented yet, so show all)
         }
 
         // Check Fog of War
         if (entity != m_Player) {
-          // Always show entities currently in combat turn order
           bool inCombat = IsInTurnOrder(entity);
           if (!inCombat &&
               !currentMap->IsVisible((int)transform->x, (int)transform->y)) {
-            continue; // Skip rendering hidden entity
+            continue;
           }
         }
 
-        int screenX, screenY;
-        currentMap->GridToScreen(transform->x, transform->y, screenX, screenY);
-        renderQueue.push_back({screenY, entity});
+        renderQueue.push_back({transform->x + transform->y, entity, -1, -1, false});
       }
     }
 
-    std::sort(
-        renderQueue.begin(), renderQueue.end(),
-        [](const Renderable &a, const Renderable &b) { return a.y < b.y; });
+    // 3. Sort by Depth
+    std::sort(renderQueue.begin(), renderQueue.end(),
+              [](const Renderable &a, const Renderable &b) {
+                if (std::abs(a.depth - b.depth) < 0.001f) {
+                  return a.isTile && !b.isTile; // Tiles first at same depth
+                }
+                return a.depth < b.depth;
+              });
 
+    // 4. Interleaved Render
     for (const auto &item : renderQueue) {
-      auto *transform =
-          GetRegistry().GetComponent<PixelsEngine::TransformComponent>(
-              item.entity);
-      auto *sprite = GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(
-          item.entity);
-      if (transform && sprite && sprite->texture) {
-        int screenX, screenY;
-        currentMap->GridToScreen(transform->x, transform->y, screenX, screenY);
-        screenX -= (int)camera.x;
-        screenY -= (int)camera.y;
-
-        auto *entStats =
-            GetRegistry().GetComponent<PixelsEngine::StatsComponent>(
+      if (item.isTile) {
+        currentMap->RenderTile(item.tileX, item.tileY, camera);
+      } else {
+        auto *transform =
+            GetRegistry().GetComponent<PixelsEngine::TransformComponent>(
                 item.entity);
-        if (entStats && entStats->isDead) {
-          sprite->texture->SetColorMod(100, 100, 100); // Tint Grey
-        }
-        if (item.entity == m_Player && entStats && entStats->isStealthed) {
-          // Apply alpha for stealth (Note: Texture class needs to handle alpha
-          // mod or we can use SetColorMod)
-          sprite->texture->SetColorMod(150, 150,
-                                       255); // Blueish tint for stealth
-        }
+        auto *sprite = GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(
+            item.entity);
+        if (transform && sprite && sprite->texture) {
+          int screenX, screenY;
+          currentMap->GridToScreen(transform->x, transform->y, screenX, screenY);
+          screenX -= (int)camera.x;
+          screenY -= (int)camera.y;
 
-        sprite->texture->RenderRect(screenX + 16 - sprite->pivotX,
-                                    screenY + 16 - sprite->pivotY,
-                                    &sprite->srcRect, -1, -1, sprite->flip);
+          auto *entStats =
+              GetRegistry().GetComponent<PixelsEngine::StatsComponent>(
+                  item.entity);
+          if (entStats && entStats->isDead) {
+            sprite->texture->SetColorMod(100, 100, 100);
+          }
+          if (item.entity == m_Player && entStats && entStats->isStealthed) {
+            sprite->texture->SetColorMod(150, 150, 255);
+          }
 
-        if (entStats && (entStats->isDead || entStats->isStealthed)) {
-          sprite->texture->SetColorMod(255, 255, 255); // Reset
-        }
+          // Render with pivot relative to diamond center (screenY + 8)
+          sprite->texture->RenderRect(screenX + 16 - sprite->pivotX,
+                                      screenY + 8 - sprite->pivotY,
+                                      &sprite->srcRect, -1, -1, sprite->flip);
 
-        // --- Render Health Bar Above Entity (in Combat or if damaged) ---
-        if (entStats &&
-            (m_State == GameState::Combat ||
-             entStats->currentHealth < entStats->maxHealth) &&
-            !entStats->isDead) {
-          int barW = 32;
-          int barH = 4;
-          int barX = screenX;
-          int barY = screenY - 8;
+          if (entStats && (entStats->isDead || entStats->isStealthed)) {
+            sprite->texture->SetColorMod(255, 255, 255);
+          }
 
-          SDL_Rect bg = {barX, barY, barW, barH};
-          SDL_SetRenderDrawColor(GetRenderer(), 50, 50, 50, 255);
-          SDL_RenderFillRect(GetRenderer(), &bg);
-
-          float hpPercent =
-              (float)entStats->currentHealth / (float)entStats->maxHealth;
-          SDL_Rect fg = {barX, barY, (int)(barW * hpPercent), barH};
-          SDL_SetRenderDrawColor(GetRenderer(), 255, 0, 0, 255);
-          SDL_RenderFillRect(GetRenderer(), &fg);
+          // Health Bars
+          if (entStats &&
+              (m_State == GameState::Combat ||
+               entStats->currentHealth < entStats->maxHealth) &&
+              !entStats->isDead) {
+            int barW = 32, barH = 4;
+            int barX = screenX, barY = screenY - 8;
+            SDL_Rect bg = {barX, barY, barW, barH};
+            SDL_SetRenderDrawColor(GetRenderer(), 50, 50, 50, 255);
+            SDL_RenderFillRect(GetRenderer(), &bg);
+            float hpPercent =
+                (float)entStats->currentHealth / (float)entStats->maxHealth;
+            SDL_Rect fg = {barX, barY, (int)(barW * hpPercent), barH};
+            SDL_SetRenderDrawColor(GetRenderer(), 255, 0, 0, 255);
+            SDL_RenderFillRect(GetRenderer(), &fg);
+          }
         }
       }
     }
-    // Render Floating Texts
+
+    // Render Floating Texts (always on top)
     for (const auto &ft : m_FloatingText.m_Texts) {
       int screenX, screenY;
       currentMap->GridToScreen(ft.x, ft.y, screenX, screenY);
@@ -3664,19 +3680,161 @@ void PixelsGateGame::HandleMainMenuInput() {
 }
 
 void PixelsGateGame::RenderMainMenu() {
+
   // 1. Render Background (Level)
+
   if (m_Level) {
+
+    // Reveal all for background effect
+
+    static bool revealed = false;
+
+    if (!revealed) {
+
+      for (int y = 0; y < m_Level->GetHeight(); ++y) {
+
+        for (int x = 0; x < m_Level->GetWidth(); ++x) {
+
+          m_Level->UpdateVisibility(x, y, 100); // Massive radius to reveal all
+
+        }
+
+      }
+
+      revealed = true;
+
+    }
+
+
+
     // Auto-scroll camera for effect
+
     static float scrollX = 0;
+
     scrollX += 0.5f;
+
     auto &camera = GetCamera();
+
     camera.x = (int)scrollX % (m_Level->GetWidth() * 32);
+
     camera.y = 200; // Fixed Y
 
-    m_Level->Render(camera);
+
+
+    // Interleaved Render (Copied logic from OnRender for MainMenu state)
+
+    struct Renderable {
+
+      float depth;
+
+      PixelsEngine::Entity entity = PixelsEngine::INVALID_ENTITY;
+
+      int tileX = -1, tileY = -1;
+
+      bool isTile = false;
+
+    };
+
+    std::vector<Renderable> renderQueue;
+
+
+
+    // 1. Collect Tiles
+
+    int mapW = m_Level->GetWidth();
+
+    int mapH = m_Level->GetHeight();
+
+    for (int y = 0; y < mapH; ++y) {
+
+      for (int x = 0; x < mapW; ++x) {
+
+        renderQueue.push_back({(float)(x + y), PixelsEngine::INVALID_ENTITY, x, y, true});
+
+      }
+
+    }
+
+
+
+    // 2. Collect Entities
+
+    auto &sprites = GetRegistry().View<PixelsEngine::SpriteComponent>();
+
+    for (auto &[entity, sprite] : sprites) {
+
+      auto *transform = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(entity);
+
+      if (transform) {
+
+        renderQueue.push_back({transform->x + transform->y, entity, -1, -1, false});
+
+      }
+
+    }
+
+
+
+    // 3. Sort by Depth
+
+    std::sort(renderQueue.begin(), renderQueue.end(),
+
+              [](const Renderable &a, const Renderable &b) {
+
+                if (std::abs(a.depth - b.depth) < 0.001f) {
+
+                  return a.isTile && !b.isTile;
+
+                }
+
+                return a.depth < b.depth;
+
+              });
+
+
+
+    // 4. Interleaved Render
+
+    for (const auto &item : renderQueue) {
+
+      if (item.isTile) {
+
+        m_Level->RenderTile(item.tileX, item.tileY, camera);
+
+      } else {
+
+        auto *transform = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(item.entity);
+
+        auto *sprite = GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(item.entity);
+
+        if (transform && sprite && sprite->texture) {
+
+          int screenX, screenY;
+
+          m_Level->GridToScreen(transform->x, transform->y, screenX, screenY);
+
+          screenX -= (int)camera.x;
+
+          screenY -= (int)camera.y;
+
+          sprite->texture->RenderRect(screenX + 16 - sprite->pivotX,
+
+                                      screenY + 8 - sprite->pivotY,
+
+                                      &sprite->srcRect, -1, -1, sprite->flip);
+
+        }
+
+      }
+
+    }
+
   }
 
+
+
   // 2. Dark Overlay
+
   SDL_Renderer *renderer = GetRenderer();
   int w = GetWindowWidth(); int h = GetWindowHeight();
   SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
@@ -7143,6 +7301,7 @@ void PixelsGateGame::RenderTooltip(const TooltipData &data, int x, int y) {
 }
 
 void PixelsGateGame::SpawnWorldEntities() {
+  std::cout << "SpawnWorldEntities called." << std::endl;
   auto playerTexture = PixelsEngine::TextureManager::LoadTexture(
       GetRenderer(), "assets/knight.png");
 
@@ -7166,7 +7325,7 @@ void PixelsGateGame::SpawnWorldEntities() {
   GetRegistry().AddComponent(npc1,
                              PixelsEngine::TransformComponent{19.0f, 19.0f});
   GetRegistry().AddComponent(
-      npc1, PixelsEngine::SpriteComponent{innkeeperTex, {0, 0, 32, 32}, 16, 30});
+      npc1, PixelsEngine::SpriteComponent{innkeeperTex, {0, 0, 32, 32}, 16, 32});
   GetRegistry().AddComponent(
       npc1, PixelsEngine::InteractionComponent{"Innkeeper", "npc_innkeeper",
                                                false, 0.0f});
@@ -7268,7 +7427,7 @@ void PixelsGateGame::SpawnWorldEntities() {
   GetRegistry().AddComponent(npc2,
                              PixelsEngine::TransformComponent{20.0f, 25.0f});
   GetRegistry().AddComponent(npc2, PixelsEngine::SpriteComponent{
-                                       guardianTex, {0, 0, 32, 32}, 16, 30});
+                                       guardianTex, {0, 0, 32, 32}, 16, 32});
   GetRegistry().AddComponent(
       npc2, PixelsEngine::InteractionComponent{"Guardian", "npc_guardian",
                                                false, 0.0f});
@@ -7395,7 +7554,7 @@ void PixelsGateGame::SpawnWorldEntities() {
   GetRegistry().AddComponent(
       comp, PixelsEngine::TransformComponent{21.0f, 21.0f}); // In Inn
   GetRegistry().AddComponent(comp, PixelsEngine::SpriteComponent{
-                                       companionTex, {0, 0, 32, 32}, 16, 30});
+                                       companionTex, {0, 0, 32, 32}, 16, 32});
   GetRegistry().AddComponent(
       comp, PixelsEngine::InteractionComponent{"Traveler", "npc_traveler",
                                                false, 0.0f});
@@ -7443,7 +7602,7 @@ void PixelsGateGame::SpawnWorldEntities() {
       trader, PixelsEngine::TransformComponent{18.0f, 21.0f}); // In Inn
   GetRegistry().AddComponent(
       trader,
-      PixelsEngine::SpriteComponent{traderTex, {0, 0, 32, 32}, 16, 30});
+      PixelsEngine::SpriteComponent{traderTex, {0, 0, 32, 32}, 16, 32});
   GetRegistry().AddComponent(trader, PixelsEngine::InteractionComponent{
                                          "Trader", "npc_trader", false, 0.0f});
   GetRegistry().AddComponent(
