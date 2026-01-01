@@ -224,7 +224,7 @@ void PixelsGateGame::OnStart() {
   GetRegistry().AddComponent(
       npc1, PixelsEngine::TransformComponent{19.0f, 19.0f}); // In Inn
   GetRegistry().AddComponent(npc1, PixelsEngine::SpriteComponent{
-                                       playerTexture, {0, 0, 32, 32}, 16, 30});
+                                       innkeeperTex, {0, 0, 32, 32}, 16, 30});
   GetRegistry().AddComponent(
       npc1, PixelsEngine::InteractionComponent{"Innkeeper", "npc_innkeeper",
                                                false, 0.0f});
@@ -377,7 +377,7 @@ void PixelsGateGame::OnStart() {
   auto &n1Inv =
       GetRegistry().AddComponent(npc1, PixelsEngine::InventoryComponent{});
   n1Inv.AddItem("Coins", 100);
-  n1Inv.AddItem("Potion", 1, PixelsEngine::ItemType::Consumable, 0, "", 50);
+  n1Inv.AddItem("Potion", 1, PixelsEngine::ItemType::Consumable, 0, "assets/ui/item_potion.png", 50);
 
   auto npc2 = GetRegistry().CreateEntity();
   GetRegistry().AddComponent(npc2,
@@ -493,7 +493,7 @@ void PixelsGateGame::OnStart() {
   GetRegistry().AddComponent(comp, PixelsEngine::SpriteComponent{
                                        companionTex, {0, 0, 32, 32}, 16, 30});
   GetRegistry().AddComponent(
-      comp, PixelsEngine::InteractionComponent{"Companion", "npc_companion",
+      comp, PixelsEngine::InteractionComponent{"Traveler", "npc_traveler",
                                                false, 0.0f});
   GetRegistry().AddComponent(
       comp, PixelsEngine::TagComponent{PixelsEngine::EntityTag::Companion});
@@ -551,7 +551,7 @@ void PixelsGateGame::OnStart() {
                                         0.0f, 120.0f});
 
   PixelsEngine::DialogueTree tradeTree;
-  tradeTree.currentEntityName = "Merchant";
+  tradeTree.currentEntityName = "Trader";
   tradeTree.currentNodeId = "start";
   PixelsEngine::DialogueNode tStart;
   tStart.id = "start";
@@ -621,10 +621,11 @@ void PixelsGateGame::OnStart() {
 
   std::vector<PixelsEngine::Item> chestLoot;
   chestLoot.push_back(
-      {"Rare Gem", "", 1, PixelsEngine::ItemType::Misc, 0, 500});
+      {"Rare Gem", "assets/ui/item_raregem.png", 1, PixelsEngine::ItemType::Misc, 0, 500});
   chestLoot.push_back(
-      {"Potion", "", 2, PixelsEngine::ItemType::Consumable, 0, 50});
+      {"Potion", "assets/ui/item_potion.png", 2, PixelsEngine::ItemType::Consumable, 0, 50});
   GetRegistry().AddComponent(chest, PixelsEngine::LootComponent{chestLoot});
+  GetRegistry().AddComponent(chest, PixelsEngine::StatsComponent{20, 20, 0, false});
 
   // 7. Spawn Items (Key and Tools)
   auto keyEnt = GetRegistry().CreateEntity();
@@ -1077,11 +1078,10 @@ void PixelsGateGame::CreateBoar(float x, float y) {
       boar, PixelsEngine::StatsComponent{30, 30, 2,
                                          false}); // Reduced damage from 5 to 2
 
-  static int boarCount = 0;
   GetRegistry().AddComponent(
       boar,
       PixelsEngine::InteractionComponent{
-          "Boar", "npc_boar_" + std::to_string(boarCount++), false, 0.0f});
+          "Boar", "npc_boar_" + std::to_string((int)x) + "_" + std::to_string((int)y), false, 0.0f});
 
   GetRegistry().AddComponent(
       boar, PixelsEngine::TagComponent{PixelsEngine::EntityTag::Hostile});
