@@ -26,27 +26,83 @@ void PixelsGateGame::OnStart() {
   // Init Config
   PixelsEngine::Config::Init();
   // Init Font
-      m_TextRenderer = std::make_unique<PixelsEngine::TextRenderer>(GetRenderer(), "assets/font.ttf", 16);
-  
-      // Initialize Tooltips
-      m_Tooltips["Atk"] = {"Attack", "Strike an enemy with your equipped weapon.", "Action", "Melee/Ranged", "Weapon Dmg", "None"};
-      m_Tooltips["Jmp"] = {"Jump", "Jump to a target location.", "Bonus Action + 3m", "5m", "Utility", "None"};
-      m_Tooltips["Snk"] = {"Sneak", "Attempt to hide from enemies.", "Action", "Self", "Stealth", "None"};
-      m_Tooltips["Shv"] = {"Shove", "Push a creature away or knock them prone.", "Bonus Action", "Melee", "1.5m Push", "ATH/ACR"};
-      m_Tooltips["Dsh"] = {"Dash", "Double your movement speed for this turn.", "Action", "Self", "Speed x2", "None"};
-      m_Tooltips["End"] = {"End Turn", "Conclude your turn in combat.", "None", "N/A", "None", "None"};
-      
-      m_Tooltips["Fir"] = {"Fireball", "A bright streak flashes from your pointing finger to a point you choose within range and then blossoms with a low roar into an explosion of flame.", "Action", "18m", "8d6 Fire", "DEX Save"};
-      m_Tooltips["Hel"] = {"Heal", "A creature you touch regains a number of hit points equal to 1d8 + your spellcasting ability modifier.", "Action", "Melee", "1d8 + Mod Healing", "None"};
-      m_Tooltips["Mis"] = {"Magic Missile", "You create three glowing darts of magical force. Each dart hits a creature of your choice that you can see within range.", "Action", "18m", "3x (1d4 + 1) Force", "None"};
-      m_Tooltips["Shd"] = {"Shield", "An invisible barrier of magical force appears and protects you.", "Reaction", "Self", "+5 AC", "None"};
-  
-      m_Tooltips["Potion"] = {"Healing Potion", "A character who drinks the magical red liquid in this vial regains 2d4 + 2 hit points.", "Bonus Action", "Self", "2d4 + 2 Healing", "None"};
-      m_Tooltips["Bread"] = {"Bread", "Simple sustenance. Regains 5 hit points when consumed.", "Bonus Action", "Self", "5 Healing", "None"};
-      m_Tooltips["Thieves' Tools"] = {"Thieves' Tools", "Used to pick locks and disarm traps.", "Action", "Melee", "Utility", "DEX Check"};
-  
-      // 1. Setup Level with New Isometric Tileset
-  
+  m_TextRenderer = std::make_unique<PixelsEngine::TextRenderer>(
+      GetRenderer(), "assets/font.ttf", 16);
+
+  // Initialize Tooltips
+  m_Tooltips["Atk"] = {
+      "Attack",     "Strike an enemy with your equipped weapon.",
+      "Action",     "Melee/Ranged",
+      "Weapon Dmg", "None"};
+  m_Tooltips["Jmp"] = {"Jump",
+                       "Jump to a target location.",
+                       "Bonus Action + 3m",
+                       "5m",
+                       "Utility",
+                       "None"};
+  m_Tooltips["Snk"] = {"Sneak",   "Attempt to hide from enemies.",
+                       "Action",  "Self",
+                       "Stealth", "None"};
+  m_Tooltips["Shv"] = {
+      "Shove",        "Push a creature away or knock them prone.",
+      "Bonus Action", "Melee",
+      "1.5m Push",    "ATH/ACR"};
+  m_Tooltips["Dsh"] = {"Dash",     "Double your movement speed for this turn.",
+                       "Action",   "Self",
+                       "Speed x2", "None"};
+  m_Tooltips["End"] = {"End Turn", "Conclude your turn in combat.",
+                       "None",     "N/A",
+                       "None",     "None"};
+
+  m_Tooltips["Fir"] = {"Fireball",
+                       "A bright streak flashes from your pointing finger to a "
+                       "point you choose within range and then blossoms with a "
+                       "low roar into an explosion of flame.",
+                       "Action",
+                       "18m",
+                       "8d6 Fire",
+                       "DEX Save"};
+  m_Tooltips["Hel"] = {"Heal",
+                       "A creature you touch regains a number of hit points "
+                       "equal to 1d8 + your spellcasting ability modifier.",
+                       "Action",
+                       "Melee",
+                       "1d8 + Mod Healing",
+                       "None"};
+  m_Tooltips["Mis"] = {
+      "Magic Missile",
+      "You create three glowing darts of magical force. Each dart hits a "
+      "creature of your choice that you can see within range.",
+      "Action",
+      "18m",
+      "3x (1d4 + 1) Force",
+      "None"};
+  m_Tooltips["Shd"] = {
+      "Shield",
+      "An invisible barrier of magical force appears and protects you.",
+      "Reaction",
+      "Self",
+      "+5 AC",
+      "None"};
+
+  m_Tooltips["Potion"] = {"Healing Potion",
+                          "A character who drinks the magical red liquid in "
+                          "this vial regains 2d4 + 2 hit points.",
+                          "Bonus Action",
+                          "Self",
+                          "2d4 + 2 Healing",
+                          "None"};
+  m_Tooltips["Bread"] = {
+      "Bread",        "Simple sustenance. Regains 5 hit points when consumed.",
+      "Bonus Action", "Self",
+      "5 Healing",    "None"};
+  m_Tooltips["Thieves' Tools"] = {
+      "Thieves' Tools", "Used to pick locks and disarm traps.",
+      "Action",         "Melee",
+      "Utility",        "DEX Check"};
+
+  // 1. Setup Level with New Isometric Tileset
+
   std::string isoTileset = "assets/isometric tileset/spritesheet.png";
   int mapW = 40;
   int mapH = 40;
@@ -1153,11 +1209,11 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
   case GameState::Map:
     HandleMapInput();
     break;
-  case GameState::Character:
-    HandleCharacterInput();
+  case GameState::CharacterMenu:
+    HandleCharacterMenuInput();
     break;
-  case GameState::Magic:
-    HandleMagicInput();
+  case GameState::RestMenu:
+    HandleRestMenuInput();
     break;
   case GameState::Trading:
     HandleTradeInput();
@@ -1170,9 +1226,6 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
     break;
   case GameState::Dialogue:
     HandleDialogueInput();
-    break;
-  case GameState::RestMenu:
-    HandleRestMenuInput();
     break;
   case GameState::Loading:
     break;
@@ -1212,79 +1265,90 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
         PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Sneak);
     auto shoveKey =
         PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Shove);
-            auto dashKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Dash);
-            auto toggleKey = PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::ToggleWeapon);
-            
-            // Tooltip Pinning
-            if (PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_T) && !m_HoveredItemName.empty()) {
-                m_TooltipPinned = !m_TooltipPinned;
-                if (m_TooltipPinned) {
-                    PixelsEngine::Input::GetMousePosition(m_PinnedTooltipX, m_PinnedTooltipY);
-                }
-            }
-            if (m_TooltipPinned && PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_ESCAPE)) {
-                m_TooltipPinned = false;
-            }
+    auto dashKey =
+        PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Dash);
+    auto toggleKey = PixelsEngine::Config::GetKeybind(
+        PixelsEngine::GameAction::ToggleWeapon);
 
-            auto* inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
-
+    // Tooltip Pinning
+    if (PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_T) &&
+        !m_HoveredItemName.empty()) {
+      m_TooltipPinned = !m_TooltipPinned;
+      if (m_TooltipPinned) {
+        PixelsEngine::Input::GetMousePosition(m_PinnedTooltipX,
+                                              m_PinnedTooltipY);
+      }
+    }
+    if (m_TooltipPinned &&
+        PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_ESCAPE)) {
+      m_TooltipPinned = false;
+    }
 
     if (PixelsEngine::Input::IsKeyPressed(escKey)) {
-      if (inv && inv->isOpen) {
-        inv->isOpen = false;
-      } else if (m_State == GameState::Magic || m_State == GameState::Map ||
-                 m_State == GameState::Character ||
-                 m_State == GameState::Targeting ||
-                 m_State == GameState::TargetingJump ||
-                 m_State == GameState::TargetingShove) {
+      if (m_State == GameState::CharacterMenu || m_State == GameState::Map ||
+          m_State == GameState::Targeting ||
+          m_State == GameState::TargetingJump ||
+          m_State == GameState::TargetingShove) {
         m_State = m_ReturnState;
       } else {
         m_State = GameState::Paused;
         m_MenuSelection = 0;
       }
     }
-    if (PixelsEngine::Input::IsKeyPressed(invKey) && inv) {
-      inv->isOpen = !inv->isOpen;
+    if (PixelsEngine::Input::IsKeyPressed(invKey)) {
+      if (m_State == GameState::CharacterMenu && m_CharacterTab == 0) {
+        m_State = m_ReturnState;
+      } else {
+        m_ReturnState =
+            (m_State == GameState::CharacterMenu) ? m_ReturnState : m_State;
+        m_State = GameState::CharacterMenu;
+        m_CharacterTab = 0;
+      }
+    }
+    if (PixelsEngine::Input::IsKeyPressed(chrKey)) {
+      if (m_State == GameState::CharacterMenu && m_CharacterTab == 1) {
+        m_State = m_ReturnState;
+      } else {
+        m_ReturnState =
+            (m_State == GameState::CharacterMenu) ? m_ReturnState : m_State;
+        m_State = GameState::CharacterMenu;
+        m_CharacterTab = 1;
+      }
+    }
+    if (PixelsEngine::Input::IsKeyPressed(magKey)) {
+      if (m_State == GameState::CharacterMenu && m_CharacterTab == 2) {
+        m_State = m_ReturnState;
+      } else {
+        m_ReturnState =
+            (m_State == GameState::CharacterMenu) ? m_ReturnState : m_State;
+        m_State = GameState::CharacterMenu;
+        m_CharacterTab = 2;
+      }
     }
     if (PixelsEngine::Input::IsKeyPressed(mapKey)) {
-      if (m_State == GameState::Map) {
-        if (m_MapTab == 0)
-          m_State = m_ReturnState;
-        else
-          m_MapTab = 0;
+      if (m_State == GameState::Map && m_MapTab == 0) {
+        m_State = m_ReturnState;
       } else {
-        m_ReturnState = m_State;
+        m_ReturnState = (m_State == GameState::Map) ? m_ReturnState : m_State;
         m_State = GameState::Map;
         m_MapTab = 0;
       }
     }
     if (PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_J)) {
-      if (m_State == GameState::Map) {
-        if (m_MapTab == 1)
-          m_State = m_ReturnState;
-        else
-          m_MapTab = 1;
+      if (m_State == GameState::Map && m_MapTab == 1) {
+        m_State = m_ReturnState;
       } else {
-        m_ReturnState = m_State;
+        m_ReturnState = (m_State == GameState::Map) ? m_ReturnState : m_State;
         m_State = GameState::Map;
         m_MapTab = 1;
       }
     }
-    if (PixelsEngine::Input::IsKeyPressed(chrKey)) {
-      if (m_State == GameState::Character) {
-        m_State = m_ReturnState;
-      } else {
-        m_ReturnState = m_State;
-        m_State = GameState::Character;
-      }
-    }
-    if (PixelsEngine::Input::IsKeyPressed(magKey)) {
-      if (m_State == GameState::Magic) {
-        m_State = m_ReturnState;
-      } else {
-        m_ReturnState = m_State;
-        m_State = GameState::Magic;
-      }
+
+    if (m_State == GameState::Combat) {
+      UpdateCombat(deltaTime);
+    } else if (m_State == GameState::Playing || m_State == GameState::Camp) {
+      HandleInput();
+      UpdateAI(deltaTime); // Update AI
     }
 
     // --- New Actions ---
@@ -1330,10 +1394,6 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
           SpawnFloatingText(0, 0, "No Actions!", {255, 0, 0, 255});
         }
       }
-    }
-
-    if (inv && inv->isOpen) {
-      HandleInventoryInput();
     }
 
     if (m_State == GameState::Combat) {
@@ -1659,8 +1719,7 @@ void PixelsGateGame::OnRender() {
   case GameState::Combat:
   case GameState::GameOver:
   case GameState::Map:
-  case GameState::Character:
-  case GameState::Magic:
+  case GameState::CharacterMenu:
   case GameState::Targeting:
   case GameState::TargetingJump:
   case GameState::TargetingShove:
@@ -1677,23 +1736,31 @@ void PixelsGateGame::OnRender() {
 
     RenderEnemyCones(camera);
 
-            struct Renderable { int y; PixelsEngine::Entity entity; };            std::vector<Renderable> renderQueue;
-            auto& sprites = GetRegistry().View<PixelsEngine::SpriteComponent>();
-            for (auto& [entity, sprite] : sprites) {
-                auto* transform = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(entity);
-                if (transform && currentMap) {
-                    // Filter entities by map state
-                    if (m_State == GameState::Camp) {
-                        if (entity != m_Player) {
-                            auto* tag = GetRegistry().GetComponent<PixelsEngine::TagComponent>(entity);
-                            if (!tag || tag->tag != PixelsEngine::EntityTag::Companion) continue;
-                        }
-                    } else {
-                        // In main world, hide companions if they should be at camp (not implemented yet, so show all)
-                    }
+    struct Renderable {
+      int y;
+      PixelsEngine::Entity entity;
+    };
+    std::vector<Renderable> renderQueue;
+    auto &sprites = GetRegistry().View<PixelsEngine::SpriteComponent>();
+    for (auto &[entity, sprite] : sprites) {
+      auto *transform =
+          GetRegistry().GetComponent<PixelsEngine::TransformComponent>(entity);
+      if (transform && currentMap) {
+        // Filter entities by map state
+        if (m_State == GameState::Camp) {
+          if (entity != m_Player) {
+            auto *tag =
+                GetRegistry().GetComponent<PixelsEngine::TagComponent>(entity);
+            if (!tag || tag->tag != PixelsEngine::EntityTag::Companion)
+              continue;
+          }
+        } else {
+          // In main world, hide companions if they should be at camp (not
+          // implemented yet, so show all)
+        }
 
-                    // Check Fog of War
-                    if (entity != m_Player) {
+        // Check Fog of War
+        if (entity != m_Player) {
           // Always show entities currently in combat turn order
           bool inCombat = IsInTurnOrder(entity);
           if (!inCombat &&
@@ -2014,13 +2081,11 @@ void PixelsGateGame::OnRender() {
     if (m_State == GameState::Map) {
       RenderMapScreen();
     }
-    if (m_State == GameState::Character) {
-      RenderCharacterScreen();
-    }
-    if (m_State == GameState::Magic) {
-      RenderMagicScreen();
+    if (m_State == GameState::CharacterMenu) {
+      RenderCharacterMenu();
     }
     if (m_State == GameState::Trading) {
+
       RenderTradeScreen();
     }
     if (m_State == GameState::KeybindSettings) {
@@ -2727,11 +2792,14 @@ void PixelsGateGame::CheckUIInteraction(int mx, int my) {
         } else
           m_State = m_ReturnState;
       } else if (i == 1) {
-        if (m_State != GameState::Character) {
-          m_ReturnState = m_State;
-          m_State = GameState::Character;
-        } else
+        if (m_State == GameState::CharacterMenu && m_CharacterTab == 1) {
           m_State = m_ReturnState;
+        } else {
+          m_ReturnState =
+              (m_State == GameState::CharacterMenu) ? m_ReturnState : m_State;
+          m_State = GameState::CharacterMenu;
+          m_CharacterTab = 1;
+        }
       } else if (i == 2) {
         if (m_State != GameState::RestMenu) {
           m_ReturnState = m_State;
@@ -2740,11 +2808,14 @@ void PixelsGateGame::CheckUIInteraction(int mx, int my) {
         } else
           m_State = m_ReturnState;
       } else if (i == 3) {
-        auto *inv =
-            GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(
-                m_Player);
-        if (inv)
-          inv->isOpen = !inv->isOpen;
+        if (m_State == GameState::CharacterMenu && m_CharacterTab == 0) {
+          m_State = m_ReturnState;
+        } else {
+          m_ReturnState =
+              (m_State == GameState::CharacterMenu) ? m_ReturnState : m_State;
+          m_State = GameState::CharacterMenu;
+          m_CharacterTab = 0;
+        }
       }
       return;
     }
@@ -2763,18 +2834,23 @@ void PixelsGateGame::CheckUIInteraction(int mx, int my) {
 }
 
 void PixelsGateGame::CheckWorldInteraction(int mx, int my) {
-    auto& camera = GetCamera(); auto& transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
-    bool clickedEntity = false;
-    for (auto& [entity, transform] : transforms) {
-        if (entity == m_Player) continue; 
+  auto &camera = GetCamera();
+  auto &transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
+  bool clickedEntity = false;
+  for (auto &[entity, transform] : transforms) {
+    if (entity == m_Player)
+      continue;
 
-        // Filter entities by map state
-        if (m_State == GameState::Camp) {
-            auto* tag = GetRegistry().GetComponent<PixelsEngine::TagComponent>(entity);
-            if (!tag || tag->tag != PixelsEngine::EntityTag::Companion) continue;
-        }
+    // Filter entities by map state
+    if (m_State == GameState::Camp) {
+      auto *tag =
+          GetRegistry().GetComponent<PixelsEngine::TagComponent>(entity);
+      if (!tag || tag->tag != PixelsEngine::EntityTag::Companion)
+        continue;
+    }
 
-        auto* sprite = GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(entity);
+    auto *sprite =
+        GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(entity);
 
     if (sprite) {
       int screenX, screenY;
@@ -2895,7 +2971,8 @@ void PixelsGateGame::RenderHUD() {
   int winW, winH;
   SDL_GetWindowSize(m_Window, &winW, &winH);
 
-  if (!m_TooltipPinned) m_HoveredItemName = "";
+  if (!m_TooltipPinned)
+    m_HoveredItemName = "";
 
   // --- 1. Health Bar (Top Left) ---
   auto *stats =
@@ -2929,89 +3006,118 @@ void PixelsGateGame::RenderHUD() {
     m_TextRenderer->RenderText(hpText, x + 10, y + 25, {255, 255, 255, 255});
   }
 
-    // --- 2. Minimap (Top Right) ---
-    auto* currentMap = (m_State == GameState::Camp) ? m_CampLevel.get() : m_Level.get();
-    if (currentMap) {
-        int mapW = currentMap->GetWidth();
-        int mapH = currentMap->GetHeight();
-        int tileSize = (m_State == GameState::Camp) ? 8 : 4; // Larger tiles for small camp map
-        int miniW = mapW * tileSize;
-        int miniH = mapH * tileSize;
-        int mx = winW - miniW - 20;
-        int my = 20;
+  // --- 2. Minimap (Top Right) ---
+  auto *currentMap =
+      (m_State == GameState::Camp) ? m_CampLevel.get() : m_Level.get();
+  if (currentMap) {
+    int mapW = currentMap->GetWidth();
+    int mapH = currentMap->GetHeight();
+    int tileSize =
+        (m_State == GameState::Camp) ? 8 : 4; // Larger tiles for small camp map
+    int miniW = mapW * tileSize;
+    int miniH = mapH * tileSize;
+    int mx = winW - miniW - 20;
+    int my = 20;
 
-        // Background / Border
-        SDL_Rect miniRect = {mx - 2, my - 2, miniW + 4, miniH + 4};
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-        SDL_RenderFillRect(renderer, &miniRect);
-        SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
-        SDL_RenderDrawRect(renderer, &miniRect);
+    // Background / Border
+    SDL_Rect miniRect = {mx - 2, my - 2, miniW + 4, miniH + 4};
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderFillRect(renderer, &miniRect);
+    SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
+    SDL_RenderDrawRect(renderer, &miniRect);
 
-        // Draw Tiles
-        for (int ty = 0; ty < mapH; ++ty) {
-            for (int tx = 0; tx < mapW; ++tx) {
-                // Check Exploration
-                if (!currentMap->IsExplored(tx, ty)) continue;
+    // Draw Tiles
+    for (int ty = 0; ty < mapH; ++ty) {
+      for (int tx = 0; tx < mapW; ++tx) {
+        // Check Exploration
+        if (!currentMap->IsExplored(tx, ty))
+          continue;
 
-                using namespace PixelsEngine::Tiles;
-                int tileIdx = currentMap->GetTile(tx, ty);
-                SDL_Color c = {0, 0, 0, 255};
+        using namespace PixelsEngine::Tiles;
+        int tileIdx = currentMap->GetTile(tx, ty);
+        SDL_Color c = {0, 0, 0, 255};
 
-                // Detailed Minimap Colors
-                if (tileIdx >= DIRT && tileIdx <= DIRT_VARIANT_18) c = {101, 67, 33, 255}; // Brown
-                else if (tileIdx >= DIRT_WITH_LEAVES_01 && tileIdx <= DIRT_WITH_LEAVES_02) c = {85, 107, 47, 255}; // Olive
-                else if (tileIdx >= GRASS && tileIdx <= GRASS_VARIANT_02) c = {34, 139, 34, 255}; // Forest Green
-                else if (tileIdx == DIRT_VARIANT_19 || tileIdx == DIRT_WITH_PARTIAL_GRASS) c = {139, 69, 19, 255}; // Saddle Brown
-                else if (tileIdx >= GRASS_BLOCK_FULL && tileIdx <= GRASS_BLOCK_FULL_VARIANT_01) c = {0, 128, 0, 255}; // Green
-                else if (tileIdx >= GRASS_WITH_BUSH && tileIdx <= GRASS_WITH_BUSH_VARIANT_07) c = {0, 100, 0, 255}; // Dark Green
-                else if (tileIdx >= GRASS_VARIANT_03 && tileIdx <= GRASS_VARIANT_06) c = {50, 205, 50, 255}; // Lime Green
-                else if (tileIdx >= FLOWER && tileIdx <= FLOWERS_WITHOUT_LEAVES) c = {255, 105, 180, 255}; // Pink/Flower
-                else if (tileIdx >= LOG && tileIdx <= LOG_WITH_LEAVES_VARIANT_02) c = {139, 69, 19, 255}; // Log Brown
-                else if (tileIdx >= DIRT_PILE && tileIdx <= DIRT_PILE_VARIANT_07) c = {160, 82, 45, 255}; // Sienna
-                else if (tileIdx >= COBBLESTONE && tileIdx <= SMOOTH_STONE) c = {128, 128, 128, 255}; // Grey
-                else if (tileIdx >= ROCK && tileIdx <= ROCK_VARIANT_03) c = {105, 105, 105, 255}; // Dim Grey
-                else if (tileIdx >= ROCK_ON_WATER && tileIdx <= STONES_ON_WATER_VARIANT_11) c = {70, 130, 180, 255}; // Steel Blue
-                else if (tileIdx >= WATER_DROPLETS && tileIdx <= OCEAN_ROUGH) c = {0, 0, 255, 255}; // Blue
-                else c = {100, 100, 100, 255}; // Unknown: Dark Grey
+        // Detailed Minimap Colors
+        if (tileIdx >= DIRT && tileIdx <= DIRT_VARIANT_18)
+          c = {101, 67, 33, 255}; // Brown
+        else if (tileIdx >= DIRT_WITH_LEAVES_01 &&
+                 tileIdx <= DIRT_WITH_LEAVES_02)
+          c = {85, 107, 47, 255}; // Olive
+        else if (tileIdx >= GRASS && tileIdx <= GRASS_VARIANT_02)
+          c = {34, 139, 34, 255}; // Forest Green
+        else if (tileIdx == DIRT_VARIANT_19 ||
+                 tileIdx == DIRT_WITH_PARTIAL_GRASS)
+          c = {139, 69, 19, 255}; // Saddle Brown
+        else if (tileIdx >= GRASS_BLOCK_FULL &&
+                 tileIdx <= GRASS_BLOCK_FULL_VARIANT_01)
+          c = {0, 128, 0, 255}; // Green
+        else if (tileIdx >= GRASS_WITH_BUSH &&
+                 tileIdx <= GRASS_WITH_BUSH_VARIANT_07)
+          c = {0, 100, 0, 255}; // Dark Green
+        else if (tileIdx >= GRASS_VARIANT_03 && tileIdx <= GRASS_VARIANT_06)
+          c = {50, 205, 50, 255}; // Lime Green
+        else if (tileIdx >= FLOWER && tileIdx <= FLOWERS_WITHOUT_LEAVES)
+          c = {255, 105, 180, 255}; // Pink/Flower
+        else if (tileIdx >= LOG && tileIdx <= LOG_WITH_LEAVES_VARIANT_02)
+          c = {139, 69, 19, 255}; // Log Brown
+        else if (tileIdx >= DIRT_PILE && tileIdx <= DIRT_PILE_VARIANT_07)
+          c = {160, 82, 45, 255}; // Sienna
+        else if (tileIdx >= COBBLESTONE && tileIdx <= SMOOTH_STONE)
+          c = {128, 128, 128, 255}; // Grey
+        else if (tileIdx >= ROCK && tileIdx <= ROCK_VARIANT_03)
+          c = {105, 105, 105, 255}; // Dim Grey
+        else if (tileIdx >= ROCK_ON_WATER &&
+                 tileIdx <= STONES_ON_WATER_VARIANT_11)
+          c = {70, 130, 180, 255}; // Steel Blue
+        else if (tileIdx >= WATER_DROPLETS && tileIdx <= OCEAN_ROUGH)
+          c = {0, 0, 255, 255}; // Blue
+        else
+          c = {100, 100, 100, 255}; // Unknown: Dark Grey
 
-                SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
-                SDL_Rect tileRect = {mx + tx * tileSize, my + ty * tileSize, tileSize, tileSize};
-                SDL_RenderFillRect(renderer, &tileRect);
-            }
+        SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
+        SDL_Rect tileRect = {mx + tx * tileSize, my + ty * tileSize, tileSize,
+                             tileSize};
+        SDL_RenderFillRect(renderer, &tileRect);
+      }
+    }
+
+    // Helper for circles on minimap
+    auto FillCircle = [&](int cx, int cy, int r, SDL_Color color) {
+      SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+      for (int dy = -r; dy <= r; dy++) {
+        for (int dx = -r; dx <= r; dx++) {
+          if (dx * dx + dy * dy <= r * r)
+            SDL_RenderDrawPoint(renderer, cx + dx, cy + dy);
         }
+      }
+    };
 
-        // Helper for circles on minimap
-        auto FillCircle = [&](int cx, int cy, int r, SDL_Color color) {
-            SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
-            for (int dy = -r; dy <= r; dy++) {
-                for (int dx = -r; dx <= r; dx++) {
-                    if (dx*dx + dy*dy <= r*r) SDL_RenderDrawPoint(renderer, cx + dx, cy + dy);
-                }
-            }
-        };
+    // Render all entities on Minimap
+    auto &transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
+    for (auto &[entity, trans] : transforms) {
+      // Filter entities by map
+      if (m_State == GameState::Camp) {
+        if (entity != m_Player) {
+          auto *tag =
+              GetRegistry().GetComponent<PixelsEngine::TagComponent>(entity);
+          if (!tag || tag->tag != PixelsEngine::EntityTag::Companion)
+            continue;
+        }
+      } else {
+        // Don't show companions if they were left at camp? (simplified: show
+        // all)
+      }
 
-        // Render all entities on Minimap
-        auto& transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
-        for (auto& [entity, trans] : transforms) {
-            // Filter entities by map
-            if (m_State == GameState::Camp) {
-                if (entity != m_Player) {
-                    auto* tag = GetRegistry().GetComponent<PixelsEngine::TagComponent>(entity);
-                    if (!tag || tag->tag != PixelsEngine::EntityTag::Companion) continue;
-                }
-            } else {
-                // Don't show companions if they were left at camp? (simplified: show all)
-            }
+      if (!currentMap->IsVisible((int)trans.x, (int)trans.y))
+        continue;
 
-            if (!currentMap->IsVisible((int)trans.x, (int)trans.y)) continue;
+      int px = mx + (int)trans.x * tileSize + tileSize / 2;
+      int py = my + (int)trans.y * tileSize + tileSize / 2;
 
-            int px = mx + (int)trans.x * tileSize + tileSize/2;
-            int py = my + (int)trans.y * tileSize + tileSize/2;
-
-            if (entity == m_Player) {
-                FillCircle(px, py, 3, {255, 255, 255, 255}); // Player: White Circle
-                continue;
-            }
+      if (entity == m_Player) {
+        FillCircle(px, py, 3, {255, 255, 255, 255}); // Player: White Circle
+        continue;
+      }
 
       auto *tagComp =
           GetRegistry().GetComponent<PixelsEngine::TagComponent>(entity);
@@ -3056,28 +3162,39 @@ void PixelsGateGame::RenderHUD() {
   SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
   SDL_RenderDrawRect(renderer, &hudRect);
 
-    auto DrawGrid = [&](const std::string& title, int startX, const std::vector<std::string>& labels, const std::vector<std::string>& keys, const std::vector<std::string>& icons, const std::vector<std::string>& counts, int count) {
-        m_TextRenderer->RenderText(title, startX, winH - barH + 5, {200, 200, 200, 255});
-        int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
-        
-        for (int i = 0; i < count; ++i) {
-            int row = i / 3;
-            int col = i % 3;
-            SDL_Rect btn = { startX + col * 45, winH - barH + 25 + row * 35, 40, 30 };
-            SDL_SetRenderDrawColor(renderer, 80, 80, 80, 255); SDL_RenderFillRect(renderer, &btn);
-            SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255); SDL_RenderDrawRect(renderer, &btn);
-            
-            // Hover Detection for Tooltips
-            if (mx >= btn.x && mx <= btn.x + btn.w && my >= btn.y && my <= btn.y + btn.h) {
-                if (title == "ACTIONS" || title == "SPELLS") {
-                    if (i < (int)labels.size()) m_HoveredItemName = labels[i];
-                } else if (title == "ITEMS") {
-                    auto hotbarItems = GetHotbarItems();
-                    if (i < (int)hotbarItems.size()) m_HoveredItemName = hotbarItems[i];
-                }
-            }
+  auto DrawGrid = [&](const std::string &title, int startX,
+                      const std::vector<std::string> &labels,
+                      const std::vector<std::string> &keys,
+                      const std::vector<std::string> &icons,
+                      const std::vector<std::string> &counts, int count) {
+    m_TextRenderer->RenderText(title, startX, winH - barH + 5,
+                               {200, 200, 200, 255});
+    int mx, my;
+    PixelsEngine::Input::GetMousePosition(mx, my);
 
-            bool iconDrawn = false;
+    for (int i = 0; i < count; ++i) {
+      int row = i / 3;
+      int col = i % 3;
+      SDL_Rect btn = {startX + col * 45, winH - barH + 25 + row * 35, 40, 30};
+      SDL_SetRenderDrawColor(renderer, 80, 80, 80, 255);
+      SDL_RenderFillRect(renderer, &btn);
+      SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
+      SDL_RenderDrawRect(renderer, &btn);
+
+      // Hover Detection for Tooltips
+      if (mx >= btn.x && mx <= btn.x + btn.w && my >= btn.y &&
+          my <= btn.y + btn.h) {
+        if (title == "ACTIONS" || title == "SPELLS") {
+          if (i < (int)labels.size())
+            m_HoveredItemName = labels[i];
+        } else if (title == "ITEMS") {
+          auto hotbarItems = GetHotbarItems();
+          if (i < (int)hotbarItems.size())
+            m_HoveredItemName = hotbarItems[i];
+        }
+      }
+
+      bool iconDrawn = false;
       if (i < (int)icons.size() && !icons[i].empty()) {
         auto tex =
             PixelsEngine::TextureManager::LoadTexture(renderer, icons[i]);
@@ -3255,46 +3372,42 @@ void PixelsGateGame::RenderHUD() {
         SDL_RenderFillRect(renderer, &bubble);
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderDrawRect(renderer, &bubble);
-                         m_TextRenderer->RenderTextWrapped(interact.dialogueText, bubble.x + 5, bubble.y + 5, w - 10, {0, 0, 0, 255});
-                    }
-                }
-            }
-        
-                // Render Tooltip on top of everything
-        
-                if (!m_HoveredItemName.empty()) {
-        
-                    auto it = m_Tooltips.find(m_HoveredItemName);
-        
-                    if (it != m_Tooltips.end()) {
-        
-                        int tx, ty;
-        
-                        if (m_TooltipPinned) {
-        
-                            tx = m_PinnedTooltipX;
-        
-                            ty = m_PinnedTooltipY;
-        
-                        } else {
-        
-                            int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
-        
-                            tx = mx + 15;
-        
-                            ty = my - 150;
-        
-                        }
-        
-                        RenderTooltip(it->second, tx, ty);
-        
-                    }
-        
-                }
-        
-            
-        }
-        
+        m_TextRenderer->RenderTextWrapped(interact.dialogueText, bubble.x + 5,
+                                          bubble.y + 5, w - 10, {0, 0, 0, 255});
+      }
+    }
+  }
+
+  // Render Tooltip on top of everything
+
+  if (!m_HoveredItemName.empty()) {
+
+    auto it = m_Tooltips.find(m_HoveredItemName);
+
+    if (it != m_Tooltips.end()) {
+
+      int tx, ty;
+
+      if (m_TooltipPinned) {
+
+        tx = m_PinnedTooltipX;
+
+        ty = m_PinnedTooltipY;
+
+      } else {
+
+        int mx, my;
+        PixelsEngine::Input::GetMousePosition(mx, my);
+
+        tx = mx + 15;
+
+        ty = my - 150;
+      }
+
+      RenderTooltip(it->second, tx, ty);
+    }
+  }
+}
 
 // --- Menu Implementations ---
 
@@ -3394,6 +3507,18 @@ void PixelsGateGame::HandleMainMenuInput() {
         {
           // Reset player to default starting state
           m_WorldFlags.clear();
+
+          // Clear all entities except player to avoid duplicates/ghosts
+          auto &entities =
+              GetRegistry().View<PixelsEngine::TransformComponent>();
+          std::vector<PixelsEngine::Entity> toDestroy;
+          for (auto &[entity, trans] : entities) {
+            if (entity != m_Player)
+              toDestroy.push_back(entity);
+          }
+          for (auto ent : toDestroy)
+            GetRegistry().DestroyEntity(ent);
+
           auto *stats =
               GetRegistry().GetComponent<PixelsEngine::StatsComponent>(
                   m_Player);
@@ -3431,34 +3556,10 @@ void PixelsGateGame::HandleMainMenuInput() {
                          "assets/thieves_tools.png", 25);
           }
 
-          // Reset Dialogues
-          auto &dialogues =
-              GetRegistry().View<PixelsEngine::DialogueComponent>();
-          for (auto &[entity, diag] : dialogues) {
-            if (diag.tree) {
-              diag.tree->currentNodeId = "start";
-              for (auto &[id, node] : diag.tree->nodes) {
-                for (auto &opt : node.options) {
-                  opt.hasBeenChosen = false;
-                }
-              }
-            }
-          }
-
-          // Reset Quest States (assuming quest components on NPCs need reset)
-          auto &quests = GetRegistry().View<PixelsEngine::QuestComponent>();
-          for (auto &[entity, quest] : quests) {
-            quest.state = 0;
-          }
-
-          // Reset NPC Inventories if needed (optional, but good for "New Game")
-          // This is harder as we hardcoded them in OnStart.
-          // Ideally OnStart logic for NPCs should be reusable or we just rely
-          // on Save/Load for state. But for a simple reset, resetting flags and
-          // dialogue options is key.
+          SpawnWorldEntities();
 
           m_State = GameState::Creation;
-          selectionIndex = 0; // Reset creation selection
+          selectionIndex = 0;
           pointsRemaining = 5;
           for (int i = 0; i < 6; ++i)
             tempStats[i] = 10;
@@ -4843,6 +4944,248 @@ void PixelsGateGame::HandleGameOverInput() {
       nullptr, hovered);
 }
 
+void PixelsGateGame::RenderCharacterMenu() {
+  SDL_Renderer *renderer = GetRenderer();
+  int w, h;
+  SDL_GetWindowSize(m_Window, &w, &h);
+  int mx, my;
+  PixelsEngine::Input::GetMousePosition(mx, my);
+
+  // Overlay
+  SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+  SDL_SetRenderDrawColor(renderer, 20, 20, 30, 230);
+  SDL_Rect overlay = {0, 0, w, h};
+  SDL_RenderFillRect(renderer, &overlay);
+  SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+
+  // Main Panel
+  int panelW = 800, panelH = 500;
+  SDL_Rect panel = {(w - panelW) / 2, (h - panelH) / 2, panelW, panelH};
+  SDL_SetRenderDrawColor(renderer, 45, 45, 55, 255);
+  SDL_RenderFillRect(renderer, &panel);
+  SDL_SetRenderDrawColor(renderer, 100, 100, 120, 255);
+  SDL_RenderDrawRect(renderer, &panel);
+
+  // --- Tab Headers ---
+  const char *tabNames[] = {"INVENTORY", "CHARACTER", "SPELLBOOK"};
+  int tabW = panelW / 3;
+  for (int i = 0; i < 3; ++i) {
+    SDL_Rect tabRect = {panel.x + i * tabW, panel.y - 40, tabW, 40};
+    bool hover = (mx >= tabRect.x && mx <= tabRect.x + tabRect.w &&
+                  my >= tabRect.y && my <= tabRect.y + tabRect.h);
+
+    if (m_CharacterTab == i)
+      SDL_SetRenderDrawColor(renderer, 60, 60, 80, 255);
+    else if (hover)
+      SDL_SetRenderDrawColor(renderer, 50, 50, 70, 255);
+    else
+      SDL_SetRenderDrawColor(renderer, 35, 35, 45, 255);
+
+    SDL_RenderFillRect(renderer, &tabRect);
+    SDL_SetRenderDrawColor(renderer, 100, 100, 120, 255);
+    SDL_RenderDrawRect(renderer, &tabRect);
+
+    m_TextRenderer->RenderTextCentered(tabNames[i], tabRect.x + tabW / 2,
+                                       tabRect.y + 20, {255, 255, 255, 255});
+  }
+
+  // --- Content ---
+  if (m_CharacterTab == 0) { // Inventory
+    // ... (existing inventory render)
+    auto *inv =
+        GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+    if (inv) {
+      // Equipment Slots (Left)
+      int slotSize = 64;
+      int startX = panel.x + 50;
+      int startY = panel.y + 50;
+
+      auto DrawBigSlot = [&](const std::string &label, PixelsEngine::Item &item,
+                             int x, int y) {
+        SDL_Rect r = {x, y, slotSize, slotSize};
+        SDL_SetRenderDrawColor(renderer, 30, 30, 40, 255);
+        SDL_RenderFillRect(renderer, &r);
+        SDL_SetRenderDrawColor(renderer, 150, 150, 180, 255);
+        SDL_RenderDrawRect(renderer, &r);
+        m_TextRenderer->RenderTextCentered(label, x + slotSize / 2, y - 15,
+                                           {200, 200, 200, 255});
+        if (!item.IsEmpty()) {
+          auto tex = PixelsEngine::TextureManager::LoadTexture(renderer,
+                                                               item.iconPath);
+          if (tex)
+            tex->Render(x + 8, y + 8, 48, 48);
+        }
+      };
+
+      DrawBigSlot("Melee", inv->equippedMelee, startX, startY);
+      DrawBigSlot("Ranged", inv->equippedRanged, startX, startY + 100);
+      DrawBigSlot("Armor", inv->equippedArmor, startX, startY + 200);
+
+      // Item List (Right)
+      int listX = panel.x + 200;
+      int itemY = panel.y + 50;
+      for (int i = 0; i < (int)inv->items.size(); ++i) {
+        auto &item = inv->items[i];
+        SDL_Rect row = {listX, itemY, panelW - 250, 40};
+        bool hov = (mx >= row.x && mx <= row.x + row.w && my >= row.y &&
+                    my <= row.y + row.h);
+        if (hov) {
+          SDL_SetRenderDrawColor(renderer, 60, 60, 90, 255);
+          SDL_RenderFillRect(renderer, &row);
+        }
+        RenderInventoryItem(item, listX + 5, itemY + 4);
+        itemY += 45;
+      }
+    }
+  } else if (m_CharacterTab == 1) { // Character Sheet
+    auto *stats =
+        GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+    if (stats) {
+      int lx = panel.x + 50, rx = panel.x + 400, ty = panel.y + 50;
+      m_TextRenderer->RenderText("Level " + std::to_string(stats->level) + " " +
+                                     stats->race + " " + stats->characterClass,
+                                 lx, ty, {255, 255, 0, 255});
+      ty += 60;
+
+      auto DrawStat = [&](const std::string &name, int val, int x, int y,
+                          SDL_Color col) {
+        m_TextRenderer->RenderText(name + ": " + std::to_string(val), x, y,
+                                   col);
+        int mod = (val - 10) / 2;
+        std::string modStr = (mod >= 0 ? "+" : "") + std::to_string(mod);
+        m_TextRenderer->RenderText("(" + modStr + ")", x + 150, y,
+                                   {150, 150, 150, 255});
+      };
+
+      DrawStat("STR", stats->strength, lx, ty, {255, 150, 150, 255});
+      ty += 40;
+      DrawStat("DEX", stats->dexterity, lx, ty, {150, 255, 150, 255});
+      ty += 40;
+      DrawStat("CON", stats->constitution, lx, ty, {150, 150, 255, 255});
+      ty += 40;
+      DrawStat("INT", stats->intelligence, lx, ty, {255, 150, 255, 255});
+      ty += 40;
+      DrawStat("WIS", stats->wisdom, lx, ty, {150, 255, 255, 255});
+      ty += 40;
+      DrawStat("CHA", stats->charisma, lx, ty, {255, 255, 150, 255});
+
+      ty = panel.y + 110;
+      m_TextRenderer->RenderText(
+          "Health: " + std::to_string(stats->currentHealth) + " / " +
+              std::to_string(stats->maxHealth),
+          rx, ty, {255, 255, 255, 255});
+      ty += 40;
+      m_TextRenderer->RenderText("Experience: " +
+                                     std::to_string(stats->experience),
+                                 rx, ty, {200, 200, 200, 255});
+      ty += 40;
+            m_TextRenderer->RenderText("Short Rests: " + std::to_string(stats->shortRestsAvailable), rx, ty, {200, 200, 200, 255});
+        }
+    }
+    else if (m_CharacterTab == 2) { // Spellbook
+        m_TextRenderer->RenderTextCentered("Known Spells", panel.x + panelW / 2,
+                                           panel.y + 50, {200, 100, 255, 255});
+        std::string spellNames[] = {"Fireball", "Heal", "Magic Missile", "Shield"};
+        std::string spellDescs[] = {"Deals fire damage in a 6m radius.",
+                                    "Restores HP to a creature.",
+                                    "Three darts of force that never miss.",
+                                    "Reaction to gain +5 AC until next turn."};
+        std::string spellTooltips[] = {"Fir", "Hel", "Mis", "Shd"};
+        int ty = panel.y + 100;
+        for (int i = 0; i < 4; ++i) {
+            SDL_Rect row = {panel.x + 50, ty, panelW - 100, 40};
+            bool hov = (mx >= row.x && mx <= row.x + row.w && my >= row.y &&
+                        my <= row.y + row.h);
+            if (hov) {
+                SDL_SetRenderDrawColor(renderer, 80, 40, 110, 255); // Prominent purple highlight
+                SDL_RenderFillRect(renderer, &row);
+                SDL_SetRenderDrawColor(renderer, 200, 100, 255, 255);
+                SDL_RenderDrawRect(renderer, &row);
+                m_HoveredItemName = spellTooltips[i];
+            }
+
+            m_TextRenderer->RenderText(spellNames[i], panel.x + 60, ty + 10,
+                                       {255, 255, 255, 255});
+            m_TextRenderer->RenderText(spellDescs[i], panel.x + 250, ty + 10,
+                                       {180, 180, 180, 255});
+            ty += 50;
+        }
+    }
+
+  m_TextRenderer->RenderTextCentered(
+      "Press ESC or Tab Key to Close", panel.x + panelW / 2,
+      panel.y + panelH - 30, {150, 150, 150, 255});
+}
+
+void PixelsGateGame::HandleCharacterMenuInput() {
+  int w, h;
+  SDL_GetWindowSize(m_Window, &w, &h);
+  int mx, my;
+  PixelsEngine::Input::GetMousePosition(mx, my);
+  int panelW = 800, panelH = 500;
+  SDL_Rect panel = {(w - panelW) / 2, (h - panelH) / 2, panelW, panelH};
+
+  if (PixelsEngine::Input::IsMouseButtonPressed(SDL_BUTTON_LEFT)) {
+    int tabW = panelW / 3;
+    for (int i = 0; i < 3; ++i) {
+      SDL_Rect tabRect = {panel.x + i * tabW, panel.y - 40, tabW, 40};
+      if (mx >= tabRect.x && mx <= tabRect.x + tabRect.w && my >= tabRect.y &&
+          my <= tabRect.y + tabRect.h) {
+        m_CharacterTab = i;
+        return;
+      }
+    }
+
+    // Spell casting logic for Spellbook tab
+    if (m_CharacterTab == 2) {
+      int ty = panel.y + 100;
+      std::string spellNames[] = {"Fireball", "Heal", "Magic Missile",
+                                  "Shield"};
+      for (int i = 0; i < 4; ++i) {
+        SDL_Rect row = {panel.x + 50, ty, panelW - 100, 40};
+        if (mx >= row.x && mx <= row.x + row.w && my >= row.y &&
+            my <= row.y + row.h) {
+          m_PendingSpellName = spellNames[i];
+          m_ReturnState = GameState::Playing; // Default return to playing
+          m_State = GameState::Targeting;
+          return;
+        }
+        ty += 50;
+      }
+    }
+  }
+
+  auto escKey =
+      PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Pause);
+  auto invKey =
+      PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Inventory);
+  auto chrKey =
+      PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Character);
+  auto magKey =
+      PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Magic);
+
+  if (PixelsEngine::Input::IsKeyPressed(escKey))
+    m_State = m_ReturnState;
+  if (PixelsEngine::Input::IsKeyPressed(invKey)) {
+    if (m_CharacterTab == 0)
+      m_State = m_ReturnState;
+    else
+      m_CharacterTab = 0;
+  }
+  if (PixelsEngine::Input::IsKeyPressed(chrKey)) {
+    if (m_CharacterTab == 1)
+      m_State = m_ReturnState;
+    else
+      m_CharacterTab = 1;
+  }
+  if (PixelsEngine::Input::IsKeyPressed(magKey)) {
+    if (m_CharacterTab == 2)
+      m_State = m_ReturnState;
+    else
+      m_CharacterTab = 2;
+  }
+}
+
 void PixelsGateGame::RenderMapScreen() {
   SDL_Renderer *renderer = GetRenderer();
   int w, h;
@@ -5115,73 +5458,6 @@ void PixelsGateGame::HandleMapInput() {
                my <= journalTabRect.y + journalTabRect.h) {
       m_MapTab = 1;
     }
-  }
-}
-
-void PixelsGateGame::RenderCharacterScreen() {
-  SDL_Renderer *renderer = GetRenderer();
-  int w, h;
-  SDL_GetWindowSize(m_Window, &w, &h);
-
-  // Semi-transparent Overlay
-  SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-  SDL_SetRenderDrawColor(renderer, 30, 30, 40, 230);
-  SDL_Rect screenRect = {0, 0, w, h};
-  SDL_RenderFillRect(renderer, &screenRect);
-  SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
-
-  m_TextRenderer->RenderTextCentered("CHARACTER SHEET", w / 2, 50,
-                                     {0, 255, 255, 255});
-
-  auto *stats =
-      GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
-  if (stats) {
-    int x = w / 4, y = 120;
-    m_TextRenderer->RenderText("Class: " + stats->characterClass, x, y,
-                               {255, 255, 255, 255});
-    y += 40;
-    m_TextRenderer->RenderText("Race: " + stats->race, x, y,
-                               {255, 255, 255, 255});
-    y += 40;
-    m_TextRenderer->RenderText(
-        "Level: " + std::to_string(stats->level) +
-            "  (XP: " + std::to_string(stats->experience) + ")",
-        x, y, {255, 255, 0, 255});
-    y += 60;
-
-    m_TextRenderer->RenderText("STR: " + std::to_string(stats->strength), x, y,
-                               {255, 200, 200, 255});
-    y += 35;
-    m_TextRenderer->RenderText("DEX: " + std::to_string(stats->dexterity), x, y,
-                               {200, 255, 200, 255});
-    y += 35;
-    m_TextRenderer->RenderText("CON: " + std::to_string(stats->constitution), x,
-                               y, {200, 200, 255, 255});
-    y += 35;
-    m_TextRenderer->RenderText("INT: " + std::to_string(stats->intelligence), x,
-                               y, {255, 200, 255, 255});
-    y += 35;
-    m_TextRenderer->RenderText("WIS: " + std::to_string(stats->wisdom), x, y,
-                               {255, 255, 200, 255});
-    y += 35;
-    m_TextRenderer->RenderText("CHA: " + std::to_string(stats->charisma), x, y,
-                               {200, 255, 255, 255});
-    y += 35;
-  }
-
-  m_TextRenderer->RenderTextCentered("Press ESC or C to Close", w / 2, h - 50,
-                                     {150, 150, 150, 255});
-}
-
-void PixelsGateGame::HandleCharacterInput() {
-  auto escKey =
-      PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Pause);
-  auto chrKey =
-      PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Character);
-
-  if (PixelsEngine::Input::IsKeyPressed(escKey) ||
-      PixelsEngine::Input::IsKeyPressed(chrKey)) {
-    m_State = m_ReturnState;
   }
 }
 
@@ -5930,7 +6206,8 @@ void PixelsGateGame::CastSpell(const std::string &spellName,
 
     // Return to spellbook if no success (clicked nothing etc)
 
-    m_State = GameState::Magic;
+    m_State = GameState::CharacterMenu;
+    m_CharacterTab = 2; // Spellbook
   }
 }
 
@@ -6370,97 +6647,6 @@ void PixelsGateGame::HandleKeybindInput() {
   }
 }
 
-void PixelsGateGame::HandleMagicInput() {
-  int w, h;
-  SDL_GetWindowSize(m_Window, &w, &h);
-  int mx, my;
-  PixelsEngine::Input::GetMousePosition(mx, my);
-  bool isClick = PixelsEngine::Input::IsMouseButtonDown(SDL_BUTTON_LEFT);
-  static bool wasClick = false;
-  bool clicked = isClick && !wasClick;
-  wasClick = isClick;
-
-  if (clicked) {
-    int x = w / 4, y = 120;
-    std::string spellNames[] = {"Fireball", "Heal", "Magic Missile", "Shield"};
-    for (int i = 0; i < 4; ++i) {
-      SDL_Rect row = {x - 20, y, w / 2 + 180, 40};
-      if (mx >= row.x && mx <= row.x + row.w && my >= row.y &&
-          my <= row.y + row.h) {
-        m_PendingSpellName = spellNames[i];
-        m_State = GameState::Targeting;
-        return;
-      }
-      y += 45;
-    }
-  }
-
-  auto escKey =
-      PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Pause);
-  auto magKey =
-      PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::Magic);
-
-  if (PixelsEngine::Input::IsKeyPressed(escKey) ||
-      PixelsEngine::Input::IsKeyPressed(magKey)) {
-    m_State = m_ReturnState;
-  }
-}
-
-void PixelsGateGame::RenderMagicScreen() {
-  SDL_Renderer *renderer = GetRenderer();
-  int w, h;
-  SDL_GetWindowSize(m_Window, &w, &h);
-  int mx, my;
-  PixelsEngine::Input::GetMousePosition(mx, my);
-
-  // Semi-transparent Overlay
-  SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-  SDL_SetRenderDrawColor(renderer, 40, 10, 60, 230);
-  SDL_Rect screenRect = {0, 0, w, h};
-  SDL_RenderFillRect(renderer, &screenRect);
-  SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
-
-  m_TextRenderer->RenderTextCentered("SPELLBOOK", w / 2, 50,
-                                     {200, 100, 255, 255});
-
-  // Spells
-  std::vector<std::pair<std::string, std::string>> spells = {
-      {"Fireball", "Deals 3d6 fire damage in an area."},
-      {"Heal", "Restores 2d4+2 health points."},
-      {"Magic Missile", "Always hits, deals 1d4+1 damage."},
-      {"Shield", "Increases AC by 5 for 1 round."}};
-
-  int x = w / 4, y = 120;
-  for (int i = 0; i < spells.size(); ++i) {
-    SDL_Rect row = {x - 20, y, w / 2 + 180, 40};
-    bool hover = (mx >= row.x && mx <= row.x + row.w && my >= row.y &&
-                  my <= row.y + row.h);
-
-    if (hover) {
-      SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-      SDL_SetRenderDrawColor(renderer, 255, 255, 255, 50);
-      SDL_RenderFillRect(renderer, &row);
-      SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
-
-      // Add arrows
-      m_TextRenderer->RenderTextCentered(">", row.x - 20, y + 20,
-                                         {50, 255, 50, 255});
-      m_TextRenderer->RenderTextCentered("<", row.x + row.w + 20, y + 20,
-                                         {50, 255, 50, 255});
-    }
-
-    m_TextRenderer->RenderText(spells[i].first, x + 10, y + 10,
-                               {255, 255, 255, 255});
-    m_TextRenderer->RenderText(spells[i].second, x + 160, y + 10,
-                               {180, 180, 180, 255});
-    y += 45;
-  }
-
-  m_TextRenderer->RenderTextCentered(
-      "Click a spell to cast. Press ESC to Close", w / 2, h - 50,
-      {150, 150, 150, 255});
-}
-
 void PixelsGateGame::RenderLootScreen() {
   SDL_Renderer *renderer = GetRenderer();
   int w, h;
@@ -6738,71 +6924,429 @@ void PixelsGateGame::InitCampMap() {
         else
           tile = DIRT;
       }
-                  m_CampLevel->SetTile(x, y, tile);
-              }
-          }
-      }
-      
-      void PixelsGateGame::RenderTooltip(const TooltipData& data, int x, int y) {
-          SDL_Renderer* renderer = GetRenderer();
-          int w = 320;
-          
-          // Calculate required height
-          int descHeight = m_TextRenderer->MeasureTextWrapped(data.description, w - 20);
-          // Header (Name+Line): 40
-          // Subheader (Cost+Range): 30
-          // Description: descHeight
-          // Footer (Effect+Save): 35
-          // Pin hint: 25
-          // Padding: 20
-          int totalH = 40 + 30 + descHeight + 35 + 25 + 20;
-          
-          // Adjust if tooltip goes off screen
-          int winW, winH; SDL_GetWindowSize(m_Window, &winW, &winH);
-          if (x + w > winW) x = winW - w - 10;
-          if (x < 10) x = 10;
-          if (y + totalH > winH) y = winH - totalH - 10;
-          if (y < 10) y = 10;
-      
-          SDL_Rect box = {x, y, w, totalH};
-          
-          SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-          SDL_SetRenderDrawColor(renderer, 20, 20, 25, 240);
-          SDL_RenderFillRect(renderer, &box);
-          SDL_SetRenderDrawColor(renderer, 100, 100, 120, 255);
-          SDL_RenderDrawRect(renderer, &box);
-          if (m_TooltipPinned) {
-              SDL_SetRenderDrawColor(renderer, 255, 215, 0, 255);
-              SDL_RenderDrawRect(renderer, &box);
-          }
-      
-          int currentY = y + 10;
-          m_TextRenderer->RenderText(data.name, x + 10, currentY, {255, 255, 255, 255});
-          currentY += 30;
-          
-          SDL_SetRenderDrawColor(renderer, 80, 80, 80, 255);
-          SDL_RenderDrawLine(renderer, x + 10, currentY, x + w - 10, currentY);
-          currentY += 10;
-      
-          SDL_Color costCol = {200, 200, 200, 255};
-          if (data.cost.find("Action") != std::string::npos) costCol = {50, 255, 50, 255};
-          else if (data.cost.find("Bonus") != std::string::npos) costCol = {255, 150, 50, 255};
-          
-          m_TextRenderer->RenderTextSmall("Cost: " + data.cost, x + 10, currentY, costCol);
-          m_TextRenderer->RenderTextSmall("Range: " + data.range, x + 160, currentY, {200, 200, 255, 255});
-          currentY += 30;
-      
-          m_TextRenderer->RenderTextWrapped(data.description, x + 10, currentY, w - 20, {180, 180, 180, 255});
-          currentY += descHeight + 15;
-      
-          m_TextRenderer->RenderTextSmall("Dmg/Effect: " + data.effect, x + 10, currentY, {255, 100, 100, 255});
-          if (data.save != "None") {
-              m_TextRenderer->RenderTextSmall("Save: " + data.save, x + 160, currentY, {255, 255, 100, 255});
-          }
-          currentY += 25;
-      
-          m_TextRenderer->RenderTextSmall(m_TooltipPinned ? "[T] Unpin" : "[T] Pin Tooltip", x + 10, currentY, {100, 100, 100, 255});
-          
-          SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
-      }
-      
+      m_CampLevel->SetTile(x, y, tile);
+    }
+  }
+}
+
+void PixelsGateGame::RenderTooltip(const TooltipData &data, int x, int y) {
+  SDL_Renderer *renderer = GetRenderer();
+  int w = 320;
+
+  // Calculate required height
+  int descHeight = m_TextRenderer->MeasureTextWrapped(data.description, w - 20);
+  // Header (Name+Line): 40
+  // Subheader (Cost+Range): 30
+  // Description: descHeight
+  // Footer (Effect+Save): 35
+  // Pin hint: 25
+  // Padding: 20
+  int totalH = 40 + 30 + descHeight + 35 + 25 + 20;
+
+  // Adjust if tooltip goes off screen
+  int winW, winH;
+  SDL_GetWindowSize(m_Window, &winW, &winH);
+  if (x + w > winW)
+    x = winW - w - 10;
+  if (x < 10)
+    x = 10;
+  if (y + totalH > winH)
+    y = winH - totalH - 10;
+  if (y < 10)
+    y = 10;
+
+  SDL_Rect box = {x, y, w, totalH};
+
+  SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+  SDL_SetRenderDrawColor(renderer, 20, 20, 25, 240);
+  SDL_RenderFillRect(renderer, &box);
+  SDL_SetRenderDrawColor(renderer, 100, 100, 120, 255);
+  SDL_RenderDrawRect(renderer, &box);
+  if (m_TooltipPinned) {
+    SDL_SetRenderDrawColor(renderer, 255, 215, 0, 255);
+    SDL_RenderDrawRect(renderer, &box);
+  }
+
+  int currentY = y + 10;
+  m_TextRenderer->RenderText(data.name, x + 10, currentY, {255, 255, 255, 255});
+  currentY += 30;
+
+  SDL_SetRenderDrawColor(renderer, 80, 80, 80, 255);
+  SDL_RenderDrawLine(renderer, x + 10, currentY, x + w - 10, currentY);
+  currentY += 10;
+
+  SDL_Color costCol = {200, 200, 200, 255};
+  if (data.cost.find("Action") != std::string::npos)
+    costCol = {50, 255, 50, 255};
+  else if (data.cost.find("Bonus") != std::string::npos)
+    costCol = {255, 150, 50, 255};
+
+  m_TextRenderer->RenderTextSmall("Cost: " + data.cost, x + 10, currentY,
+                                  costCol);
+  m_TextRenderer->RenderTextSmall("Range: " + data.range, x + 160, currentY,
+                                  {200, 200, 255, 255});
+  currentY += 30;
+
+  m_TextRenderer->RenderTextWrapped(data.description, x + 10, currentY, w - 20,
+                                    {180, 180, 180, 255});
+  currentY += descHeight + 15;
+
+  m_TextRenderer->RenderTextSmall("Dmg/Effect: " + data.effect, x + 10,
+                                  currentY, {255, 100, 100, 255});
+  if (data.save != "None") {
+    m_TextRenderer->RenderTextSmall("Save: " + data.save, x + 160, currentY,
+                                    {255, 255, 100, 255});
+  }
+  currentY += 25;
+
+  m_TextRenderer->RenderTextSmall(m_TooltipPinned ? "[T] Unpin"
+                                                  : "[T] Pin Tooltip",
+                                  x + 10, currentY, {100, 100, 100, 255});
+
+  SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+}
+
+void PixelsGateGame::SpawnWorldEntities() {
+  auto playerTexture = PixelsEngine::TextureManager::LoadTexture(
+      GetRenderer(),
+      "assets/Pixel Art Top Down - Basic v1.2.2/Texture/TX Player.png");
+
+  // 3. Spawn Boars
+  CreateBoar(35.0f, 35.0f);
+  CreateBoar(32.0f, 5.0f);
+  CreateBoar(5.0f, 32.0f);
+
+  // 4. NPCs
+  auto npc1 = GetRegistry().CreateEntity();
+  GetRegistry().AddComponent(npc1,
+                             PixelsEngine::TransformComponent{19.0f, 19.0f});
+  GetRegistry().AddComponent(npc1, PixelsEngine::SpriteComponent{
+                                       playerTexture, {0, 0, 32, 32}, 16, 30});
+  GetRegistry().AddComponent(
+      npc1, PixelsEngine::InteractionComponent{"Innkeeper", "npc_innkeeper",
+                                               false, 0.0f});
+  GetRegistry().AddComponent(npc1,
+                             PixelsEngine::StatsComponent{50, 50, 5, false});
+  GetRegistry().AddComponent(
+      npc1, PixelsEngine::QuestComponent{"FetchOrb", 0, "Gold Orb"});
+  GetRegistry().AddComponent(
+      npc1, PixelsEngine::TagComponent{PixelsEngine::EntityTag::Quest});
+  GetRegistry().AddComponent(npc1, PixelsEngine::AIComponent{8.0f, 1.5f, 2.0f,
+                                                             0.0f, false, 0.0f,
+                                                             90.0f, 90.0f});
+
+  // ... Dialogue Trees ...
+  PixelsEngine::DialogueTree innTree;
+  innTree.currentEntityName = "Innkeeper";
+  innTree.currentNodeId = "start";
+  PixelsEngine::DialogueNode startNode;
+  startNode.id = "start";
+  startNode.npcText =
+      "Welcome to the Pixel Inn! What can I do for you today, traveler?";
+  startNode.options.push_back(PixelsEngine::DialogueOption(
+      "I'm looking for work. [Intelligence DC 10]", "work_check",
+      "Intelligence", 10, "work_success", "work_fail",
+      PixelsEngine::DialogueAction::None, "", "Inn_Work_Topic_Closed", false));
+  startNode.options.push_back(PixelsEngine::DialogueOption(
+      "I found the Gold Orb.", "quest_complete", "None", 0, "", "",
+      PixelsEngine::DialogueAction::CompleteQuest, "Quest_FetchOrb_Done",
+      "Quest_FetchOrb_Done", true, "Quest_FetchOrb_Active", "Gold Orb"));
+  startNode.options.push_back(PixelsEngine::DialogueOption(
+      "How are things?", "quest_chat", "None", 0, "", "",
+      PixelsEngine::DialogueAction::None, "", "", true, "Quest_FetchOrb_Done"));
+  startNode.options.push_back(PixelsEngine::DialogueOption(
+      "Can I get a discount on a room? [Charisma DC 12]", "room_check",
+      "Charisma", 12, "discount_success", "discount_fail",
+      PixelsEngine::DialogueAction::None, "", "discount_active", false));
+  startNode.options.push_back(PixelsEngine::DialogueOption(
+      "I don't like your face. [Attack]", "end", "None", 0, "", "",
+      PixelsEngine::DialogueAction::StartCombat));
+  startNode.options.push_back(PixelsEngine::DialogueOption(
+      "Just looking around. [End]", "end", "None", 0, "", "",
+      PixelsEngine::DialogueAction::EndConversation));
+  innTree.nodes["start"] = startNode;
+
+  PixelsEngine::DialogueNode workSuccess;
+  workSuccess.id = "work_success";
+  workSuccess.npcText = "Find my lucky Gold Orb in the woods. Find it for me?";
+  workSuccess.options.push_back(PixelsEngine::DialogueOption(
+      "I'll find it.", "end", "None", 0, "", "",
+      PixelsEngine::DialogueAction::StartQuest, "Quest_FetchOrb_Active"));
+  innTree.nodes["work_success"] = workSuccess;
+
+  PixelsEngine::DialogueNode workFail;
+  workFail.id = "work_fail";
+  workFail.npcText = "You look slow.";
+  workFail.options.push_back(PixelsEngine::DialogueOption(
+      "Hmph.", "end", "None", 0, "", "",
+      PixelsEngine::DialogueAction::EndConversation));
+  innTree.nodes["work_fail"] = workFail;
+  PixelsEngine::DialogueNode questComplete;
+  questComplete.id = "quest_complete";
+  questComplete.npcText = "My Orb! Thank you.";
+  questComplete.options.push_back(PixelsEngine::DialogueOption(
+      "Happy to help.", "end", "None", 0, "", "",
+      PixelsEngine::DialogueAction::EndConversation));
+  innTree.nodes["quest_complete"] = questComplete;
+  PixelsEngine::DialogueNode questChat;
+  questChat.id = "quest_chat";
+  questChat.npcText = "Business is booming!";
+  questChat.options.push_back(PixelsEngine::DialogueOption(
+      "Glad to hear it.", "end", "None", 0, "", "",
+      PixelsEngine::DialogueAction::EndConversation));
+  innTree.nodes["quest_chat"] = questChat;
+  PixelsEngine::DialogueNode discountSuccess;
+  discountSuccess.id = "discount_success";
+  discountSuccess.npcText = "Fine, half price.";
+  discountSuccess.options.push_back(PixelsEngine::DialogueOption(
+      "Much appreciated.", "end", "None", 0, "", "",
+      PixelsEngine::DialogueAction::EndConversation, "discount_active"));
+  innTree.nodes["discount_success"] = discountSuccess;
+  PixelsEngine::DialogueNode discountFail;
+  discountFail.id = "discount_fail";
+  discountFail.npcText = "Full price.";
+  discountFail.options.push_back(PixelsEngine::DialogueOption(
+      "Worth a shot.", "end", "None", 0, "", "",
+      PixelsEngine::DialogueAction::EndConversation));
+  innTree.nodes["discount_fail"] = discountFail;
+
+  GetRegistry().AddComponent(
+      npc1, PixelsEngine::DialogueComponent{
+                std::make_shared<PixelsEngine::DialogueTree>(innTree)});
+  auto &n1Inv =
+      GetRegistry().AddComponent(npc1, PixelsEngine::InventoryComponent{});
+  n1Inv.AddItem("Coins", 100);
+  n1Inv.AddItem("Potion", 1, PixelsEngine::ItemType::Consumable, 0,
+                "assets/ui/item_potion.png", 50);
+
+  auto npc2 = GetRegistry().CreateEntity();
+  GetRegistry().AddComponent(npc2,
+                             PixelsEngine::TransformComponent{20.0f, 25.0f});
+  GetRegistry().AddComponent(npc2, PixelsEngine::SpriteComponent{
+                                       playerTexture, {0, 0, 32, 32}, 16, 30});
+  GetRegistry().AddComponent(
+      npc2, PixelsEngine::InteractionComponent{"Guardian", "npc_guardian",
+                                               false, 0.0f});
+  GetRegistry().AddComponent(npc2,
+                             PixelsEngine::StatsComponent{50, 50, 5, false});
+  GetRegistry().AddComponent(
+      npc2, PixelsEngine::QuestComponent{"HuntBoars", 0, "Boar Meat"});
+  GetRegistry().AddComponent(
+      npc2, PixelsEngine::TagComponent{PixelsEngine::EntityTag::Quest});
+  GetRegistry().AddComponent(npc2, PixelsEngine::AIComponent{8.0f, 1.5f, 2.0f,
+                                                             0.0f, false, 0.0f,
+                                                             270.0f, 90.0f});
+
+  PixelsEngine::DialogueTree guardTree;
+  guardTree.currentEntityName = "Guardian";
+  guardTree.currentNodeId = "start";
+  PixelsEngine::DialogueNode gStart;
+  gStart.id = "start";
+  gStart.npcText = "Dangerous road.";
+  gStart.options.push_back(PixelsEngine::DialogueOption(
+      "I can handle myself. [Charisma DC 10]", "g_check", "Charisma", 10,
+      "g_pass", "g_fail"));
+  gStart.options.push_back(PixelsEngine::DialogueOption(
+      "I have the Boar Meat.", "g_done", "None", 0, "", "",
+      PixelsEngine::DialogueAction::CompleteQuest, "Quest_HuntBoars_Done",
+      "Quest_HuntBoars_Done", true, "Quest_HuntBoars_Active", "Boar Meat"));
+  gStart.options.push_back(
+      PixelsEngine::DialogueOption("[Attack]", "end", "None", 0, "", "",
+                                   PixelsEngine::DialogueAction::StartCombat));
+  gStart.options.push_back(PixelsEngine::DialogueOption(
+      "[End]", "end", "None", 0, "", "",
+      PixelsEngine::DialogueAction::EndConversation));
+  guardTree.nodes["start"] = gStart;
+  PixelsEngine::DialogueNode gPass;
+  gPass.id = "g_pass";
+  gPass.npcText = "Fine, go die.";
+  gPass.options.push_back(PixelsEngine::DialogueOption("[End]", "end"));
+  guardTree.nodes["g_pass"] = gPass;
+  PixelsEngine::DialogueNode gFail;
+  gFail.id = "g_fail";
+  gFail.npcText = "Ha! Shaking.";
+  gFail.options.push_back(PixelsEngine::DialogueOption("[End]", "end"));
+  guardTree.nodes["g_fail"] = gFail;
+  PixelsEngine::DialogueNode gDone;
+  gDone.id = "g_done";
+  gDone.npcText = "Not useless.";
+  gDone.options.push_back(PixelsEngine::DialogueOption("[End]", "end"));
+  guardTree.nodes["g_done"] = gDone;
+
+  GetRegistry().AddComponent(
+      npc2, PixelsEngine::DialogueComponent{
+                std::make_shared<PixelsEngine::DialogueTree>(guardTree)});
+  auto &n2Inv =
+      GetRegistry().AddComponent(npc2, PixelsEngine::InventoryComponent{});
+  n2Inv.AddItem("Coins", 50);
+  n2Inv.AddItem("Bread", 5, PixelsEngine::ItemType::Consumable, 0,
+                "assets/ui/item_bread.png", 10);
+
+  // 5. Spawn Gold Orb
+  auto orb = GetRegistry().CreateEntity();
+  GetRegistry().AddComponent(orb, PixelsEngine::TransformComponent{5.0f, 5.0f});
+  m_Level->SetTile(5, 5, PixelsEngine::Tiles::GRASS);
+  auto orbTexture = PixelsEngine::TextureManager::LoadTexture(
+      GetRenderer(), "assets/gold_orb.png");
+  GetRegistry().AddComponent(
+      orb, PixelsEngine::SpriteComponent{orbTexture, {0, 0, 32, 32}, 16, 16});
+  GetRegistry().AddComponent(
+      orb, PixelsEngine::InteractionComponent{"Gold Orb", "item_gold_orb",
+                                              false, 0.0f});
+
+  // 6. Spawn Locked Chest
+  auto chest = GetRegistry().CreateEntity();
+  GetRegistry().AddComponent(chest,
+                             PixelsEngine::TransformComponent{22.0f, 22.0f});
+  auto chestTex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(),
+                                                            "assets/chest.png");
+  GetRegistry().AddComponent(
+      chest, PixelsEngine::SpriteComponent{chestTex, {0, 0, 32, 32}, 16, 16});
+  GetRegistry().AddComponent(chest, PixelsEngine::InteractionComponent{
+                                        "Old Chest", "obj_chest", false, 0.0f});
+  GetRegistry().AddComponent(
+      chest, PixelsEngine::LockComponent{true, "Chest Key", 15});
+  std::vector<PixelsEngine::Item> chestLoot;
+  chestLoot.push_back({"Rare Gem", "assets/ui/item_raregem.png", 1,
+                       PixelsEngine::ItemType::Misc, 0, 500});
+  chestLoot.push_back({"Potion", "assets/ui/item_potion.png", 2,
+                       PixelsEngine::ItemType::Consumable, 0, 50});
+  GetRegistry().AddComponent(chest, PixelsEngine::LootComponent{chestLoot});
+
+  // 7. Spawn Items (Key and Tools)
+  auto keyEnt = GetRegistry().CreateEntity();
+  GetRegistry().AddComponent(keyEnt,
+                             PixelsEngine::TransformComponent{25.0f, 25.0f});
+  auto keyTex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(),
+                                                          "assets/key.png");
+  GetRegistry().AddComponent(
+      keyEnt, PixelsEngine::SpriteComponent{keyTex, {0, 0, 32, 32}, 16, 16});
+  GetRegistry().AddComponent(keyEnt, PixelsEngine::InteractionComponent{
+                                         "Chest Key", "item_key", false, 0.0f});
+  GetRegistry().AddComponent(
+      keyEnt, PixelsEngine::LootComponent{std::vector<PixelsEngine::Item>{
+                  {"Chest Key", "assets/key.png", 1,
+                   PixelsEngine::ItemType::Misc, 0, 0}}});
+
+  auto toolsEnt = GetRegistry().CreateEntity();
+  GetRegistry().AddComponent(toolsEnt,
+                             PixelsEngine::TransformComponent{21.0f, 25.0f});
+  auto toolsTex = PixelsEngine::TextureManager::LoadTexture(
+      GetRenderer(), "assets/thieves_tools.png");
+  GetRegistry().AddComponent(toolsEnt, PixelsEngine::SpriteComponent{
+                                           toolsTex, {0, 0, 32, 32}, 16, 16});
+  GetRegistry().AddComponent(
+      toolsEnt, PixelsEngine::InteractionComponent{"Thieves' Tools",
+                                                   "item_tools", false, 0.0f});
+  GetRegistry().AddComponent(
+      toolsEnt, PixelsEngine::LootComponent{std::vector<PixelsEngine::Item>{
+                    {"Thieves' Tools", "assets/thieves_tools.png", 1,
+                     PixelsEngine::ItemType::Tool, 0, 25}}});
+
+  // Add a Companion (Traveler)
+  auto comp = GetRegistry().CreateEntity();
+  GetRegistry().AddComponent(
+      comp, PixelsEngine::TransformComponent{21.0f, 21.0f}); // In Inn
+  GetRegistry().AddComponent(comp, PixelsEngine::SpriteComponent{
+                                       playerTexture, {0, 0, 32, 32}, 16, 30});
+  GetRegistry().AddComponent(
+      comp, PixelsEngine::InteractionComponent{"Traveler", "npc_traveler",
+                                               false, 0.0f});
+  GetRegistry().AddComponent(
+      comp, PixelsEngine::TagComponent{PixelsEngine::EntityTag::Companion});
+  GetRegistry().AddComponent(comp,
+                             PixelsEngine::StatsComponent{80, 80, 8, false});
+  GetRegistry().AddComponent(
+      comp, PixelsEngine::AIComponent{10.0f, 1.5f, 2.0f, 0.0f, false});
+
+  PixelsEngine::DialogueTree compTree;
+  compTree.currentEntityName = "Traveler";
+  compTree.currentNodeId = "start";
+  PixelsEngine::DialogueNode cStart;
+  cStart.id = "start";
+  cStart.npcText = "Quiet night, isn't it? Thinking of heading out?";
+  cStart.options.push_back(PixelsEngine::DialogueOption(
+      "Who are you?", "c_info", "None", 0, "", "",
+      PixelsEngine::DialogueAction::None, "", "", false));
+  cStart.options.push_back(PixelsEngine::DialogueOption(
+      "[End]", "end", "None", 0, "", "",
+      PixelsEngine::DialogueAction::EndConversation));
+  compTree.nodes["start"] = cStart;
+
+  PixelsEngine::DialogueNode cInfo;
+  cInfo.id = "c_info";
+  cInfo.npcText =
+      "Just a wanderer, like you. I've seen things you wouldn't believe.";
+  cInfo.options.push_back(PixelsEngine::DialogueOption(
+      "Interesting. [End]", "end", "None", 0, "", "",
+      PixelsEngine::DialogueAction::EndConversation));
+  compTree.nodes["c_info"] = cInfo;
+
+  GetRegistry().AddComponent(
+      comp, PixelsEngine::DialogueComponent{
+                std::make_shared<PixelsEngine::DialogueTree>(compTree)});
+
+  auto &cInv =
+      GetRegistry().AddComponent(comp, PixelsEngine::InventoryComponent{});
+  cInv.AddItem("Coins", 10);
+
+  // Add a Trader
+  auto trader = GetRegistry().CreateEntity();
+  GetRegistry().AddComponent(
+      trader, PixelsEngine::TransformComponent{18.0f, 21.0f}); // In Inn
+  GetRegistry().AddComponent(
+      trader,
+      PixelsEngine::SpriteComponent{playerTexture, {0, 0, 32, 32}, 16, 30});
+  GetRegistry().AddComponent(trader, PixelsEngine::InteractionComponent{
+                                         "Trader", "npc_trader", false, 0.0f});
+  GetRegistry().AddComponent(
+      trader, PixelsEngine::TagComponent{PixelsEngine::EntityTag::Trader});
+  GetRegistry().AddComponent(trader,
+                             PixelsEngine::StatsComponent{100, 100, 10, false});
+  GetRegistry().AddComponent(
+      trader, PixelsEngine::AIComponent{8.0f, 1.5f, 2.0f, 0.0f, false, 0.0f,
+                                        0.0f, 120.0f});
+
+  PixelsEngine::DialogueTree tradeTree;
+  tradeTree.currentEntityName = "Trader";
+  tradeTree.currentNodeId = "start";
+  PixelsEngine::DialogueNode tStart;
+  tStart.id = "start";
+  tStart.npcText =
+      "Looking for supplies? I've got the best prices in the valley.";
+  tStart.options.push_back(PixelsEngine::DialogueOption(
+      "Show me your wares. [Trade]", "start", "None", 0, "", "",
+      PixelsEngine::DialogueAction::GiveItem));
+  tStart.options.push_back(PixelsEngine::DialogueOption(
+      "Any news? [Persuasion DC 10]", "t_check", "Charisma", 10, "t_pass",
+      "t_fail", PixelsEngine::DialogueAction::None, "", "", false));
+  tStart.options.push_back(PixelsEngine::DialogueOption(
+      "[End]", "end", "None", 0, "", "",
+      PixelsEngine::DialogueAction::EndConversation));
+  tradeTree.nodes["start"] = tStart;
+
+  PixelsEngine::DialogueNode tPass;
+  tPass.id = "t_pass";
+  tPass.npcText = "Rumor has it there's a golden orb hidden in the forest. "
+                  "Worth a fortune.";
+  tPass.options.push_back(PixelsEngine::DialogueOption(
+      "I'll keep an eye out. [End]", "end", "None", 0, "", "",
+      PixelsEngine::DialogueAction::EndConversation));
+  tradeTree.nodes["t_pass"] = tPass;
+
+  PixelsEngine::DialogueNode tFail;
+  tFail.id = "t_fail";
+  tFail.npcText =
+      "Nothing for free, friend. Buy something and maybe I'll talk.";
+  tFail.options.push_back(PixelsEngine::DialogueOption(
+      "[End]", "end", "None", 0, "", "",
+      PixelsEngine::DialogueAction::EndConversation));
+  tradeTree.nodes["t_fail"] = tFail;
+
+  GetRegistry().AddComponent(
+      trader, PixelsEngine::DialogueComponent{
+                  std::make_shared<PixelsEngine::DialogueTree>(tradeTree)});
+
+  auto &tInv =
+      GetRegistry().AddComponent(trader, PixelsEngine::InventoryComponent{});
+}
