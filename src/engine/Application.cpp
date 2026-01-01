@@ -6,7 +6,8 @@
 
 namespace PixelsEngine {
 
-Application::Application(const char *title, int width, int height) {
+Application::Application(const char *title, int width, int height)
+    : m_Width(width), m_Height(height) {
   // Initialize Camera
   m_Camera = std::make_unique<Camera>(width, height);
 
@@ -50,6 +51,8 @@ Application::Application(const char *title, int width, int height) {
     return;
   }
 
+  SDL_RenderSetLogicalSize(m_Renderer, width, height);
+
   m_IsRunning = true;
 }
 
@@ -67,6 +70,7 @@ void Application::ToggleFullScreen() {
   Uint32 fullscreenFlag = SDL_WINDOW_FULLSCREEN_DESKTOP;
   bool isFullscreen = SDL_GetWindowFlags(m_Window) & fullscreenFlag;
   SDL_SetWindowFullscreen(m_Window, isFullscreen ? 0 : fullscreenFlag);
+  SDL_RenderSetLogicalSize(m_Renderer, m_Width, m_Height);
 }
 
 void Application::Run() {
@@ -77,7 +81,7 @@ void Application::Run() {
 
   while (m_IsRunning) {
     // Update input state (copy current to previous)
-    Input::Update();
+    Input::Update(m_Renderer);
 
     Uint32 currentTime = SDL_GetTicks();
     float deltaTime = (currentTime - lastTime) / 1000.0f;
@@ -86,6 +90,11 @@ void Application::Run() {
     while (SDL_PollEvent(&e) != 0) {
       if (e.type == SDL_QUIT) {
         m_IsRunning = false;
+      } else if (e.type == SDL_WINDOWEVENT) {
+        if (e.window.event == SDL_WINDOWEVENT_RESIZED ||
+            e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+          SDL_RenderSetLogicalSize(m_Renderer, m_Width, m_Height);
+        }
       }
     }
 

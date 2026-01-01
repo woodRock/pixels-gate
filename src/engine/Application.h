@@ -18,6 +18,9 @@ public:
   Camera &GetCamera() { return *m_Camera; }
   Registry &GetRegistry() { return m_Registry; }
 
+  int GetWindowWidth() const { return m_Width; }
+  int GetWindowHeight() const { return m_Height; }
+
 protected:
   virtual void OnStart() {}
   virtual void OnUpdate(float deltaTime) {}
@@ -25,6 +28,8 @@ protected:
 
   SDL_Window *m_Window = nullptr;
   SDL_Renderer *m_Renderer = nullptr;
+  int m_Width;
+  int m_Height;
   bool m_IsRunning = false;
   std::unique_ptr<Camera> m_Camera;
   Registry m_Registry;

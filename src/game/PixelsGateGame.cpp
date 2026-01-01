@@ -803,6 +803,7 @@ void PixelsGateGame::HandleCreationInput() {
 }
 
 void PixelsGateGame::PerformAttack(PixelsEngine::Entity forcedTarget) {
+  auto *currentMap = (m_State == GameState::Camp) ? m_CampLevel.get() : m_Level.get();
   auto *playerStats =
       GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
   auto *playerTrans =
@@ -1781,8 +1782,7 @@ void PixelsGateGame::OnRender() {
     break;
   case GameState::Loading: {
     SDL_Renderer *renderer = GetRenderer();
-    int w, h;
-    SDL_GetWindowSize(m_Window, &w, &h);
+    int w = GetWindowWidth(); int h = GetWindowHeight();
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_Rect screen = {0, 0, w, h};
     SDL_RenderFillRect(renderer, &screen);
@@ -1931,8 +1931,7 @@ void PixelsGateGame::OnRender() {
         PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(
             PixelsEngine::GameAction::AttackModifier))) {
       SDL_Renderer *renderer = GetRenderer();
-      int winW, winH;
-      SDL_GetWindowSize(m_Window, &winW, &winH);
+      int winW = GetWindowWidth(); int winH = GetWindowHeight();
       int mx, my;
       PixelsEngine::Input::GetMousePosition(mx, my);
 
@@ -1967,7 +1966,7 @@ void PixelsGateGame::OnRender() {
                                  SDL_Color color) {
         SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
         int cx, cy;
-        m_Level->GridToScreen(worldX, worldY, cx, cy);
+        currentMap->GridToScreen(worldX, worldY, cx, cy);
         cx -= (int)camera.x;
         cy -= (int)camera.y;
         cx += 16;
@@ -2006,7 +2005,7 @@ void PixelsGateGame::OnRender() {
       // 3. Jump Path Line
       if (m_State == GameState::TargetingJump && pTrans) {
         int px, py;
-        m_Level->GridToScreen(pTrans->x, pTrans->y, px, py);
+        currentMap->GridToScreen(pTrans->x, pTrans->y, px, py);
         px -= (int)camera.x;
         py -= (int)camera.y;
         px += 16;
@@ -2040,7 +2039,7 @@ void PixelsGateGame::OnRender() {
             GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(entity);
         if (sprite) {
           int screenX, screenY;
-          m_Level->GridToScreen(transform.x, transform.y, screenX, screenY);
+          currentMap->GridToScreen(transform.x, transform.y, screenX, screenY);
           screenX -= (int)camera.x;
           screenY -= (int)camera.y;
           SDL_Rect drawRect = {screenX + 16 - sprite->pivotX,
@@ -2073,13 +2072,13 @@ void PixelsGateGame::OnRender() {
         auto &camera = GetCamera();
         int worldX = mx + (int)camera.x, worldY = my + (int)camera.y, gridX,
             gridY;
-        m_Level->ScreenToGrid(worldX, worldY, gridX, gridY);
+        currentMap->ScreenToGrid(worldX, worldY, gridX, gridY);
 
-        if (m_Level->IsWalkable(gridX, gridY)) {
+        if (currentMap->IsWalkable(gridX, gridY)) {
           float dist = std::sqrt(std::pow(pTrans->x - gridX, 2) +
                                  std::pow(pTrans->y - gridY, 2));
           int px, py;
-          m_Level->GridToScreen(pTrans->x, pTrans->y, px, py);
+          currentMap->GridToScreen(pTrans->x, pTrans->y, px, py);
           px -= (int)camera.x;
           py -= (int)camera.y;
           px += 16;
@@ -2123,8 +2122,7 @@ void PixelsGateGame::OnRender() {
     // Render Fade Overlay
     if (m_FadeState != FadeState::None) {
       SDL_Renderer *renderer = GetRenderer();
-      int w, h;
-      SDL_GetWindowSize(m_Window, &w, &h);
+      int w = GetWindowWidth(); int h = GetWindowHeight();
 
       float alpha = 0.0f;
       if (m_FadeState == FadeState::FadingOut) {
@@ -2282,8 +2280,7 @@ void PixelsGateGame::RenderDiceRoll() {
   if (!m_DiceRoll.active)
     return;
   SDL_Renderer *renderer = GetRenderer();
-  int winW, winH;
-  SDL_GetWindowSize(m_Window, &winW, &winH);
+  int winW = GetWindowWidth(); int winH = GetWindowHeight();
   SDL_SetRenderDrawColor(renderer, 0, 0, 0, 150);
   SDL_Rect overlay = {0, 0, winW, winH};
   SDL_RenderFillRect(renderer, &overlay);
@@ -2351,8 +2348,7 @@ void PixelsGateGame::RenderInventory() {
     return;
 
   SDL_Renderer *renderer = GetRenderer();
-  int winW, winH;
-  SDL_GetWindowSize(m_Window, &winW, &winH);
+  int winW = GetWindowWidth(); int winH = GetWindowHeight();
   int w = 400, h = 500;
   SDL_Rect panel = {(winW - w) / 2, (winH - h) / 2, w, h};
 
@@ -2506,7 +2502,7 @@ void PixelsGateGame::RenderInventoryItem(const PixelsEngine::Item &item, int x,
   m_TextRenderer->RenderText(display, x + 40, y + 8, {255, 255, 255, 255});
 }
 
-void PixelsGateGame::HandleInput() {
+void PixelsGateGame::HandleInput() {auto *currentMap = (m_State == GameState::Camp) ? m_CampLevel.get() : m_Level.get();
   bool isAttackModifierDown =
       PixelsEngine::Input::IsKeyDown(PixelsEngine::Config::GetKeybind(
           PixelsEngine::GameAction::AttackModifier));
@@ -2660,8 +2656,7 @@ void PixelsGateGame::HandleInput() {
   }
 
   if (isPressedLeft) {
-    int winW, winH;
-    SDL_GetWindowSize(m_Window, &winW, &winH);
+    int winW = GetWindowWidth(); int winH = GetWindowHeight();
 
     auto *inv =
         GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
@@ -2689,7 +2684,7 @@ void PixelsGateGame::HandleInput() {
               GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(entity);
           if (sprite) {
             int screenX, screenY;
-            m_Level->GridToScreen(transform.x, transform.y, screenX, screenY);
+            currentMap->GridToScreen(transform.x, transform.y, screenX, screenY);
             screenX -= (int)camera.x;
             screenY -= (int)camera.y;
             SDL_Rect drawRect = {screenX + 16 - sprite->pivotX,
@@ -2726,7 +2721,7 @@ void PixelsGateGame::HandleInput() {
           GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(entity);
       if (sprite) {
         int screenX, screenY;
-        m_Level->GridToScreen(transform.x, transform.y, screenX, screenY);
+        currentMap->GridToScreen(transform.x, transform.y, screenX, screenY);
         screenX -= (int)camera.x;
         screenY -= (int)camera.y;
         SDL_Rect drawRect = {screenX + 16 - sprite->pivotX,
@@ -2778,8 +2773,7 @@ void PixelsGateGame::HandleInput() {
 }
 
 void PixelsGateGame::CheckUIInteraction(int mx, int my) {
-  int winW, winH;
-  SDL_GetWindowSize(m_Window, &winW, &winH);
+  int winW = GetWindowWidth(); int winH = GetWindowHeight();
   int barH = 100;
 
   auto CheckGridClick = [&](int startX, int count,
@@ -2911,6 +2905,7 @@ void PixelsGateGame::CheckUIInteraction(int mx, int my) {
 }
 
 void PixelsGateGame::CheckWorldInteraction(int mx, int my) {
+  auto *currentMap = (m_State == GameState::Camp) ? m_CampLevel.get() : m_Level.get();
   auto &camera = GetCamera();
   auto &transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
   bool clickedEntity = false;
@@ -2931,7 +2926,7 @@ void PixelsGateGame::CheckWorldInteraction(int mx, int my) {
 
     if (sprite) {
       int screenX, screenY;
-      m_Level->GridToScreen(transform.x, transform.y, screenX, screenY);
+      currentMap->GridToScreen(transform.x, transform.y, screenX, screenY);
       screenX -= (int)camera.x;
       screenY -= (int)camera.y;
       SDL_Rect drawRect = {screenX + 16 - sprite->pivotX,
@@ -3024,7 +3019,7 @@ void PixelsGateGame::CheckWorldInteraction(int mx, int my) {
   }
   if (!clickedEntity) {
     int worldX = mx + camera.x, worldY = my + camera.y, gridX, gridY;
-    m_Level->ScreenToGrid(worldX, worldY, gridX, gridY);
+    currentMap->ScreenToGrid(worldX, worldY, gridX, gridY);
     m_SelectedNPC = PixelsEngine::INVALID_ENTITY;
     auto *pathComp =
         GetRegistry().GetComponent<PixelsEngine::PathMovementComponent>(
@@ -3045,8 +3040,7 @@ void PixelsGateGame::CheckWorldInteraction(int mx, int my) {
 
 void PixelsGateGame::RenderHUD() {
   SDL_Renderer *renderer = GetRenderer();
-  int winW, winH;
-  SDL_GetWindowSize(m_Window, &winW, &winH);
+  int winW = GetWindowWidth(); int winH = GetWindowHeight();
 
   if (!m_TooltipPinned)
     m_HoveredItemName = "";
@@ -3432,7 +3426,7 @@ void PixelsGateGame::RenderHUD() {
           GetRegistry().GetComponent<PixelsEngine::TransformComponent>(entity);
       if (transform) {
         int screenX, screenY;
-        m_Level->GridToScreen(transform->x, transform->y, screenX, screenY);
+        currentMap->GridToScreen(transform->x, transform->y, screenX, screenY);
         screenX -= (int)camera.x;
         screenY -= (int)camera.y;
 
@@ -3529,8 +3523,7 @@ void PixelsGateGame::HandleMenuNavigation(int numOptions,
 }
 
 void PixelsGateGame::HandleMainMenuInput() {
-  int w, h;
-  SDL_GetWindowSize(m_Window, &w, &h);
+  int w = GetWindowWidth(); int h = GetWindowHeight();
   int mx, my;
   PixelsEngine::Input::GetMousePosition(mx, my);
 
@@ -3685,8 +3678,7 @@ void PixelsGateGame::RenderMainMenu() {
 
   // 2. Dark Overlay
   SDL_Renderer *renderer = GetRenderer();
-  int w, h;
-  SDL_GetWindowSize(m_Window, &w, &h);
+  int w = GetWindowWidth(); int h = GetWindowHeight();
   SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
   SDL_SetRenderDrawColor(renderer, 0, 0, 0, 150);
   SDL_Rect overlay = {0, 0, w, h};
@@ -3719,8 +3711,7 @@ void PixelsGateGame::RenderMainMenu() {
 void PixelsGateGame::RenderPauseMenu() {
   // 1. Dark Overlay (on top of frozen game)
   SDL_Renderer *renderer = GetRenderer();
-  int w, h;
-  SDL_GetWindowSize(m_Window, &w, &h);
+  int w = GetWindowWidth(); int h = GetWindowHeight();
   SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
   SDL_SetRenderDrawColor(renderer, 0, 0, 0, 150);
   SDL_Rect overlay = {0, 0, w, h};
@@ -3754,8 +3745,7 @@ void PixelsGateGame::RenderPauseMenu() {
 }
 
 void PixelsGateGame::HandlePauseMenuInput() {
-  int w, h;
-  SDL_GetWindowSize(m_Window, &w, &h);
+  int w = GetWindowWidth(); int h = GetWindowHeight();
   int mx, my;
   PixelsEngine::Input::GetMousePosition(mx, my);
 
@@ -3817,8 +3807,7 @@ void PixelsGateGame::HandlePauseMenuInput() {
 }
 
 void PixelsGateGame::HandleOptionsInput() {
-  int w, h;
-  SDL_GetWindowSize(m_Window, &w, &h);
+  int w = GetWindowWidth(); int h = GetWindowHeight();
   int mx, my;
   PixelsEngine::Input::GetMousePosition(mx, my);
 
@@ -3859,8 +3848,7 @@ void PixelsGateGame::RenderOptions() {
   SDL_SetRenderDrawColor(renderer, 20, 20, 20, 255);
   SDL_RenderClear(renderer);
 
-  int w, h;
-  SDL_GetWindowSize(m_Window, &w, &h);
+  int w = GetWindowWidth(); int h = GetWindowHeight();
   m_TextRenderer->RenderTextCentered("OPTIONS", w / 2, 50,
                                      {255, 255, 255, 255});
 
@@ -3883,8 +3871,7 @@ void PixelsGateGame::RenderCredits() {
   SDL_SetRenderDrawColor(renderer, 10, 10, 30, 255);
   SDL_RenderClear(renderer);
 
-  int w, h;
-  SDL_GetWindowSize(m_Window, &w, &h);
+  int w = GetWindowWidth(); int h = GetWindowHeight();
   m_TextRenderer->RenderTextCentered("CREDITS", w / 2, 50,
                                      {255, 255, 255, 255});
 
@@ -3908,8 +3895,7 @@ void PixelsGateGame::RenderControls() {
   SDL_SetRenderDrawColor(renderer, 20, 20, 20, 255);
   SDL_RenderClear(renderer);
 
-  int w, h;
-  SDL_GetWindowSize(m_Window, &w, &h);
+  int w = GetWindowWidth(); int h = GetWindowHeight();
   m_TextRenderer->RenderTextCentered("CONTROLS", w / 2, 50,
                                      {255, 255, 255, 255});
 
@@ -3946,13 +3932,14 @@ void PixelsGateGame::RenderControls() {
 // --- New Features Implementations ---
 
 void PixelsGateGame::UpdateAI(float deltaTime) {
+  auto *currentMap =
+      (m_State == GameState::Camp) ? m_CampLevel.get() : m_Level.get();
   auto *pTrans =
       GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
   auto *pStats =
       GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
-  if (!pTrans || !pStats || pStats->isDead)
+  if (!pTrans || !pStats)
     return;
-
   auto &view = GetRegistry().View<PixelsEngine::AIComponent>();
   for (auto &[entity, ai] : view) {
     // If we are in combat, and this entity IS in the turn order, skip real-time
@@ -4082,8 +4069,7 @@ void PixelsGateGame::UpdateDayNight(float deltaTime) {
 
 void PixelsGateGame::RenderDayNightCycle() {
   SDL_Renderer *renderer = GetRenderer();
-  int w, h;
-  SDL_GetWindowSize(m_Window, &w, &h);
+  int w = GetWindowWidth(); int h = GetWindowHeight();
 
   SDL_Color tint = {0, 0, 0, 0};
 
@@ -4134,8 +4120,14 @@ void PixelsGateGame::SpawnFloatingText(float x, float y,
   m_FloatingText.m_Texts.push_back({x, y, text, 1.5f, color});
 }
 
-void PixelsGateGame::SpawnLootBag(
-    float x, float y, const std::vector<PixelsEngine::Item> &items) {
+void PixelsGateGame::SpawnLootBag(float x, float y,
+
+                                  const std::vector<PixelsEngine::Item> &items) {
+
+  auto *currentMap =
+
+      (m_State == GameState::Camp) ? m_CampLevel.get() : m_Level.get();
+
   auto bag = GetRegistry().CreateEntity();
   GetRegistry().AddComponent(bag, PixelsEngine::TransformComponent{x, y});
   auto tex = PixelsEngine::TextureManager::LoadTexture(
@@ -4245,8 +4237,7 @@ void PixelsGateGame::UseItem(const std::string &itemName) {
 }
 
 void PixelsGateGame::HandleInventoryInput() {
-  int winW, winH;
-  SDL_GetWindowSize(m_Window, &winW, &winH);
+  int winW = GetWindowWidth(); int winH = GetWindowHeight();
   int panelW = 800, panelH = 500;
   SDL_Rect panel = {(winW - panelW) / 2, (winH - panelH) / 2, panelW, panelH};
 
@@ -4656,7 +4647,7 @@ void PixelsGateGame::UpdateCombat(float deltaTime) {
   }
 }
 
-void PixelsGateGame::HandleCombatInput() {
+void PixelsGateGame::HandleCombatInput() {auto *currentMap = (m_State == GameState::Camp) ? m_CampLevel.get() : m_Level.get();
   if (PixelsEngine::Input::IsKeyPressed(PixelsEngine::Config::GetKeybind(
           PixelsEngine::GameAction::EndTurn))) {
     NextTurn();
@@ -4691,16 +4682,16 @@ void PixelsGateGame::HandleCombatInput() {
         float newY = transform->y + dy * moveCost;
 
         bool moved = false;
-        if (m_Level->IsWalkable((int)newX, (int)newY)) {
+        if (currentMap->IsWalkable((int)newX, (int)newY)) {
           transform->x = newX;
           transform->y = newY;
           moved = true;
         } else {
           // Sliding
-          if (m_Level->IsWalkable((int)newX, (int)transform->y)) {
+          if (currentMap->IsWalkable((int)newX, (int)transform->y)) {
             transform->x = newX;
             moved = true;
-          } else if (m_Level->IsWalkable((int)transform->x, (int)newY)) {
+          } else if (currentMap->IsWalkable((int)transform->x, (int)newY)) {
             transform->y = newY;
             moved = true;
           }
@@ -4747,7 +4738,7 @@ void PixelsGateGame::HandleCombatInput() {
           GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(entity);
       if (sprite) {
         int screenX, screenY;
-        m_Level->GridToScreen(transform.x, transform.y, screenX, screenY);
+        currentMap->GridToScreen(transform.x, transform.y, screenX, screenY);
         screenX -= (int)camera.x;
         screenY -= (int)camera.y;
         SDL_Rect drawRect = {screenX + 16 - sprite->pivotX,
@@ -4800,8 +4791,7 @@ void PixelsGateGame::HandleCombatInput() {
   if (isPressedLeftRaw && !isCtrlDown) {
     int mx, my;
     PixelsEngine::Input::GetMousePosition(mx, my);
-    int winW, winH;
-    SDL_GetWindowSize(m_Window, &winW, &winH);
+    int winW = GetWindowWidth(); int winH = GetWindowHeight();
 
     auto *inv =
         GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
@@ -4828,7 +4818,7 @@ void PixelsGateGame::HandleCombatInput() {
               GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(entity);
           if (sprite) {
             int screenX, screenY;
-            m_Level->GridToScreen(transform.x, transform.y, screenX, screenY);
+            currentMap->GridToScreen(transform.x, transform.y, screenX, screenY);
             screenX -= (int)camera.x;
             screenY -= (int)camera.y;
             SDL_Rect drawRect = {screenX + 16 - sprite->pivotX,
@@ -4853,8 +4843,7 @@ void PixelsGateGame::HandleCombatInput() {
 
 void PixelsGateGame::RenderCombatUI() {
   SDL_Renderer *renderer = GetRenderer();
-  int w, h;
-  SDL_GetWindowSize(m_Window, &w, &h);
+  int w = GetWindowWidth(); int h = GetWindowHeight();
 
   // Turn Order Bar
   std::vector<CombatManager::CombatTurn> aliveParticipants;
@@ -4917,14 +4906,14 @@ void PixelsGateGame::RenderCombatUI() {
   }
 }
 void PixelsGateGame::RenderEnemyCones(const PixelsEngine::Camera &camera) {
+  auto *currentMap = (m_State == GameState::Camp) ? m_CampLevel.get() : m_Level.get();
   if (!PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_LSHIFT))
     return;
 
   SDL_Renderer *renderer = GetRenderer();
   SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-  int winW, winH;
-  SDL_GetWindowSize(m_Window, &winW, &winH);
+  int winW = GetWindowWidth(); int winH = GetWindowHeight();
 
   auto &view = GetRegistry().View<PixelsEngine::AIComponent>();
   for (auto &[entity, ai] : view) {
@@ -4987,8 +4976,7 @@ void PixelsGateGame::RenderEnemyCones(const PixelsEngine::Camera &camera) {
 
 void PixelsGateGame::RenderGameOver() {
   SDL_Renderer *renderer = GetRenderer();
-  int w, h;
-  SDL_GetWindowSize(m_Window, &w, &h);
+  int w = GetWindowWidth(); int h = GetWindowHeight();
 
   // Dark Red Overlay
   SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
@@ -5015,8 +5003,7 @@ void PixelsGateGame::RenderGameOver() {
 }
 
 void PixelsGateGame::HandleGameOverInput() {
-  int w, h;
-  SDL_GetWindowSize(m_Window, &w, &h);
+  int w = GetWindowWidth(); int h = GetWindowHeight();
   int mx, my;
   PixelsEngine::Input::GetMousePosition(mx, my);
 
@@ -5056,8 +5043,7 @@ void PixelsGateGame::HandleGameOverInput() {
 
 void PixelsGateGame::RenderCharacterMenu() {
   SDL_Renderer *renderer = GetRenderer();
-  int w, h;
-  SDL_GetWindowSize(m_Window, &w, &h);
+  int w = GetWindowWidth(); int h = GetWindowHeight();
   int mx, my;
   PixelsEngine::Input::GetMousePosition(mx, my);
 
@@ -5228,8 +5214,7 @@ void PixelsGateGame::RenderCharacterMenu() {
 }
 
 void PixelsGateGame::HandleCharacterMenuInput() {
-  int w, h;
-  SDL_GetWindowSize(m_Window, &w, &h);
+  int w = GetWindowWidth(); int h = GetWindowHeight();
   int mx, my;
   PixelsEngine::Input::GetMousePosition(mx, my);
   int panelW = 800, panelH = 500;
@@ -5301,10 +5286,9 @@ void PixelsGateGame::HandleCharacterMenuInput() {
   }
 }
 
-void PixelsGateGame::RenderMapScreen() {
+void PixelsGateGame::RenderMapScreen() {auto *currentMap = (m_State == GameState::Camp) ? m_CampLevel.get() : m_Level.get();
   SDL_Renderer *renderer = GetRenderer();
-  int w, h;
-  SDL_GetWindowSize(m_Window, &w, &h);
+  int w = GetWindowWidth(); int h = GetWindowHeight();
 
   // Semi-transparent Overlay
   SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
@@ -5346,8 +5330,8 @@ void PixelsGateGame::RenderMapScreen() {
   if (m_MapTab == 0) {
     // --- Render Map ---
     if (m_Level) {
-      int mapW = m_Level->GetWidth();
-      int mapH = m_Level->GetHeight();
+      int mapW = currentMap->GetWidth();
+      int mapH = currentMap->GetHeight();
       int tileSize = 10;
       int miniW = mapW * tileSize;
       int miniH = mapH * tileSize;
@@ -5360,10 +5344,10 @@ void PixelsGateGame::RenderMapScreen() {
 
       for (int ty = 0; ty < mapH; ++ty) {
         for (int tx = 0; tx < mapW; ++tx) {
-          if (!m_Level->IsExplored(tx, ty))
+          if (!currentMap->IsExplored(tx, ty))
             continue;
           using namespace PixelsEngine::Tiles;
-          int tileIdx = m_Level->GetTile(tx, ty);
+          int tileIdx = currentMap->GetTile(tx, ty);
           SDL_Color c = {0, 0, 0, 255};
 
           if (tileIdx >= DIRT && tileIdx <= DIRT_VARIANT_18)
@@ -5421,7 +5405,7 @@ void PixelsGateGame::RenderMapScreen() {
 
       auto &transforms = GetRegistry().View<PixelsEngine::TransformComponent>();
       for (auto &[entity, trans] : transforms) {
-        if (!m_Level->IsExplored((int)trans.x, (int)trans.y))
+        if (!currentMap->IsExplored((int)trans.x, (int)trans.y))
           continue;
 
         int px = mx + (int)trans.x * tileSize + tileSize / 2;
@@ -5551,8 +5535,7 @@ void PixelsGateGame::HandleMapInput() {
 
   // Mouse Interaction for Tabs
   if (PixelsEngine::Input::IsMouseButtonPressed(SDL_BUTTON_LEFT)) {
-    int w, h;
-    SDL_GetWindowSize(m_Window, &w, &h);
+    int w = GetWindowWidth(); int h = GetWindowHeight();
     int mx, my;
     PixelsEngine::Input::GetMousePosition(mx, my);
 
@@ -5578,8 +5561,7 @@ void PixelsGateGame::HandleMapInput() {
 
 void PixelsGateGame::RenderRestMenu() {
   SDL_Renderer *renderer = GetRenderer();
-  int w, h;
-  SDL_GetWindowSize(m_Window, &w, &h);
+  int w = GetWindowWidth(); int h = GetWindowHeight();
 
   // Overlay
   SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
@@ -5645,8 +5627,7 @@ void PixelsGateGame::RenderRestMenu() {
 }
 
 void PixelsGateGame::HandleRestMenuInput() {
-  int winW, winH;
-  SDL_GetWindowSize(m_Window, &winW, &winH);
+  int winW = GetWindowWidth(); int winH = GetWindowHeight();
   int mx, my;
   PixelsEngine::Input::GetMousePosition(mx, my);
   int boxW = 400, boxH = 250;
@@ -5765,8 +5746,7 @@ void PixelsGateGame::HandleRestMenuInput() {
 
 void PixelsGateGame::RenderDialogueScreen() {
   SDL_Renderer *renderer = GetRenderer();
-  int w, h;
-  SDL_GetWindowSize(m_Window, &w, &h);
+  int w = GetWindowWidth(); int h = GetWindowHeight();
   int mx, my;
   PixelsEngine::Input::GetMousePosition(mx, my);
 
@@ -6025,7 +6005,7 @@ void PixelsGateGame::HandleDialogueInput() {
   }
 }
 
-void PixelsGateGame::HandleTargetingInput() {
+void PixelsGateGame::HandleTargetingInput() {auto *currentMap = (m_State == GameState::Camp) ? m_CampLevel.get() : m_Level.get();
 
   int mx, my;
   PixelsEngine::Input::GetMousePosition(mx, my);
@@ -6056,7 +6036,7 @@ void PixelsGateGame::HandleTargetingInput() {
       if (sprite) {
 
         int screenX, screenY;
-        m_Level->GridToScreen(transform.x, transform.y, screenX, screenY);
+        currentMap->GridToScreen(transform.x, transform.y, screenX, screenY);
 
         screenX -= (int)camera.x;
         screenY -= (int)camera.y;
@@ -6377,8 +6357,7 @@ void PixelsGateGame::RenderTradeScreen() {
 
   SDL_Renderer *renderer = GetRenderer();
 
-  int w, h;
-  SDL_GetWindowSize(m_Window, &w, &h);
+  int w = GetWindowWidth(); int h = GetWindowHeight();
 
   int mx, my;
   PixelsEngine::Input::GetMousePosition(mx, my);
@@ -6530,8 +6509,7 @@ void PixelsGateGame::HandleTradeInput() {
     return;
   }
 
-  int w, h;
-  SDL_GetWindowSize(m_Window, &w, &h);
+  int w = GetWindowWidth(); int h = GetWindowHeight();
 
   int mx, my;
   PixelsEngine::Input::GetMousePosition(mx, my);
@@ -6666,8 +6644,7 @@ void PixelsGateGame::RenderKeybindSettings() {
 
   SDL_Renderer *renderer = GetRenderer();
 
-  int w, h;
-  SDL_GetWindowSize(m_Window, &w, &h);
+  int w = GetWindowWidth(); int h = GetWindowHeight();
 
   SDL_SetRenderDrawColor(renderer, 20, 20, 30, 255);
 
@@ -6811,8 +6788,7 @@ void PixelsGateGame::HandleKeybindInput() {
 
 void PixelsGateGame::RenderLootScreen() {
   SDL_Renderer *renderer = GetRenderer();
-  int w, h;
-  SDL_GetWindowSize(m_Window, &w, &h);
+  int w = GetWindowWidth(); int h = GetWindowHeight();
   int mx, my;
   PixelsEngine::Input::GetMousePosition(mx, my);
 
@@ -6885,8 +6861,7 @@ void PixelsGateGame::HandleLootInput() {
     return;
   }
 
-  int w, h;
-  SDL_GetWindowSize(m_Window, &w, &h);
+  int w = GetWindowWidth(); int h = GetWindowHeight();
   int mx, my;
   PixelsEngine::Input::GetMousePosition(mx, my);
   bool pressed = PixelsEngine::Input::IsMouseButtonPressed(SDL_BUTTON_LEFT);
@@ -6954,15 +6929,15 @@ bool PixelsGateGame::IsInTurnOrder(PixelsEngine::Entity entity) {
   return false;
 }
 
-void PixelsGateGame::HandleTargetingJumpInput() {
+void PixelsGateGame::HandleTargetingJumpInput() {auto *currentMap = (m_State == GameState::Camp) ? m_CampLevel.get() : m_Level.get();
   int mx, my;
   PixelsEngine::Input::GetMousePosition(mx, my);
   if (PixelsEngine::Input::IsMouseButtonPressed(SDL_BUTTON_LEFT)) {
     auto &camera = GetCamera();
     int worldX = mx + camera.x, worldY = my + camera.y, gridX, gridY;
-    m_Level->ScreenToGrid(worldX, worldY, gridX, gridY);
+    currentMap->ScreenToGrid(worldX, worldY, gridX, gridY);
 
-    if (m_Level->IsWalkable(gridX, gridY)) {
+    if (currentMap->IsWalkable(gridX, gridY)) {
       auto *transform =
           GetRegistry().GetComponent<PixelsEngine::TransformComponent>(
               m_Player);
@@ -6995,7 +6970,7 @@ void PixelsGateGame::HandleTargetingJumpInput() {
     m_State = m_ReturnState;
 }
 
-void PixelsGateGame::HandleTargetingShoveInput() {
+void PixelsGateGame::HandleTargetingShoveInput() {auto *currentMap = (m_State == GameState::Camp) ? m_CampLevel.get() : m_Level.get();
   int mx, my;
   PixelsEngine::Input::GetMousePosition(mx, my);
   if (PixelsEngine::Input::IsMouseButtonPressed(SDL_BUTTON_LEFT)) {
@@ -7010,7 +6985,7 @@ void PixelsGateGame::HandleTargetingShoveInput() {
           GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(entity);
       if (sprite) {
         int screenX, screenY;
-        m_Level->GridToScreen(transform.x, transform.y, screenX, screenY);
+        currentMap->GridToScreen(transform.x, transform.y, screenX, screenY);
         screenX -= (int)camera.x;
         screenY -= (int)camera.y;
         SDL_Rect drawRect = {screenX + 16 - sprite->pivotX,
@@ -7050,7 +7025,7 @@ void PixelsGateGame::HandleTargetingShoveInput() {
         float pushX = tTrans->x + dx * 2.0f;
         float pushY = tTrans->y + dy * 2.0f;
 
-        if (m_Level->IsWalkable((int)pushX, (int)pushY)) {
+        if (currentMap->IsWalkable((int)pushX, (int)pushY)) {
           tTrans->x = pushX;
           tTrans->y = pushY;
         }
@@ -7106,8 +7081,7 @@ void PixelsGateGame::RenderTooltip(const TooltipData &data, int x, int y) {
   int totalH = 40 + 30 + descHeight + 35 + 25 + 20;
 
   // Adjust if tooltip goes off screen
-  int winW, winH;
-  SDL_GetWindowSize(m_Window, &winW, &winH);
+  int winW = GetWindowWidth(); int winH = GetWindowHeight();
   if (x + w > winW)
     x = winW - w - 10;
   if (x < 10)

@@ -6,7 +6,7 @@ namespace PixelsEngine {
 
 class Input {
 public:
-  static void Update();
+  static void Update(SDL_Renderer *renderer = nullptr);
 
   static bool IsKeyDown(SDL_Scancode key);
   static bool IsKeyPressed(SDL_Scancode key);

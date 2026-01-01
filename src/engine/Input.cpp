@@ -10,14 +10,26 @@ Uint32 Input::m_PrevMouseState = 0;
 int Input::m_MouseX = 0;
 int Input::m_MouseY = 0;
 
-void Input::Update() {
+void Input::Update(SDL_Renderer *renderer) {
   if (!m_KeyboardState) {
     m_KeyboardState = SDL_GetKeyboardState(NULL);
   }
 
   memcpy(m_PrevKeyboardState, m_KeyboardState, SDL_NUM_SCANCODES);
   m_PrevMouseState = m_MouseState;
-  m_MouseState = SDL_GetMouseState(&m_MouseX, &m_MouseY);
+
+  int rawX, rawY;
+  m_MouseState = SDL_GetMouseState(&rawX, &rawY);
+
+  if (renderer) {
+    float logX, logY;
+    SDL_RenderWindowToLogical(renderer, rawX, rawY, &logX, &logY);
+    m_MouseX = (int)logX;
+    m_MouseY = (int)logY;
+  } else {
+    m_MouseX = rawX;
+    m_MouseY = rawY;
+  }
 }
 
 bool Input::IsKeyDown(SDL_Scancode key) {
