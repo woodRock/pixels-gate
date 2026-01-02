@@ -57,6 +57,29 @@ struct InventoryComponent {
     AddItem(newItem.name, newItem.quantity, newItem.type, newItem.statBonus,
             newItem.iconPath, newItem.value);
   }
+
+  int GetGoldCount() const {
+    for (auto &it : items) {
+      if (it.name == "Coins")
+        return it.quantity;
+    }
+    return 0;
+  }
+
+  bool RemoveGold(int amount) {
+    for (auto it = items.begin(); it != items.end(); ++it) {
+      if (it->name == "Coins") {
+        if (it->quantity >= amount) {
+          it->quantity -= amount;
+          if (it->quantity <= 0)
+            items.erase(it);
+          return true;
+        }
+        return false;
+      }
+    }
+    return false;
+  }
 };
 
 } // namespace PixelsEngine

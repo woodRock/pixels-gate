@@ -25,74 +25,73 @@ public:
     std::vector<std::pair<int, int>> path;
 
     if (!map.IsWalkable(endX, endY))
-      return path; // Target unreachable
+      return path;
 
-    // Open Set (Nodes to be evaluated)
-    // Using a simple vector for simplicity, priority_queue is better for
-    // performance but harder to search/update
-    std::vector<Node *> openSet;
-    std::vector<Node *> closedSet;
+    if (startX == endX && startY == endY)
+      return path;
 
-    Node *startNode = new Node{startX, startY, 0, 0, nullptr};
-    startNode->hCost = Heuristic(startX, startY, endX, endY);
-    openSet.push_back(startNode);
+    struct NodePtr {
+        Node* node;
+        float fCost; // Store fCost at time of queuing
+        bool operator>(const NodePtr& other) const { return fCost > other.fCost; }
+    };
 
-    while (!openSet.empty()) {
-      // Find node with lowest F cost
-      auto currentIt = openSet.begin();
-      for (auto it = openSet.begin(); it != openSet.end(); ++it) {
-        if ((*it)->fCost() < (*currentIt)->fCost() ||
-            ((*it)->fCost() == (*currentIt)->fCost() &&
-             (*it)->hCost < (*currentIt)->hCost)) {
-          currentIt = it;
-        }
-      }
+    std::priority_queue<NodePtr, std::vector<NodePtr>, std::greater<NodePtr>> openSet;
+    std::unordered_map<int, Node*> allNodes;
 
-      Node *current = *currentIt;
+    auto GetKey = [](int x, int y) { return x * 10000 + y; };
 
-      // Remove from Open, Add to Closed
-      openSet.erase(currentIt);
-      closedSet.push_back(current);
+    Node* startNode = new Node{startX, startY, 0, Heuristic(startX, startY, endX, endY), nullptr};
+    allNodes[GetKey(startX, startY)] = startNode;
+    openSet.push({startNode, startNode->fCost()});
 
-      // Found target?
+    int nodesProcessed = 0;
+    const int MAX_NODES = 5000; 
+
+    while (!openSet.empty() && nodesProcessed < MAX_NODES) {
+      NodePtr currentPtr = openSet.top();
+      openSet.pop();
+      Node* current = currentPtr.node;
+
+      // If we found a better path to this node since it was queued, skip this entry
+      if (currentPtr.fCost > current->fCost()) continue;
+
+      nodesProcessed++;
+
       if (current->x == endX && current->y == endY) {
         RetracePath(startNode, current, path);
-        Cleanup(openSet, closedSet);
+        for (auto& pair : allNodes) delete pair.second;
         return path;
       }
 
-      // Neighbors
-      // 4-Directional movement (or 8?)
-      int dx[] = {0, 0, -1, 1};
-      int dy[] = {-1, 1, 0, 0};
+      int dx[] = {0, 0, -1, 1, -1, -1, 1, 1}; // 8-directional
+      int dy[] = {-1, 1, 0, 0, -1, 1, -1, 1};
 
-      for (int i = 0; i < 4; ++i) {
+      for (int i = 0; i < 8; ++i) {
         int nx = current->x + dx[i];
         int ny = current->y + dy[i];
 
-        if (!map.IsWalkable(nx, ny))
-          continue;
-        if (IsInList(closedSet, nx, ny))
-          continue;
+        if (!map.IsWalkable(nx, ny)) continue;
 
-        float newMovementCostToNeighbor =
-            current->gCost + 1; // Distance between neighbors is 1
+        float moveCost = (i < 4) ? 1.0f : 1.414f;
+        float gScore = current->gCost + moveCost;
+        int key = GetKey(nx, ny);
 
-        Node *neighbor = GetFromList(openSet, nx, ny);
-        if (neighbor == nullptr) {
-          neighbor = new Node{nx, ny, 0, 0, nullptr};
-          openSet.push_back(neighbor);
-        } else if (newMovementCostToNeighbor >= neighbor->gCost) {
-          continue; // Not a better path
+        if (allNodes.find(key) == allNodes.end() || gScore < allNodes[key]->gCost) {
+            if (allNodes.find(key) == allNodes.end()) {
+                Node* neighbor = new Node{nx, ny, gScore, Heuristic(nx, ny, endX, endY), current};
+                allNodes[key] = neighbor;
+                openSet.push({neighbor, neighbor->fCost()});
+            } else {
+                allNodes[key]->gCost = gScore;
+                allNodes[key]->parent = current;
+                openSet.push({allNodes[key], allNodes[key]->fCost()});
+            }
         }
-
-        neighbor->gCost = newMovementCostToNeighbor;
-        neighbor->hCost = Heuristic(nx, ny, endX, endY);
-        neighbor->parent = current;
       }
     }
 
-    Cleanup(openSet, closedSet);
+    for (auto& pair : allNodes) delete pair.second;
     return path;
   }
 
@@ -105,9 +104,11 @@ private:
   static void RetracePath(Node *startNode, Node *endNode,
                           std::vector<std::pair<int, int>> &path) {
     Node *current = endNode;
-    while (current != startNode) {
+    int safety = 0;
+    while (current != startNode && current != nullptr && safety < 1000) {
       path.push_back({current->x, current->y});
       current = current->parent;
+      safety++;
     }
     std::reverse(path.begin(), path.end());
   }
