@@ -121,7 +121,7 @@ void PixelsGateGame::SpawnWorldEntities() {
     GetRegistry().AddComponent(npc1, PixelsEngine::SpriteComponent{innkeeperTex, {0, 0, 32, 32}, 16, 32});
     GetRegistry().AddComponent(npc1, PixelsEngine::InteractionComponent{"Innkeeper", "npc_innkeeper", false, 0.0f});
     GetRegistry().AddComponent(npc1, PixelsEngine::StatsComponent{50, 50, 5, false});
-    GetRegistry().AddComponent(npc1, PixelsEngine::QuestComponent{"FetchOrb", 0, "Gold Orb"});
+    GetRegistry().AddComponent(npc1, PixelsEngine::QuestComponent{"FetchOrb", "The innkeeper lost his lucky Gold Orb. He believes it's somewhere near the rocky cliffs.", 0, "Gold Orb"});
     GetRegistry().AddComponent(npc1, PixelsEngine::TagComponent{PixelsEngine::EntityTag::Quest});
     GetRegistry().AddComponent(npc1, PixelsEngine::AIComponent{8.0f, 1.5f, 2.0f, 0.0f, false, 0.0f, 90.0f, 90.0f});
 
@@ -174,7 +174,7 @@ void PixelsGateGame::SpawnWorldEntities() {
     GetRegistry().AddComponent(npc2, PixelsEngine::SpriteComponent{guardianTex, {0, 0, 32, 32}, 16, 32});
     GetRegistry().AddComponent(npc2, PixelsEngine::InteractionComponent{"Guardian", "npc_guardian", false, 0.0f});
     GetRegistry().AddComponent(npc2, PixelsEngine::StatsComponent{50, 50, 5, false});
-    GetRegistry().AddComponent(npc2, PixelsEngine::QuestComponent{"HuntBoars", 0, "Boar Meat"});
+    GetRegistry().AddComponent(npc2, PixelsEngine::QuestComponent{"HuntBoars", "The road is dangerous. The guardian needs you to thin out the boar population and bring back some meat.", 0, "Boar Meat"});
     GetRegistry().AddComponent(npc2, PixelsEngine::TagComponent{PixelsEngine::EntityTag::Quest});
     GetRegistry().AddComponent(npc2, PixelsEngine::AIComponent{8.0f, 1.5f, 2.0f, 0.0f, false, 0.0f, 270.0f, 90.0f});
 

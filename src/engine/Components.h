@@ -66,6 +66,7 @@ struct StatsComponent {
 
 struct QuestComponent {
   std::string questId;
+  std::string description;
   int state = 0; // 0: None, 1: Active, 2: Completed
   std::string targetItem;
 };

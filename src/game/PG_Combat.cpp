@@ -363,7 +363,7 @@ void PixelsGateGame::CastSpell(const std::string &spellName, PixelsEngine::Entit
         } else {
             int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
             auto &camera = GetCamera();
-            auto *currentMap = (m_State == GameState::Camp) ? m_CampLevel.get() : m_Level.get();
+            auto *currentMap = GetCurrentMap();
             int gx, gy; currentMap->ScreenToGrid(mx + camera.x, my + camera.y, gx, gy);
             tx = (float)gx; ty = (float)gy;
         }
@@ -438,7 +438,7 @@ void PixelsGateGame::PerformDash(int targetX, int targetY) {
         return;
     }
 
-    auto *currentMap = (m_State == GameState::Camp) ? m_CampLevel.get() : m_Level.get();
+    auto *currentMap = GetCurrentMap();
     if (!currentMap->IsWalkable(targetX, targetY)) {
         SpawnFloatingText(pTrans->x, pTrans->y, "Invalid Location", {200, 200, 200, 255});
         m_State = m_ReturnState;
@@ -497,7 +497,7 @@ void PixelsGateGame::PerformShove(PixelsEngine::Entity target) {
     if (mag > 0) {
         int nx = (int)(tTrans->x + dx/mag);
         int ny = (int)(tTrans->y + dy/mag);
-        auto *currentMap = (m_State == GameState::Camp) ? m_CampLevel.get() : m_Level.get();
+        auto *currentMap = GetCurrentMap();
         if (currentMap->IsWalkable(nx, ny)) {
             tTrans->x = (float)nx;
             tTrans->y = (float)ny;

@@ -455,12 +455,18 @@ void PixelsGateGame::RenderMapScreen() {
     
     if (m_MapTab == 1) { // Journal
         auto &quests = GetRegistry().View<PixelsEngine::QuestComponent>();
-        int qy = 160;
+        int qy = 100;
+        int winW = GetWindowWidth();
         for(auto &[e, q] : quests) {
             if(q.state > 0) {
-                std::string status = (q.state == 2) ? " (Done)" : "";
-                m_TextRenderer->RenderText("- " + q.questId + status, GetWindowWidth()/2 - 150, qy, {255,255,255,255});
-                qy+=40;
+                std::string status = (q.state == 2) ? " (COMPLETED)" : " (ACTIVE)";
+                SDL_Color titleCol = (q.state == 2) ? SDL_Color{100, 255, 100, 255} : SDL_Color{255, 215, 0, 255};
+                
+                m_TextRenderer->RenderText(q.questId + status, 100, qy, titleCol);
+                qy += 25;
+                
+                int th = m_TextRenderer->RenderTextWrapped(q.description, 120, qy, winW - 240, {200, 200, 200, 255});
+                qy += th + 30;
             }
         }
     }
@@ -683,6 +689,15 @@ void PixelsGateGame::RenderLootScreen() {
             RenderInventoryItem(it, p.x+30, y);
             y+=45;
         }
+
+        // Take All Button
+        SDL_Rect btnRect = {p.x + 125, p.y + 440, 150, 40};
+        bool btnHover = (mx >= btnRect.x && mx <= btnRect.x + btnRect.w && my >= btnRect.y && my <= btnRect.y + btnRect.h);
+        SDL_SetRenderDrawColor(GetRenderer(), btnHover ? 100 : 80, btnHover ? 100 : 80, btnHover ? 120 : 100, 255);
+        SDL_RenderFillRect(GetRenderer(), &btnRect);
+        SDL_SetRenderDrawColor(GetRenderer(), 200, 200, 200, 255);
+        SDL_RenderDrawRect(GetRenderer(), &btnRect);
+        m_TextRenderer->RenderTextCentered("Take All", btnRect.x + 75, btnRect.y + 10, {255, 255, 255, 255});
     }
 }
 
@@ -755,7 +770,7 @@ void PixelsGateGame::RenderOverlays() {
     auto *pTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
     if (!pTrans) return;
 
-    auto *currentMap = (m_State == GameState::Camp) ? m_CampLevel.get() : m_Level.get();
+    auto *currentMap = GetCurrentMap();
     auto &camera = GetCamera();
     int px, py;
     currentMap->GridToScreen(pTrans->x, pTrans->y, px, py);

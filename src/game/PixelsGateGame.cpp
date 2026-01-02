@@ -15,19 +15,27 @@ void PixelsGateGame::OnStart() {
       GetRenderer(), "assets/font.ttf", 16);
 
   // Initialize Tooltips
-  m_Tooltips["Atk"] = {"Attack", "Strike an enemy.", "Action", "Melee/Ranged", "Weapon Dmg", "None"};
-  m_Tooltips["Jmp"] = {"Jump", "Jump to target.", "Bonus Action + 3m", "5m", "Utility", "None"};
-  m_Tooltips["Snk"] = {"Sneak", "Hide from enemies.", "Action", "Self", "Stealth", "None"};
-  m_Tooltips["Shv"] = {"Shove", "Push creature.", "Bonus Action", "Melee", "1.5m Push", "ATH/ACR"};
-  m_Tooltips["Dsh"] = {"Dash", "Double movement.", "Action", "Self", "Speed x2", "None"};
-  m_Tooltips["End"] = {"End Turn", "End combat turn.", "None", "N/A", "None", "None"};
-  m_Tooltips["Fir"] = {"Fireball", "Explosion of flame.", "Action", "18m", "8d6 Fire", "DEX Save"};
-  m_Tooltips["Hel"] = {"Heal", "Regain hit points.", "Action", "Melee", "1d8 + Mod", "None"};
-  m_Tooltips["Mis"] = {"Magic Missile", "3 darts of force.", "Action", "18m", "3x (1d4+1)", "None"};
-  m_Tooltips["Shd"] = {"Shield", "+5 AC reaction.", "Reaction", "Self", "+5 AC", "None"};
-  m_Tooltips["Potion"] = {"Healing Potion", "Heal 2d4+2 HP.", "Bonus Action", "Self", "Healing", "None"};
-  m_Tooltips["Bread"] = {"Bread", "Heal 5 HP.", "Bonus Action", "Self", "Healing", "None"};
-  m_Tooltips["Thieves' Tools"] = {"Thieves' Tools", "Pick locks.", "Action", "Melee", "Utility", "DEX Check"};
+  m_Tooltips["Atk"] = {"Attack", "Launch a calculated strike against your foe. Precision meets power.", "Action", "Weapon Range", "Weapon Dmg", "None"};
+  m_Tooltips["Jmp"] = {"Jump", "Leap through the air with athletic prowess to reach higher ground or avoid hazards.", "Bonus Action + 3m", "3m", "Mobility", "None"};
+  m_Tooltips["Snk"] = {"Sneak", "Melding into the shadows, you become nearly invisible to the untrained eye. Grants Advantage.", "Action", "Self", "Stealth", "None"};
+  m_Tooltips["Shv"] = {"Shove", "Use your physical might to send an enemy reeling backwards. Distance depends on strength.", "Bonus Action", "Melee", "Push", "ATH/ACR"};
+  m_Tooltips["Dsh"] = {"Dash", "Push your body to its absolute limit, doubling your tactical movement speed for this turn.", "Action", "Self", "Speed x2", "None"};
+  m_Tooltips["End"] = {"End Turn", "Conclude your tactical maneuvers and allow others to act.", "None", "N/A", "None", "None"};
+  
+  m_Tooltips["Fir"] = {"Fireball", "A bright streak flashes from your pointing finger to a point you choose and then blossoms with a low roar into an explosion of flame.", "Action", "18m", "8d6 Fire", "DEX Save"};
+  m_Tooltips["Hel"] = {"Heal", "Call upon divine energy to knit wounds and restore vitality to a weary soul.", "Action", "Melee", "1d8 + Mod", "None"};
+  m_Tooltips["Mis"] = {"Magic Missile", "Three glowing darts of magical force. Each dart hits a creature of your choice that you can see within range.", "Action", "18m", "3x (1d4+1)", "None"};
+  m_Tooltips["Shd"] = {"Shield", "An invisible barrier of magical force appears and protects you as a reaction against an incoming attack.", "Reaction", "Self", "+5 AC", "None"};
+  
+  m_Tooltips["Potion"] = {"Healing Potion", "A vial of bubbling red liquid. Drinking it restores a moderate amount of health.", "Bonus Action", "Self", "Healing", "None"};
+  m_Tooltips["Bread"] = {"Fresh Bread", "Baked this morning at the Inn. Crusty on the outside, soft on the inside. Restores a small amount of health.", "Bonus Action", "Self", "Healing", "None"};
+  m_Tooltips["Thieves' Tools"] = {"Thieves' Tools", "A set of lockpicks, files, and small mirrors used to bypass security measures and open locked containers.", "Action", "Melee", "Utility", "DEX Check"};
+  m_Tooltips["Gold Orb"] = {"The Innkeeper's Lucky Orb", "A heavy, solid gold sphere that glitters with an unnatural luster. It seems very precious to its owner.", "Misc", "N/A", "Quest Item", "None"};
+  m_Tooltips["Sword"] = {"Steel Sword", "A well-balanced blade forged for combat. Reliable and deadly.", "Equippable", "Melee", "+5 Dmg", "None"};
+  m_Tooltips["Bow"] = {"Shortbow", "A flexible wooden bow that allows for swift attacks from a distance.", "Equippable", "10m", "+3 Dmg", "None"};
+  m_Tooltips["Armor"] = {"Leather Armor", "Lightweight protection made from cured hide. Offers defense without sacrificing mobility.", "Equippable", "Self", "+2 AC", "None"};
+  m_Tooltips["Chest Key"] = {"Chest Key", "A small iron key with an ornate handle. It looks like it belongs to an old chest.", "Misc", "N/A", "Key", "None"};
+  m_Tooltips["Boar Meat"] = {"Raw Boar Meat", "Tough, gamey meat harvested from a wild boar. Could be useful for a meal or a quest.", "Misc", "Self", "Health/Quest", "None"};
   
   InitCampMap();
   GenerateMainLevelTerrain();
@@ -80,6 +88,7 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
                       }
                   }
               }
+              return; // CONSUME CLICK: Prevent underlying menu from seeing this click
           }
       }
   }
@@ -145,20 +154,17 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
       case GameState::KeybindSettings: HandleKeybindInput(); break;
       case GameState::Looting: HandleLootInput(); break;
       case GameState::Dialogue: HandleDialogueInput(); break;
-      case GameState::Targeting: HandleTargetingInput(); break;
-      case GameState::TargetingJump: HandleTargetingJumpInput(); break;
-      case GameState::TargetingShove: HandleTargetingShoveInput(); break;
-      case GameState::TargetingDash: HandleTargetingDashInput(); break;
-      
       case GameState::Credits:
       case GameState::Controls:
           if (PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_ESCAPE)) m_State = GameState::MainMenu;
           break;
-      case GameState::Loading: break;
-
       case GameState::Camp:
       case GameState::Playing:
       case GameState::Combat:
+      case GameState::Targeting:
+      case GameState::TargetingJump:
+      case GameState::TargetingShove:
+      case GameState::TargetingDash:
           // 1. Handle Game Over
           auto *pStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
           if (pStats && pStats->currentHealth <= 0) {
@@ -168,7 +174,11 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
           }
 
           // 2. Handle Input
-          HandleInput();
+          if (m_State == GameState::Targeting) HandleTargetingInput();
+          else if (m_State == GameState::TargetingJump) HandleTargetingJumpInput();
+          else if (m_State == GameState::TargetingShove) HandleTargetingShoveInput();
+          else if (m_State == GameState::TargetingDash) HandleTargetingDashInput();
+          else HandleInput();
 
           // 3. Update Systems
           if (m_State == GameState::Combat) UpdateCombat(deltaTime);
@@ -177,17 +187,14 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
           UpdateMovement(deltaTime);
 
           // 4. Update Camera & Visibility (Fog of War)
-          auto *pTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
-          if (pTrans) {
-              auto *currentMap = (m_State == GameState::Camp) ? m_CampLevel.get() : m_Level.get();
+          auto *pTransTarget = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
+          if (pTransTarget) {
+              auto *currentMap = GetCurrentMap();
               if (currentMap) {
-                  // --- CRITICAL FIX: Update Visibility ---
-                  // This reveals the tiles around the player. Without this, IsVisible returns false and tiles are black.
-                  currentMap->UpdateVisibility((int)pTrans->x, (int)pTrans->y, 6); 
-                  // ---------------------------------------
+                  currentMap->UpdateVisibility((int)pTransTarget->x, (int)pTransTarget->y, 6); 
 
                   int screenX, screenY;
-                  currentMap->GridToScreen(pTrans->x, pTrans->y, screenX, screenY);
+                  currentMap->GridToScreen(pTransTarget->x, pTransTarget->y, screenX, screenY);
                   auto &cam = GetCamera();
                   cam.x = screenX - cam.width / 2;
                   cam.y = screenY - cam.height / 2;
@@ -200,7 +207,16 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
 PixelsEngine::Tilemap* PixelsGateGame::GetCurrentMap() {
     if (m_State == GameState::Camp) return m_CampLevel.get();
     if (m_State == GameState::Playing || m_State == GameState::Combat) return m_Level.get();
-    // For menu states, check m_ReturnState
+    
+    // For states that transition from another state (Targeting, Menu, etc.)
+    if (m_State == GameState::Targeting || m_State == GameState::TargetingJump || 
+        m_State == GameState::TargetingShove || m_State == GameState::TargetingDash ||
+        m_State == GameState::Dialogue || m_State == GameState::RestMenu) 
+    {
+        if (m_ReturnState == GameState::Camp) return m_CampLevel.get();
+        return m_Level.get();
+    }
+
     if (m_ReturnState == GameState::Camp) return m_CampLevel.get();
     return m_Level.get();
 }

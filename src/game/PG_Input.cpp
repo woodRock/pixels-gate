@@ -307,7 +307,7 @@ void PixelsGateGame::HandleInput() {
     int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
     // User reported clicking higher than position. Subtracting 4 previously likely made it worse.
     // We will add 8 pixels to Y to shift the internal 'hit' down to the visual cursor.
-    my += 8; 
+     
 
     if (PixelsEngine::Input::IsMouseButtonPressed(SDL_BUTTON_LEFT)) {
         if (my > GetWindowHeight() - 100) {
@@ -436,7 +436,7 @@ void PixelsGateGame::ResetGame() {
     auto &entities = GetRegistry().View<PixelsEngine::TransformComponent>();
     std::vector<PixelsEngine::Entity> toDestroy;
     for (auto &[entity, trans] : entities) {
-        if (entity != m_Player) toDestroy.push_back(entity);
+        toDestroy.push_back(entity);
     }
     for (auto ent : toDestroy) GetRegistry().DestroyEntity(ent);
 
@@ -474,7 +474,7 @@ void PixelsGateGame::ResetGame() {
 void PixelsGateGame::HandleMainMenuInput() { 
     int w = GetWindowWidth(); int h = GetWindowHeight();
     int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
-    my += 8; // Apply visual offset
+     // Apply visual offset
 
     int hovered = -1;
     int y = 250;
@@ -537,7 +537,7 @@ void PixelsGateGame::HandleDialogueInput() {
     int hovered = -1;
     
     int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
-    my += 8; // Match global offset
+     // Match global offset
 
     for(int i=0; i<count; ++i) {
         SDL_Rect r = {panelX + 20, optY - 5, panelW - 40, 30};
@@ -621,7 +621,7 @@ void PixelsGateGame::HandleCharacterMenuInput() {
 
     if (PixelsEngine::Input::IsMouseButtonPressed(SDL_BUTTON_LEFT)) {
         int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
-        my += 8; // Apply visual offset
+         // Apply visual offset
         int tabW = panelW / 3;
         for (int i = 0; i < 3; ++i) {
             SDL_Rect tabRect = {panelX + i * tabW, panelY - 40, tabW, 40};
@@ -719,7 +719,7 @@ void PixelsGateGame::HandleMapInput() {
 void PixelsGateGame::HandleRestMenuInput() {
     int w = GetWindowWidth(); int h = GetWindowHeight();
     int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
-    my += 8; // Apply visual offset
+     // Apply visual offset
     
     int boxW = 400; int boxH = 250;
     int boxX = (w - boxW) / 2; int boxY = (h - boxH) / 2;
@@ -791,7 +791,7 @@ void PixelsGateGame::HandleCombatInput() {
 void PixelsGateGame::HandlePauseMenuInput() { 
     int w = GetWindowWidth(); int h = GetWindowHeight();
     int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
-    my += 8; // Apply visual offset
+     // Apply visual offset
 
     int boxY = (h - 400) / 2;
     int y = boxY + 80;
@@ -816,7 +816,7 @@ void PixelsGateGame::HandlePauseMenuInput() {
 PixelsEngine::Entity PixelsGateGame::GetEntityAtMouse() {
     int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
     auto &camera = GetCamera();
-    auto *currentMap = (m_State == GameState::Camp) ? m_CampLevel.get() : m_Level.get();
+    auto *currentMap = GetCurrentMap();
     
     PixelsEngine::Entity bestTarget = PixelsEngine::INVALID_ENTITY;
     float bestDist = 1000.0f;
@@ -847,7 +847,7 @@ PixelsEngine::Entity PixelsGateGame::GetEntityAtMouse() {
 
 void PixelsGateGame::HandleOptionsInput() {
     int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
-    my += 8;
+    
     int hovered = -1;
     int y = GetWindowHeight()/2 - 40;
     for(int i=0; i<2; ++i) {
@@ -860,7 +860,7 @@ void PixelsGateGame::HandleOptionsInput() {
 
 void PixelsGateGame::HandleGameOverInput() {
     int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
-    my += 8;
+    
     int hovered = -1;
     int y = GetWindowHeight()/2;
     for(int i=0; i<2; ++i) {
@@ -944,7 +944,7 @@ void PixelsGateGame::HandleTradeInput() {
 
     if (PixelsEngine::Input::IsMouseButtonPressed(SDL_BUTTON_LEFT)) {
         int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
-        my += 8; // Apply visual offset
+         // Apply visual offset
         int w = GetWindowWidth();
         int h = GetWindowHeight();
 
@@ -1023,17 +1023,58 @@ void PixelsGateGame::HandleLootInput() {
 
     if (PixelsEngine::Input::IsMouseButtonPressed(SDL_BUTTON_LEFT)) {
         int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
-        my += 8; // Apply visual offset
+        
         auto *loot = GetRegistry().GetComponent<PixelsEngine::LootComponent>(m_LootingEntity);
         if (!loot) return;
+
+        int winW = GetWindowWidth();
+        int winH = GetWindowHeight();
+        int pX = (winW - 400) / 2;
+        int pY = (winH - 500) / 2;
+
+        // Take All Button
+        SDL_Rect btnRect = {pX + 125, pY + 440, 150, 40};
+        if (mx >= btnRect.x && mx <= btnRect.x + btnRect.w && my >= btnRect.y && my <= btnRect.y + btnRect.h) {
+            auto *pInv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+            if (pInv) {
+                bool collectedAny = false;
+                auto it = loot->drops.begin();
+                while (it != loot->drops.end()) {
+                    // Check capacity (simple count check, though stackable items might not increase count if they stack)
+                    // AddItemObject handles stacking, so size() check is approximation. 
+                    // Ideally AddItemObject should return success/fail or we check specific item stacking.
+                    // For now, assume if size < capacity we can try. 
+                    // Actually AddItemObject just pushes back if not found.
+                    // Let's rely on pInv->items.size() check inside the loop effectively.
+                    
+                    // Check if item stacks with existing
+                    bool stacks = false;
+                    for(auto &invItem : pInv->items) {
+                        if(invItem.name == it->name) { stacks = true; break; }
+                    }
+
+                    if (stacks || pInv->items.size() < pInv->capacity) {
+                        pInv->AddItemObject(*it);
+                        collectedAny = true;
+                        it = loot->drops.erase(it);
+                    } else {
+                        SpawnFloatingText(0, 0, "Inventory Full!", {255, 0, 0, 255});
+                        ++it;
+                    }
+                }
+                if (collectedAny) SpawnFloatingText(0, 0, "Looted All", {200, 255, 200, 255});
+                if (loot->drops.empty()) m_State = m_ReturnState;
+            }
+            return;
+        }
 
         float currentTime = SDL_GetTicks() / 1000.0f;
         bool isDoubleClick = (currentTime - m_LastClickTime) < 0.3f;
         m_LastClickTime = currentTime;
 
         if (isDoubleClick) {
-            int y = (GetWindowHeight() - 500) / 2 + 80;
-            int x = (GetWindowWidth() - 400) / 2 + 30;
+            int y = pY + 80;
+            int x = pX + 30;
             for (size_t i = 0; i < loot->drops.size(); ++i) {
                 if (my >= y && my <= y + 32) {
                     auto *pInv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
