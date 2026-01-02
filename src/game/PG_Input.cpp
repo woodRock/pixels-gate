@@ -126,14 +126,17 @@ void PixelsGateGame::CheckWorldInteraction(int mx, int my) {
         auto *stats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(clickedEnt);
         bool isDead = (stats && stats->isDead);
 
-        if (isDoubleClick) {
-            auto *interact = GetRegistry().GetComponent<PixelsEngine::InteractionComponent>(clickedEnt);
-            if (interact) {
-                if (interact->uniqueId == "camp_bedroll" || interact->uniqueId == "camp_fire") {
-                    m_ReturnState = m_State;
-                    m_State = GameState::RestMenu;
-                    return;
-                }
+        // Check interaction first (handles both single/double clicks based on context)
+        auto *interact = GetRegistry().GetComponent<PixelsEngine::InteractionComponent>(clickedEnt);
+        if (interact) {
+            // Camp Props - Single Click opens menu
+            if (interact->uniqueId == "camp_bedroll" || interact->uniqueId == "camp_fire") {
+                m_ReturnState = m_State;
+                m_State = GameState::RestMenu;
+                return;
+            }
+            // Items - Double Click to pickup
+            if (isDoubleClick) {
                 PickupItem(clickedEnt);
                 return;
             }
@@ -783,6 +786,7 @@ void PixelsGateGame::HandleRestMenuInput() {
                 auto *t = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
                 if(t) { t->x = m_LastWorldPos.x; t->y = m_LastWorldPos.y; }
                 m_State = GameState::Playing;
+                m_ReturnState = GameState::Playing;
             } else { // Back
                 m_State = m_ReturnState;
             }

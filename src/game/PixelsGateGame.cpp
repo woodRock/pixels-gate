@@ -48,6 +48,9 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
     return;
   }
 
+  // Ensure return state is synced when playing
+  if (m_State == GameState::Playing) m_ReturnState = GameState::Playing;
+
   if (m_State == GameState::Loading) {
     if (m_LoadFuture.valid() && m_LoadFuture.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
       m_LoadFuture.get();
@@ -242,8 +245,18 @@ void PixelsGateGame::OnRender() {
         std::vector<Renderable> renderQueue;
 
         if (currentMap) {
-            for (int y = 0; y < currentMap->GetHeight(); ++y)
-                for (int x = 0; x < currentMap->GetWidth(); ++x)
+            int startX, startY, endX, endY;
+            currentMap->ScreenToGrid(camera.x, camera.y, startX, startY);
+            currentMap->ScreenToGrid(camera.x + camera.width, camera.y + camera.height, endX, endY);
+            
+            // Expand range to cover rotation/isometric
+            startX -= 15; startY -= 15;
+            endX += 15; endY += 15;
+            startX = std::max(0, startX); startY = std::max(0, startY);
+            endX = std::min(currentMap->GetWidth(), endX); endY = std::min(currentMap->GetHeight(), endY);
+
+            for (int y = startY; y < endY; ++y)
+                for (int x = startX; x < endX; ++x)
                     renderQueue.push_back({(float)(x + y), PixelsEngine::INVALID_ENTITY, x, y, true});
         }
 
@@ -290,7 +303,7 @@ void PixelsGateGame::OnRender() {
                     if (entStats && entStats->isDead) sprite->texture->SetColorMod(100, 100, 100);
                     if (item.entity == m_Player && entStats && entStats->isStealthed) sprite->texture->SetColorMod(150, 150, 255);
 
-                    sprite->texture->RenderRect(screenX + 16 - sprite->pivotX, screenY + 8 - sprite->pivotY, &sprite->srcRect, -1, -1, sprite->flip);
+                    sprite->texture->RenderRect(screenX + 16 - (int)(sprite->pivotX * sprite->scale), screenY + 8 - (int)(sprite->pivotY * sprite->scale), &sprite->srcRect, (int)(sprite->srcRect.w * sprite->scale), (int)(sprite->srcRect.h * sprite->scale), sprite->flip);
                     if (entStats && (entStats->isDead || entStats->isStealthed)) sprite->texture->SetColorMod(255, 255, 255);
 
                     if (entStats && (m_State == GameState::Combat || entStats->currentHealth < entStats->maxHealth) && !entStats->isDead) {

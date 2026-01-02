@@ -20,51 +20,173 @@ void PixelsGateGame::InitCampMap() {
             m_CampLevel->SetTile(x, y, tile);
         }
     }
-
-
 }
 
 void PixelsGateGame::GenerateMainLevelTerrain() {
     std::string isoTileset = "assets/isometric tileset/spritesheet.png";
-    int mapW = 40, mapH = 40;
+    int mapW = 100, mapH = 100;
     m_Level = std::make_unique<PixelsEngine::Tilemap>(GetRenderer(), isoTileset, 32, 32, mapW, mapH);
     m_Level->SetProjection(PixelsEngine::Projection::Isometric);
 
     using namespace PixelsEngine::Tiles;
+    
+    // Perlin-ish noise for terrain
+    auto Noise = [](float x, float y) {
+        return std::sin(x * 0.1f) + std::cos(y * 0.1f) + std::sin(x * 0.3f + y * 0.2f) * 0.5f;
+    };
+
+    // POIs
+    int innX = 20, innY = 20;
+    int caveX = 85, caveY = 15;
+    int deadManX = 50, deadManY = 60;
+
     for (int y = 0; y < mapH; ++y) {
         for (int x = 0; x < mapW; ++x) {
             int tile = GRASS;
-            // The Inn
+            float n = Noise((float)x, (float)y);
+
+            // Biomes
+            if (n > 1.2f) tile = GRASS_WITH_BUSH;
+            else if (n < -1.0f) tile = DIRT_VARIANT_19;
+            
+            // Forest patches
+            if (n > 0.8f && (x*y)%7 == 0) tile = BUSH;
+            if (n > 0.5f && (x*y)%13 == 0) tile = GRASS_VARIANT_01;
+
+            // River (Diagonal)
+            if (std::abs((x - 50) - (y - 50)) < 4) tile = WATER;
+            
+            // Roads (Simple A* or distance based interpolation for now)
+            // Road 1: Inn to Dead Man
+            float d1 = std::abs((x - innX) * (deadManY - innY) - (deadManX - innX) * (y - innY)) / std::sqrt(std::pow(deadManX - innX, 2) + std::pow(deadManY - innY, 2));
+            if (d1 < 1.5f && x >= std::min(innX, deadManX) && x <= std::max(innX, deadManX) && y >= std::min(innY, deadManY) && y <= std::max(innY, deadManY)) tile = DIRT;
+
+            // Road 2: Dead Man to Cave
+            float d2 = std::abs((x - deadManX) * (caveY - deadManY) - (caveX - deadManX) * (y - deadManY)) / std::sqrt(std::pow(caveX - deadManX, 2) + std::pow(caveY - deadManY, 2));
+            if (d2 < 1.5f && x >= std::min(deadManX, caveX) && x <= std::max(deadManX, caveX) && y >= std::min(caveY, deadManY) && y <= std::max(caveY, deadManY)) tile = DIRT;
+
+            // Inn Area
             if (x >= 17 && x <= 23 && y >= 17 && y <= 23) {
                 if (x == 17 || x == 23 || y == 17 || y == 23) {
                     tile = LOGS;
                     if (x == 20 && y == 23) tile = DIRT;
                 } else tile = SMOOTH_STONE;
             }
-            // Paths
-            else if ((x == 20) || (y == 20) || (x == y) || (x + y == 40) ||
-                     (std::sqrt(std::pow(x - 20, 2) + std::pow(y - 20, 2)) < 12.0f &&
-                      std::sqrt(std::pow(x - 20, 2) + std::pow(y - 20, 2)) > 10.5f)) {
-                tile = DIRT;
+
+            // Cave Area
+            if (std::sqrt(std::pow(x - caveX, 2) + std::pow(y - caveY, 2)) < 8.0f) {
+                tile = ROCK;
+                if (std::sqrt(std::pow(x - caveX, 2) + std::pow(y - caveY, 2)) < 5.0f) tile = DIRT_WITH_PARTIAL_GRASS;
             }
-            // River
-            else if (std::abs(x - y) < 3) {
-                tile = (std::abs(x - y) == 0) ? DEEP_WATER : WATER;
-                if ((x + y) % 7 == 0) tile = ROCK_ON_WATER;
-            }
-            // Terrain
-            else {
-                float noise = std::sin(x * 0.2f) + std::cos(y * 0.2f);
-                if (noise > 1.0f) tile = GRASS_WITH_BUSH;
-                else if (noise < -1.2f) tile = DIRT_VARIANT_19;
-                if (tile == GRASS && (x * y) % 13 == 0) tile = GRASS_VARIANT_01;
-                if (tile == GRASS && (x * y) % 17 == 0) tile = FLOWER;
-                if (tile == GRASS_WITH_BUSH && (x * y) % 11 == 0) tile = BUSH;
-            }
+
             if (x == 0 || x == mapW - 1 || y == 0 || y == mapH - 1) tile = ROCK;
             m_Level->SetTile(x, y, tile);
         }
     }
+}
+
+void PixelsGateGame::CreateWolf(float x, float y) {
+    auto wolf = GetRegistry().CreateEntity();
+    GetRegistry().AddComponent(wolf, PixelsEngine::TransformComponent{x, y});
+    GetRegistry().AddComponent(wolf, PixelsEngine::StatsComponent{40, 40, 6, false});
+    GetRegistry().AddComponent(wolf, PixelsEngine::InteractionComponent{"Wolf", "npc_wolf", false, 0.0f});
+    GetRegistry().AddComponent(wolf, PixelsEngine::TagComponent{PixelsEngine::EntityTag::Hostile});
+    GetRegistry().AddComponent(wolf, PixelsEngine::AIComponent{10.0f, 1.5f, 2.0f, 0.0f, true});
+    auto tex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/critters/wolf/wolf-run.png");
+    GetRegistry().AddComponent(wolf, PixelsEngine::SpriteComponent{tex, {0, 0, 64, 32}, 32, 24});
+    // Assuming spritesheet or static for now, reusing what exists or generic
+}
+
+void PixelsGateGame::CreateStag(float x, float y) {
+    auto stag = GetRegistry().CreateEntity();
+    GetRegistry().AddComponent(stag, PixelsEngine::TransformComponent{x, y});
+    GetRegistry().AddComponent(stag, PixelsEngine::StatsComponent{30, 30, 2, false});
+    GetRegistry().AddComponent(stag, PixelsEngine::TagComponent{PixelsEngine::EntityTag::None}); // Passive
+    GetRegistry().AddComponent(stag, PixelsEngine::AIComponent{8.0f, 1.5f, 2.0f, 0.0f, false}); // Not aggressive
+    auto tex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/critters/stag/critter_stag_SE_idle.png");
+    GetRegistry().AddComponent(stag, PixelsEngine::SpriteComponent{tex, {0, 0, 41, 43}, 20, 32});
+}
+
+void PixelsGateGame::CreateBadger(float x, float y) {
+    auto badger = GetRegistry().CreateEntity();
+    GetRegistry().AddComponent(badger, PixelsEngine::TransformComponent{x, y});
+    GetRegistry().AddComponent(badger, PixelsEngine::StatsComponent{20, 20, 4, false});
+    GetRegistry().AddComponent(badger, PixelsEngine::TagComponent{PixelsEngine::EntityTag::Hostile});
+    GetRegistry().AddComponent(badger, PixelsEngine::AIComponent{6.0f, 1.2f, 2.0f, 0.0f, true});
+    auto tex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/critters/badger/critter_badger_SE_idle.png");
+    GetRegistry().AddComponent(badger, PixelsEngine::SpriteComponent{tex, {0, 0, 32, 22}, 16, 16});
+}
+
+void PixelsGateGame::CreateWolfBoss(float x, float y) {
+    auto boss = GetRegistry().CreateEntity();
+    GetRegistry().AddComponent(boss, PixelsEngine::TransformComponent{x, y});
+    GetRegistry().AddComponent(boss, PixelsEngine::StatsComponent{150, 150, 12, false});
+    GetRegistry().AddComponent(boss, PixelsEngine::InteractionComponent{"Dire Wolf", "boss_wolf", false, 0.0f});
+    GetRegistry().AddComponent(boss, PixelsEngine::TagComponent{PixelsEngine::EntityTag::Hostile});
+    GetRegistry().AddComponent(boss, PixelsEngine::AIComponent{12.0f, 2.0f, 2.0f, 0.0f, true});
+    auto tex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/critters/wolf/wolf-howl.png");
+    // Scale 2.0f
+    GetRegistry().AddComponent(boss, PixelsEngine::SpriteComponent{tex, {0, 0, 64, 46}, 32, 32, SDL_FLIP_NONE, 2.0f});
+    
+    std::vector<PixelsEngine::Item> drops;
+    drops.push_back({"Wolf Pelt", "", 1, PixelsEngine::ItemType::Misc, 0, 200});
+    drops.push_back({"Magic Ring", "assets/ui/item_raregem.png", 1, PixelsEngine::ItemType::Misc, 0, 500});
+    GetRegistry().AddComponent(boss, PixelsEngine::LootComponent{drops});
+}
+
+void PixelsGateGame::CreateDeadManAndSon(float x, float y) {
+    // Dead Father
+    auto father = GetRegistry().CreateEntity();
+    GetRegistry().AddComponent(father, PixelsEngine::TransformComponent{x, y});
+    auto fTex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/npc_guardian.png"); // Reusing for body
+    GetRegistry().AddComponent(father, PixelsEngine::SpriteComponent{fTex, {0, 0, 32, 32}, 16, 32}); // Should rotate 90 deg ideally
+    GetRegistry().AddComponent(father, PixelsEngine::StatsComponent{0, 0, 0, true}); // Dead
+    GetRegistry().AddComponent(father, PixelsEngine::InteractionComponent{"Dead Body", "dead_body", false, 0.0f});
+    std::vector<PixelsEngine::Item> loot;
+    loot.push_back({"Letter to Son", "", 1, PixelsEngine::ItemType::Misc, 0, 0});
+    GetRegistry().AddComponent(father, PixelsEngine::LootComponent{loot});
+
+    // Son
+    auto son = GetRegistry().CreateEntity();
+    GetRegistry().AddComponent(son, PixelsEngine::TransformComponent{x + 1.0f, y});
+    auto sTex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/npc_trader.png"); // Reusing
+    GetRegistry().AddComponent(son, PixelsEngine::SpriteComponent{sTex, {0, 0, 32, 32}, 16, 32});
+    GetRegistry().AddComponent(son, PixelsEngine::InteractionComponent{"Grieving Son", "npc_son", false, 0.0f});
+    GetRegistry().AddComponent(son, PixelsEngine::TagComponent{PixelsEngine::EntityTag::NPC});
+    GetRegistry().AddComponent(son, PixelsEngine::StatsComponent{30, 30, 3, false});
+
+    PixelsEngine::DialogueTree tree;
+    tree.currentEntityName = "Grieving Son";
+    tree.currentNodeId = "start";
+    
+    PixelsEngine::DialogueNode start; start.id = "start"; start.npcText = "He's gone... The beast came out of nowhere. It... it tore him apart.";
+    start.options.push_back(PixelsEngine::DialogueOption("You should seek revenge. Hunt it down! [Persuasion DC 12]", "rev_check", "Charisma", 12, "rev_success", "rev_fail"));
+    start.options.push_back(PixelsEngine::DialogueOption("It's too dangerous. Go home and live. [Persuasion DC 10]", "home_check", "Charisma", 10, "home_success", "home_fail"));
+    start.options.push_back(PixelsEngine::DialogueOption("I will kill the wolf for you.", "hero", "None", 0, "", "", PixelsEngine::DialogueAction::StartQuest, "Quest_KillWolfBoss"));
+    start.options.push_back(PixelsEngine::DialogueOption("Tragic. Bye.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    tree.nodes["start"] = start;
+
+    PixelsEngine::DialogueNode rs; rs.id = "rev_success"; rs.npcText = "You're right. I can't let this stand. I'll sharpen my blade."; 
+    rs.options.push_back(PixelsEngine::DialogueOption("Good luck.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    tree.nodes["rev_success"] = rs;
+
+    PixelsEngine::DialogueNode rf; rf.id = "rev_fail"; rf.npcText = "I... I can't. I'm too scared."; 
+    rf.options.push_back(PixelsEngine::DialogueOption("Pathetic.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    tree.nodes["rev_fail"] = rf;
+
+    PixelsEngine::DialogueNode hs; hs.id = "home_success"; hs.npcText = "Maybe you're right. Mother needs me."; 
+    hs.options.push_back(PixelsEngine::DialogueOption("Go.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    tree.nodes["home_success"] = hs;
+
+    PixelsEngine::DialogueNode hf; hf.id = "home_fail"; hf.npcText = "No! I won't leave him here!"; 
+    hf.options.push_back(PixelsEngine::DialogueOption("Suit yourself.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    tree.nodes["home_fail"] = hf;
+
+    PixelsEngine::DialogueNode hero; hero.id = "hero"; hero.npcText = "You would do that? Thank you! It lives in the cave to the east."; 
+    hero.options.push_back(PixelsEngine::DialogueOption("Consider it dead.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    tree.nodes["hero"] = hero;
+
+    GetRegistry().AddComponent(son, PixelsEngine::DialogueComponent{std::make_shared<PixelsEngine::DialogueTree>(tree)});
 }
 
 void PixelsGateGame::CreateBoar(float x, float y) {
@@ -113,6 +235,15 @@ void PixelsGateGame::SpawnWorldEntities() {
     auto guardianTex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/npc_guardian.png");
     auto companionTex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/npc_companion.png");
     auto traderTex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/npc_trader.png");
+
+    // Scatter Critters
+    for(int i=0; i<8; ++i) CreateWolf(30.0f + (i*10), 30.0f + (i*5));
+    for(int i=0; i<10; ++i) CreateStag(10.0f + (i*8), 50.0f + (i*2));
+    for(int i=0; i<6; ++i) CreateBadger(60.0f + (i*5), 20.0f + (i*6));
+    
+    // Scenario & Boss
+    CreateDeadManAndSon(50.0f, 60.0f);
+    CreateWolfBoss(85.0f, 15.0f); // In Cave Area
 
     CreateBoar(35.0f, 35.0f);
     CreateBoar(32.0f, 5.0f);

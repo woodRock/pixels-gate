@@ -18,6 +18,7 @@ struct SpriteComponent {
   int pivotX = 0;
   int pivotY = 0;
   SDL_RendererFlip flip = SDL_FLIP_NONE;
+  float scale = 1.0f;
 };
 
 struct PathMovementComponent {

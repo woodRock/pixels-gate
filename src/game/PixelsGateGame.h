@@ -161,6 +161,11 @@ public:
     void GenerateMainLevelTerrain();
     void SpawnWorldEntities();
     void CreateBoar(float x, float y);
+    void CreateWolf(float x, float y);
+    void CreateStag(float x, float y);
+    void CreateBadger(float x, float y);
+    void CreateWolfBoss(float x, float y);
+    void CreateDeadManAndSon(float x, float y);
     void ResetGame(); // NEW Helper
 
     // Systems
