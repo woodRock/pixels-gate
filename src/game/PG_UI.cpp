@@ -854,10 +854,16 @@ void PixelsGateGame::RenderRestMenu() {
     SDL_SetRenderDrawColor(GetRenderer(), 40, 30, 20, 255); SDL_RenderFillRect(GetRenderer(), &b);
     m_TextRenderer->RenderTextCentered("REST MENU", b.x+200, b.y+30, {255,215,0,255});
     
-    std::string campOpt = (m_ReturnState == GameState::Camp) ? "Leave Camp" : "Go to Camp";
-    std::string opts[] = {"Short Rest", "Long Rest", campOpt, "Back"};
+    std::vector<std::string> opts;
+    if (m_ReturnState == GameState::Camp) {
+        opts = {"Long Rest (40 Supplies)", "Partial Rest", "Leave Camp", "Back"};
+    } else {
+        opts = {"Short Rest", "Go to Camp", "", "Back"};
+    }
+
     int y = b.y+80;
     for(int i=0; i<4; ++i) {
+        if(opts[i].empty()) { y+=40; continue; }
         SDL_Color c = (m_MenuSelection==i) ? SDL_Color{255,255,0,255} : SDL_Color{255,255,255,255};
         m_TextRenderer->RenderTextCentered(opts[i], b.x+200, y, c);
         y+=40;

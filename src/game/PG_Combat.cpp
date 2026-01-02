@@ -563,24 +563,43 @@ void PixelsGateGame::RenderCombatUI() {
 }
 
 void PixelsGateGame::RenderEnemyCones(const PixelsEngine::Camera &camera) {
-    if (!PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_LSHIFT)) return;
+    auto *pStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+    bool showCones = (pStats && pStats->isStealthed) || PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_LSHIFT);
+    
+    if (!showCones) return;
+
     SDL_SetRenderDrawBlendMode(GetRenderer(), SDL_BLENDMODE_BLEND);
+    auto *currentMap = GetCurrentMap();
+    if (!currentMap) return;
+
     auto &view = GetRegistry().View<PixelsEngine::AIComponent>();
     for (auto &[entity, ai] : view) {
         auto *transform = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(entity);
         if (!transform) continue;
-        float screenX = (transform->x - camera.x) * 32.0f + GetWindowWidth() / 2.0f;
-        float screenY = (transform->y - camera.y) * 32.0f + GetWindowHeight() / 2.0f;
+        
+        int sx, sy;
+        currentMap->GridToScreen(transform->x, transform->y, sx, sy);
+        float centerX = (float)(sx - camera.x + 16);
+        float centerY = (float)(sy - camera.y + 8);
         
         float radDir = ai.facingDir * (M_PI / 180.0f);
         float radHalf = (ai.coneAngle / 2.0f) * (M_PI / 180.0f);
-        float range = ai.sightRange * 32.0f;
         
         std::vector<SDL_Vertex> verts;
-        verts.push_back({{screenX, screenY}, {255, 0, 0, 100}, {0,0}});
-        for (int i = 0; i <= 5; ++i) {
-            float angle = radDir - radHalf + (i * (2 * radHalf) / 5.0f);
-            verts.push_back({{screenX + cos(angle)*range, screenY + sin(angle)*range}, {255,0,0,100}, {0,0}});
+        verts.push_back({{centerX, centerY}, {255, 0, 0, 40}, {0,0}}); // More transparent center
+        
+        int segments = 15;
+        for (int i = 0; i <= segments; ++i) {
+            float angle = radDir - radHalf + (i * (2 * radHalf) / (float)segments);
+            float gx = transform->x + std::cos(angle) * ai.sightRange;
+            float gy = transform->y + std::sin(angle) * ai.sightRange;
+            
+            int px, py;
+            currentMap->GridToScreen(gx, gy, px, py);
+            float screenPx = (float)(px - camera.x + 16);
+            float screenPy = (float)(py - camera.y + 8);
+
+            verts.push_back({{screenPx, screenPy}, {255, 0, 0, 70}, {0,0}}); // More transparent edge
         }
         for (size_t i = 0; i < verts.size() - 1; ++i) {
             SDL_Vertex tri[3] = {verts[0], verts[i], verts[i+1]};

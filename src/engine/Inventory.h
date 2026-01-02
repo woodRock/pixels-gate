@@ -22,6 +22,7 @@ struct Item {
   ItemType type = ItemType::Misc;
   int statBonus = 0; // Damage for weapons, Defense for armor
   int value = 10;    // Gold value per unit
+  int supplyValue = 0; // Camp supply value
 
   bool IsEmpty() const { return name.empty() || quantity <= 0; }
 };
@@ -32,13 +33,13 @@ struct InventoryComponent {
   bool isOpen = false;
 
   // Equipment Slots
-  Item equippedMelee = {"", "", 0, ItemType::WeaponMelee, 0, 0};
-  Item equippedRanged = {"", "", 0, ItemType::WeaponRanged, 0, 0};
-  Item equippedArmor = {"", "", 0, ItemType::Armor, 0, 0};
+  Item equippedMelee = {"", "", 0, ItemType::WeaponMelee, 0, 0, 0};
+  Item equippedRanged = {"", "", 0, ItemType::WeaponRanged, 0, 0, 0};
+  Item equippedArmor = {"", "", 0, ItemType::Armor, 0, 0, 0};
 
   void AddItem(const std::string &name, int count = 1,
                ItemType type = ItemType::Misc, int bonus = 0,
-               const std::string &iconPath = "", int val = 10) {
+               const std::string &iconPath = "", int val = 10, int supplies = 0) {
     for (auto it = items.begin(); it != items.end(); ++it) {
       if (it->name == name) {
         it->quantity += count;
@@ -49,13 +50,13 @@ struct InventoryComponent {
       }
     }
     if (count > 0 && items.size() < capacity) {
-      items.push_back({name, iconPath, count, type, bonus, val});
+      items.push_back({name, iconPath, count, type, bonus, val, supplies});
     }
   }
 
   void AddItemObject(const Item &newItem) {
     AddItem(newItem.name, newItem.quantity, newItem.type, newItem.statBonus,
-            newItem.iconPath, newItem.value);
+            newItem.iconPath, newItem.value, newItem.supplyValue);
   }
 
   int GetGoldCount() const {

@@ -20,6 +20,8 @@ void PixelsGateGame::InitCampMap() {
             m_CampLevel->SetTile(x, y, tile);
         }
     }
+
+
 }
 
 void PixelsGateGame::GenerateMainLevelTerrain() {
@@ -97,6 +99,7 @@ void PixelsGateGame::SpawnWorldEntities() {
     auto &inv = GetRegistry().AddComponent(m_Player, PixelsEngine::InventoryComponent{});
     inv.AddItem("Potion", 3, PixelsEngine::ItemType::Consumable, 0, "assets/ui/item_potion.png", 50);
     inv.AddItem("Thieves' Tools", 1, PixelsEngine::ItemType::Tool, 0, "assets/thieves_tools.png", 25);
+    inv.AddItem("Camp Supplies", 3, PixelsEngine::ItemType::Misc, 0, "assets/ui/item_bread.png", 40, 40); // 3 Packs = 120 supplies
     auto playerTexture = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/knight.png");
     GetRegistry().AddComponent(m_Player, PixelsEngine::SpriteComponent{playerTexture, {0, 0, 32, 32}, 16, 32});
     auto &anim = GetRegistry().AddComponent(m_Player, PixelsEngine::AnimationComponent{});
@@ -270,4 +273,31 @@ void PixelsGateGame::SpawnWorldEntities() {
     GetRegistry().AddComponent(toolsEnt, PixelsEngine::SpriteComponent{toolsTex, {0, 0, 32, 32}, 16, 16});
     GetRegistry().AddComponent(toolsEnt, PixelsEngine::InteractionComponent{"Thieves' Tools", "item_tools", false, 0.0f});
     GetRegistry().AddComponent(toolsEnt, PixelsEngine::LootComponent{std::vector<PixelsEngine::Item>{{"Thieves' Tools", "assets/thieves_tools.png", 1, PixelsEngine::ItemType::Tool, 0, 25}}});
+
+    // Tent (Camp)
+    auto tent = GetRegistry().CreateEntity();
+    GetRegistry().AddComponent(tent, PixelsEngine::TransformComponent{7.0f, 5.0f});
+    auto tentTex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/camp_tent.png");
+    GetRegistry().AddComponent(tent, PixelsEngine::SpriteComponent{tentTex, {0, 0, 64, 64}, 32, 48});
+    GetRegistry().AddComponent(tent, PixelsEngine::TagComponent{PixelsEngine::EntityTag::CampProp});
+
+    // Bedroll (Camp)
+    auto bedroll = GetRegistry().CreateEntity();
+    GetRegistry().AddComponent(bedroll, PixelsEngine::TransformComponent{8.0f, 6.0f});
+    auto bedrollTex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/camp_bedroll.png");
+    GetRegistry().AddComponent(bedroll, PixelsEngine::SpriteComponent{bedrollTex, {0, 0, 32, 32}, 16, 16});
+    GetRegistry().AddComponent(bedroll, PixelsEngine::TagComponent{PixelsEngine::EntityTag::CampProp});
+    GetRegistry().AddComponent(bedroll, PixelsEngine::InteractionComponent{"Rest", "camp_bedroll", false, 0.0f});
+
+    // Fire (Camp)
+    auto fire = GetRegistry().CreateEntity();
+    GetRegistry().AddComponent(fire, PixelsEngine::TransformComponent{7.5f, 7.5f});
+    auto fireTex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/camp_fire_sheet.png");
+    GetRegistry().AddComponent(fire, PixelsEngine::SpriteComponent{fireTex, {0, 0, 32, 32}, 16, 24});
+    auto &fireAnim = GetRegistry().AddComponent(fire, PixelsEngine::AnimationComponent{});
+    fireAnim.AddAnimation("Burn", 0, 0, 32, 32, 4, 0.15f);
+    fireAnim.Play("Burn");
+    GetRegistry().AddComponent(fire, PixelsEngine::LightComponent{5.0f, {255, 200, 100, 255}, true});
+    GetRegistry().AddComponent(fire, PixelsEngine::TagComponent{PixelsEngine::EntityTag::CampProp});
+    GetRegistry().AddComponent(fire, PixelsEngine::InteractionComponent{"Rest", "camp_fire", false, 0.0f});
 }

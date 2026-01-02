@@ -47,6 +47,8 @@ struct StatsComponent {
   bool hasAdvantage = false;
   int shortRestsAvailable = 2;
   int maxShortRests = 2;
+  int currentSpellSlots = 3;
+  int maxSpellSlots = 3;
 
   // D&D Stats
   int strength = 10;
@@ -91,7 +93,7 @@ struct LootComponent {
   std::vector<PixelsEngine::Item> drops;
 };
 
-enum class EntityTag { None, Hostile, NPC, Companion, Trader, Quest };
+enum class EntityTag { None, Hostile, NPC, Companion, Trader, Quest, CampProp };
 
 struct TagComponent {
   EntityTag tag = EntityTag::None;
@@ -115,6 +117,14 @@ struct DialogueTree;
 
 struct DialogueComponent {
   std::shared_ptr<DialogueTree> tree;
+};
+
+struct LightComponent {
+  float radius = 5.0f;
+  SDL_Color color = {255, 200, 100, 255};
+  bool flickers = false;
+  float flickerTimer = 0.0f;
+  float baseRadius = 5.0f;
 };
 
 } // namespace PixelsEngine

@@ -166,6 +166,7 @@ public:
     // Systems
     void UpdateAI(float deltaTime);
     void UpdateMovement(float deltaTime);
+    void UpdateAnimations(float deltaTime);
     void UpdateDayNight(float deltaTime);
     void RenderDayNightCycle();
     void SpawnFloatingText(float x, float y, const std::string &text, SDL_Color color);

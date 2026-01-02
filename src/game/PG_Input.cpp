@@ -129,6 +129,11 @@ void PixelsGateGame::CheckWorldInteraction(int mx, int my) {
         if (isDoubleClick) {
             auto *interact = GetRegistry().GetComponent<PixelsEngine::InteractionComponent>(clickedEnt);
             if (interact) {
+                if (interact->uniqueId == "camp_bedroll" || interact->uniqueId == "camp_fire") {
+                    m_ReturnState = m_State;
+                    m_State = GameState::RestMenu;
+                    return;
+                }
                 PickupItem(clickedEnt);
                 return;
             }
@@ -458,14 +463,6 @@ void PixelsGateGame::ResetGame() {
     }
 
     auto *inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
-    if(inv) { 
-        inv->items.clear();
-        inv->equippedMelee = {"", "", 0, PixelsEngine::ItemType::WeaponMelee, 0};
-        inv->equippedRanged = {"", "", 0, PixelsEngine::ItemType::WeaponRanged, 0};
-        inv->equippedArmor = {"", "", 0, PixelsEngine::ItemType::Armor, 0};
-        inv->AddItem("Potion", 3, PixelsEngine::ItemType::Consumable, 0, "assets/ui/item_potion.png", 50);
-        inv->AddItem("Thieves' Tools", 1, PixelsEngine::ItemType::Tool, 0, "assets/thieves_tools.png", 25);
-    }
     
     for(int i=0; i<6; ++i) m_CC_TempStats[i] = 10;
     m_CC_ClassIndex = 0; m_CC_RaceIndex = 0; m_CC_SelectionIndex = 0; m_CC_PointsRemaining = 5;
@@ -719,7 +716,6 @@ void PixelsGateGame::HandleMapInput() {
 void PixelsGateGame::HandleRestMenuInput() {
     int w = GetWindowWidth(); int h = GetWindowHeight();
     int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
-     // Apply visual offset
     
     int boxW = 400; int boxH = 250;
     int boxX = (w - boxW) / 2; int boxY = (h - boxH) / 2;
@@ -731,36 +727,86 @@ void PixelsGateGame::HandleRestMenuInput() {
         y += 40;
     }
 
+    bool inCamp = (m_ReturnState == GameState::Camp);
+
     HandleMenuNavigation(4, [&](int selection){
-        if (selection == 0) { // Short Rest
-            auto *s = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
-            if (s && s->shortRestsAvailable > 0) {
-                s->shortRestsAvailable--;
-                s->currentHealth = std::min(s->maxHealth, s->currentHealth + (s->maxHealth/2));
+        auto *s = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+        auto *inv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+        
+        if (inCamp) {
+            // CAMP MENU: 0=Long Rest, 1=Partial Rest, 2=Leave Camp, 3=Back
+            if (selection == 0) { // Long Rest (Cost 40)
+                int totalSupplies = 0;
+                if (inv) {
+                    for(auto &item : inv->items) totalSupplies += item.quantity * item.supplyValue;
+                }
+                
+                if (totalSupplies >= 40) {
+                    int remainingCost = 40;
+                    if (inv) {
+                        for (auto it = inv->items.begin(); it != inv->items.end(); ) {
+                            if (it->supplyValue > 0) {
+                                int needed = (remainingCost + it->supplyValue - 1) / it->supplyValue;
+                                int take = std::min(it->quantity, needed);
+                                int valueTaken = take * it->supplyValue;
+                                
+                                it->quantity -= take;
+                                remainingCost -= valueTaken;
+                                if (it->quantity <= 0) it = inv->items.erase(it);
+                                else ++it;
+                                
+                                if (remainingCost <= 0) break;
+                            } else {
+                                ++it;
+                            }
+                        }
+                    }
+                    if (s) {
+                        s->currentHealth = s->maxHealth;
+                        s->shortRestsAvailable = s->maxShortRests;
+                        s->currentSpellSlots = s->maxSpellSlots; // Restore Spells
+                        // Reset cooldowns/status could go here
+                    }
+                    SpawnFloatingText(0, 0, "Long Rest: Fully Restored!", {0, 255, 0, 255});
+                    m_State = m_ReturnState;
+                } else {
+                    SpawnFloatingText(0, 0, "Not enough supplies (Need 40)!", {255, 0, 0, 255});
+                }
+            } else if (selection == 1) { // Partial Rest
+                if (s) {
+                    s->currentHealth = std::min(s->maxHealth, s->currentHealth + s->maxHealth / 2);
+                    s->currentSpellSlots = std::min(s->maxSpellSlots, s->currentSpellSlots + s->maxSpellSlots / 2);
+                }
+                SpawnFloatingText(0, 0, "Partial Rest: Half Restored.", {255, 255, 0, 255});
                 m_State = m_ReturnState;
-            }
-        } else if (selection == 1) { // Long Rest
-            auto *s = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
-            if(s) {
-                s->currentHealth = s->maxHealth;
-                s->shortRestsAvailable = s->maxShortRests;
-            }
-            m_State = m_ReturnState;
-        } else if (selection == 2) { // Camp
-            if (m_ReturnState == GameState::Camp) {
+            } else if (selection == 2) { // Leave Camp
                 auto *t = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
                 if(t) { t->x = m_LastWorldPos.x; t->y = m_LastWorldPos.y; }
                 m_State = GameState::Playing;
-            } else {
+            } else { // Back
+                m_State = m_ReturnState;
+            }
+        } else {
+            // WORLD MENU: 0=Short Rest, 1=Go to Camp, 2=Empty, 3=Back
+            if (selection == 0) { // Short Rest
+                if (s && s->shortRestsAvailable > 0) {
+                    s->shortRestsAvailable--;
+                    s->currentHealth = std::min(s->maxHealth, s->currentHealth + (s->maxHealth/2));
+                    SpawnFloatingText(0, 0, "Short Rest Taken", {0, 255, 0, 255});
+                    m_State = m_ReturnState;
+                } else {
+                    SpawnFloatingText(0, 0, "No Short Rests left!", {255, 0, 0, 255});
+                }
+            } else if (selection == 1) { // Go to Camp
                 auto *t = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
                 if(t) { 
                     m_LastWorldPos.x = t->x; m_LastWorldPos.y = t->y; 
-                    t->x = 7.0f; t->y = 7.0f; 
+                    t->x = 7.0f; t->y = 7.0f; // Camp Spawn
                 }
                 m_State = GameState::Camp;
+            } else { // Back
+                m_State = m_ReturnState;
             }
-        } else { // Back
-            m_State = m_ReturnState;
         }
     }, [&](){ m_State = m_ReturnState; }, hovered);
 }

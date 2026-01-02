@@ -2,12 +2,44 @@
 #include "../engine/Dice.h"
 #include "../engine/Input.h"
 #include "../engine/TextureManager.h"
+#include "../engine/AnimationSystem.h"
 #include <cmath>
 #include <algorithm> 
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+void PixelsGateGame::UpdateAnimations(float deltaTime) {
+    auto &view = GetRegistry().View<PixelsEngine::AnimationComponent>();
+    for (auto &[entity, anim] : view) {
+        if (!anim.isPlaying || anim.animations.empty()) continue;
+
+        anim.timer += deltaTime;
+        if (anim.timer >= anim.animations[anim.currentAnimationIndex].frameDuration) {
+            anim.timer = 0.0f;
+            anim.currentFrameIndex++;
+            if (anim.currentFrameIndex >= anim.animations[anim.currentAnimationIndex].frames.size()) {
+                if (anim.animations[anim.currentAnimationIndex].loop) {
+                    anim.currentFrameIndex = 0;
+                } else {
+                    anim.currentFrameIndex--;
+                    anim.isPlaying = false;
+                }
+            }
+        }
+
+        auto *sprite = GetRegistry().GetComponent<PixelsEngine::SpriteComponent>(entity);
+        if (sprite) {
+            sprite->srcRect = anim.animations[anim.currentAnimationIndex].frames[anim.currentFrameIndex];
+        }
+    }
+}
+
 void PixelsGateGame::UpdateAI(float deltaTime) {
     auto *pTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
-    if (!pTrans) return;
+    auto *pStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+    if (!pTrans || !pStats) return;
 
     auto &view = GetRegistry().View<PixelsEngine::AIComponent>();
     for (auto &[entity, ai] : view) {
@@ -24,13 +56,33 @@ void PixelsGateGame::UpdateAI(float deltaTime) {
         }
 
         float dist = std::sqrt(std::pow(pTrans->x - transform->x, 2) + std::pow(pTrans->y - transform->y, 2));
-        if (ai.isAggressive && dist <= ai.sightRange) {
+        
+        bool detected = false;
+        if (dist <= ai.sightRange) {
+            float dx = pTrans->x - transform->x;
+            float dy = pTrans->y - transform->y;
+            float angleToPlayer = std::atan2(dy, dx) * (180.0f / M_PI);
+            
+            float diff = std::abs(ai.facingDir - angleToPlayer);
+            if (diff > 180.0f) diff = 360.0f - diff;
+
+            if (pStats->isStealthed) {
+                // Sneaking: only detected if in cone
+                if (diff <= ai.coneAngle / 2.0f) detected = true;
+            } else {
+                // Not sneaking: detected if in cone OR very close
+                if (diff <= ai.coneAngle / 2.0f || dist < 2.0f) detected = true;
+            }
+        }
+
+        if (ai.isAggressive && detected) {
             if (dist > ai.attackRange) {
                 float dx = pTrans->x - transform->x; float dy = pTrans->y - transform->y;
                 float len = std::sqrt(dx*dx + dy*dy);
                 if (len > 0) {
                     transform->x += (dx/len) * 2.0f * deltaTime;
                     transform->y += (dy/len) * 2.0f * deltaTime;
+                    ai.facingDir = std::atan2(dy, dx) * (180.0f / M_PI);
                 }
             } else {
                 ai.attackTimer -= deltaTime;
@@ -97,20 +149,65 @@ void PixelsGateGame::UpdateMovement(float deltaTime) {
 }
 
 void PixelsGateGame::UpdateDayNight(float deltaTime) {
-    m_Time.Update(deltaTime);
+    // No automatic time progression
+    if (m_State == GameState::Camp) m_Time.m_TimeOfDay = 24.0f; // Night
+    else m_Time.m_TimeOfDay = 12.0f; // Day
 }
 
 void PixelsGateGame::RenderDayNightCycle() {
     SDL_Color tint = {0,0,0,0};
-    if (m_Time.m_TimeOfDay < 5.0f || m_Time.m_TimeOfDay > 20.0f) tint = {10,10,50,100};
-    else if (m_Time.m_TimeOfDay < 8.0f) tint = {255,100,50,50};
+    
+    if (m_State == GameState::Camp) {
+        tint = {10, 10, 50, 180}; // Brighter Night for Camp
+    }
     
     if (tint.a > 0) {
         SDL_SetRenderDrawBlendMode(GetRenderer(), SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(GetRenderer(), tint.r, tint.g, tint.b, tint.a);
         SDL_Rect s = {0,0,GetWindowWidth(),GetWindowHeight()};
         SDL_RenderFillRect(GetRenderer(), &s);
-        SDL_SetRenderDrawBlendMode(GetRenderer(), SDL_BLENDMODE_NONE);
+
+        // Draw Lights (Additive) - Only visible when it's dark
+        if (tint.a > 100) {
+            SDL_SetRenderDrawBlendMode(GetRenderer(), SDL_BLENDMODE_ADD);
+            
+            auto &lights = GetRegistry().View<PixelsEngine::LightComponent>();
+            auto *currentMap = GetCurrentMap();
+            auto &camera = GetCamera();
+
+            for(auto &[entity, light] : lights) {
+                auto *trans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(entity);
+                if(!trans || !currentMap) continue;
+
+                int sx, sy;
+                currentMap->GridToScreen(trans->x, trans->y, sx, sy);
+                float screenX = (float)(sx - camera.x + 16);
+                float screenY = (float)(sy - camera.y + 16);
+
+                float radius = light.radius * 32.0f; 
+                if(light.flickers) {
+                    radius += (std::rand() % 10 - 5);
+                }
+
+                std::vector<SDL_Vertex> verts;
+                // Center color (Light color)
+                verts.push_back({{screenX, screenY}, {light.color.r, light.color.g, light.color.b, 255}, {0,0}});
+                
+                int segments = 20;
+                for(int i=0; i<=segments; ++i) {
+                    float angle = (float)i / segments * 2.0f * M_PI;
+                    float px = screenX + std::cos(angle) * radius;
+                    float py = screenY + std::sin(angle) * radius * 0.6f; // Isometric squash
+                    verts.push_back({{px, py}, {0, 0, 0, 0}, {0,0}});
+                }
+                
+                for(int i=0; i<segments; ++i) {
+                    SDL_Vertex tri[3] = {verts[0], verts[i+1], verts[i+2]};
+                    SDL_RenderGeometry(GetRenderer(), nullptr, tri, 3, nullptr, 0);
+                }
+            }
+            SDL_SetRenderDrawBlendMode(GetRenderer(), SDL_BLENDMODE_NONE);
+        }
     }
     m_TextRenderer->RenderText("Time: " + std::to_string((int)m_Time.m_TimeOfDay) + ":00", GetWindowWidth()-100, 10, {255,255,255,255});
 }
@@ -148,6 +245,58 @@ void PixelsGateGame::ResolveDiceRoll() {
                         break;
                     }
                 }
+            }
+        }
+    } else if (m_DiceRoll.actionType == PixelsEngine::ContextActionType::Pickpocket) {
+        bool seen = false;
+        auto &aiView = GetRegistry().View<PixelsEngine::AIComponent>();
+        auto *pTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
+        
+        for (auto &[witness, wai] : aiView) {
+            auto *wStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(witness);
+            if (wStats && wStats->isDead) continue;
+            auto *wTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(witness);
+            if (!wTrans) continue;
+
+            float dx = pTrans->x - wTrans->x;
+            float dy = pTrans->y - wTrans->y;
+            float dist = std::sqrt(dx*dx + dy*dy);
+            
+            if (dist <= wai.sightRange) {
+                float angleToPlayer = std::atan2(dy, dx) * (180.0f / M_PI);
+                float diff = std::abs(wai.facingDir - angleToPlayer);
+                if (diff > 180.0f) diff = 360.0f - diff;
+                if (diff <= wai.coneAngle / 2.0f) {
+                    seen = true;
+                    wai.isAggressive = true;
+                    wai.hostileTimer = 30.0f;
+                    SpawnFloatingText(wTrans->x, wTrans->y, "Thief!", {255, 0, 0, 255});
+                }
+            }
+        }
+
+        if (seen) {
+            SpawnFloatingText(pTrans->x, pTrans->y, "Caught!", {255, 0, 0, 255});
+            StartCombat(m_DiceRoll.target);
+        } else if (m_DiceRoll.success) {
+            auto *tInv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_DiceRoll.target);
+            auto *pInv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
+            if (tInv && pInv && !tInv->items.empty()) {
+                auto &item = tInv->items[0]; 
+                pInv->AddItemObject(item);
+                SpawnFloatingText(pTrans->x, pTrans->y, "Stole " + item.name, {0, 255, 0, 255});
+                tInv->items.erase(tInv->items.begin());
+            } else {
+                SpawnFloatingText(pTrans->x, pTrans->y, "Nothing to steal", {200, 200, 200, 255});
+            }
+        } else {
+            SpawnFloatingText(pTrans->x, pTrans->y, "Failed!", {255, 100, 0, 255});
+            auto *targetAI = GetRegistry().GetComponent<PixelsEngine::AIComponent>(m_DiceRoll.target);
+            if (targetAI) {
+                targetAI->isAggressive = true;
+                targetAI->hostileTimer = 30.0f;
+                SpawnFloatingText(pTrans->x, pTrans->y, "Hey!", {255, 0, 0, 255});
+                StartCombat(m_DiceRoll.target);
             }
         }
     }

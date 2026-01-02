@@ -185,6 +185,7 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
           else UpdateAI(deltaTime);
           
           UpdateMovement(deltaTime);
+          UpdateAnimations(deltaTime);
 
           // 4. Update Camera & Visibility (Fog of War)
           auto *pTransTarget = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
@@ -237,8 +238,6 @@ void PixelsGateGame::OnRender() {
         auto *currentMap = GetCurrentMap();
         auto &camera = GetCamera();
         
-        RenderEnemyCones(camera);
-
         struct Renderable { float depth; PixelsEngine::Entity entity; int tileX, tileY; bool isTile; };
         std::vector<Renderable> renderQueue;
 
@@ -252,9 +251,17 @@ void PixelsGateGame::OnRender() {
         for (auto &[entity, sprite] : sprites) {
             auto *transform = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(entity);
             if (transform && currentMap) {
-                if ((m_State == GameState::Camp || m_ReturnState == GameState::Camp) && entity != m_Player) {
+                bool inCampMode = (m_State == GameState::Camp || m_ReturnState == GameState::Camp);
+                
+                if (inCampMode && entity != m_Player) {
                     auto *tag = GetRegistry().GetComponent<PixelsEngine::TagComponent>(entity);
-                    if (!tag || tag->tag != PixelsEngine::EntityTag::Companion) continue;
+                    bool isCampProp = (tag && tag->tag == PixelsEngine::EntityTag::CampProp);
+                    bool isCompanion = (tag && tag->tag == PixelsEngine::EntityTag::Companion);
+                    if (!isCampProp && !isCompanion) continue;
+                } 
+                else if (!inCampMode && entity != m_Player) {
+                     auto *tag = GetRegistry().GetComponent<PixelsEngine::TagComponent>(entity);
+                     if (tag && tag->tag == PixelsEngine::EntityTag::CampProp) continue;
                 }
                 // Only render if visible (Fog of War)
                 bool isVisible = currentMap->IsVisible((int)transform->x, (int)transform->y);
@@ -297,6 +304,8 @@ void PixelsGateGame::OnRender() {
                 }
             }
         }
+
+        RenderEnemyCones(camera);
 
         // Floating Text
         for (const auto &ft : m_FloatingText.m_Texts) {
