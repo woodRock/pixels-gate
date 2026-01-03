@@ -81,6 +81,7 @@ void PixelsGateGame::CheckUIInteraction(int mx, int my) {
                 else {
                     m_ReturnState = m_State;
                     m_State = GameState::Targeting;
+                    m_StateTimer = 0.0f;
                 }
             }
             return;
@@ -922,6 +923,7 @@ void PixelsGateGame::HandleGameOverInput() {
 }
 
 void PixelsGateGame::HandleTargetingInput() {
+    if (m_StateTimer < 0.2f) return;
     if (PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_ESCAPE)) {
         m_State = m_ReturnState;
         return;

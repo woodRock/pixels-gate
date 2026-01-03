@@ -77,6 +77,9 @@ void PixelsGateGame::GenerateMainLevelTerrain() {
             if (std::sqrt(std::pow(x - caveX, 2) + std::pow(y - caveY, 2)) < 8.0f) {
                 tile = ROCK;
                 if (std::sqrt(std::pow(x - caveX, 2) + std::pow(y - caveY, 2)) < 5.0f) tile = DIRT_WITH_PARTIAL_GRASS;
+                
+                // Cave Entrance (West side)
+                if (x < caveX && std::abs(y - caveY) < 3) tile = DIRT;
             }
 
             if (x == 0 || x == mapW - 1 || y == 0 || y == mapH - 1) tile = ROCK;
@@ -236,18 +239,48 @@ void PixelsGateGame::SpawnWorldEntities() {
     auto companionTex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/npc_companion.png");
     auto traderTex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/npc_trader.png");
 
+    // Helper to check for valid spawn location (Not on Road/Dirt)
+    auto IsValidSpawn = [&](float x, float y) {
+        int gx = (int)x; int gy = (int)y;
+        if (m_Level) {
+            int tile = m_Level->GetTile(gx, gy);
+            // Assuming DIRT is the road tile (and DIRT_VARIANT_19 is road/biome)
+            // We want to avoid spawning ON the road.
+            if (tile == PixelsEngine::Tiles::DIRT || tile == PixelsEngine::Tiles::DIRT_VARIANT_19) return false;
+            // Also check neighbors for "Close to road"
+            for(int dy=-2; dy<=2; ++dy) {
+                for(int dx=-2; dx<=2; ++dx) {
+                    int t = m_Level->GetTile(gx+dx, gy+dy);
+                    if (t == PixelsEngine::Tiles::DIRT) return false;
+                }
+            }
+        }
+        return true;
+    };
+
     // Scatter Critters
-    for(int i=0; i<8; ++i) CreateWolf(30.0f + (i*10), 30.0f + (i*5));
-    for(int i=0; i<10; ++i) CreateStag(10.0f + (i*8), 50.0f + (i*2));
-    for(int i=0; i<6; ++i) CreateBadger(60.0f + (i*5), 20.0f + (i*6));
+    for(int i=0; i<8; ++i) {
+        float x = 30.0f + (i*10); float y = 30.0f + (i*5);
+        if(IsValidSpawn(x, y)) CreateWolf(x, y);
+    }
+    for(int i=0; i<10; ++i) {
+        float x = 10.0f + (i*8); float y = 50.0f + (i*2);
+        if(IsValidSpawn(x, y)) CreateStag(x, y);
+    }
+    for(int i=0; i<6; ++i) {
+        float x = 60.0f + (i*5); float y = 20.0f + (i*6);
+        if(IsValidSpawn(x, y)) CreateBadger(x, y);
+    }
     
     // Scenario & Boss
     CreateDeadManAndSon(50.0f, 60.0f);
     CreateWolfBoss(85.0f, 15.0f); // In Cave Area
 
-    CreateBoar(35.0f, 35.0f);
-    CreateBoar(32.0f, 5.0f);
-    CreateBoar(5.0f, 32.0f);
+    // Boars: One is quest boar (allowed on/near road), others avoided
+    CreateBoar(35.0f, 35.0f); // Quest Boar (likely near road)
+    
+    if(IsValidSpawn(32.0f, 5.0f)) CreateBoar(32.0f, 5.0f);
+    if(IsValidSpawn(5.0f, 32.0f)) CreateBoar(5.0f, 32.0f);
 
     // Innkeeper
     auto npc1 = GetRegistry().CreateEntity();

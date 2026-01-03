@@ -161,6 +161,7 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
       case GameState::Controls:
           if (PixelsEngine::Input::IsKeyPressed(SDL_SCANCODE_ESCAPE)) m_State = GameState::MainMenu;
           break;
+      case GameState::Loading: break;
       case GameState::Camp:
       case GameState::Playing:
       case GameState::Combat:
@@ -175,6 +176,8 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
               m_MenuSelection = 0;
               return;
           }
+
+          m_StateTimer += deltaTime;
 
           // 2. Handle Input
           if (m_State == GameState::Targeting) HandleTargetingInput();
@@ -280,7 +283,7 @@ void PixelsGateGame::OnRender() {
                 bool isVisible = currentMap->IsVisible((int)transform->x, (int)transform->y);
                 if (entity != m_Player && !IsInTurnOrder(entity) && !isVisible) continue;
                 
-                renderQueue.push_back({transform->x + transform->y, entity, -1, -1, false});
+                renderQueue.push_back({transform->x + transform->y + 0.1f, entity, -1, -1, false});
             }
         }
 

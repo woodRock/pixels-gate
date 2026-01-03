@@ -252,6 +252,8 @@ private:
     int m_PinnedTooltipX = 0;
     int m_PinnedTooltipY = 0;
 
+    float m_StateTimer = 0.0f;
+
     // --- Character Creation State (Moved from Static) ---
     int m_CC_TempStats[6] = {10, 10, 10, 10, 10, 10};
     int m_CC_ClassIndex = 0;

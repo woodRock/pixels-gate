@@ -574,6 +574,9 @@ void PixelsGateGame::RenderEnemyCones(const PixelsEngine::Camera &camera) {
 
     auto &view = GetRegistry().View<PixelsEngine::AIComponent>();
     for (auto &[entity, ai] : view) {
+        auto *stats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(entity);
+        if (stats && stats->isDead) continue;
+        
         auto *transform = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(entity);
         if (!transform) continue;
         
