@@ -441,31 +441,46 @@ void PixelsGateGame::RenderMapScreen() {
     SDL_Rect o = {0,0,GetWindowWidth(),GetWindowHeight()}; SDL_RenderFillRect(GetRenderer(), &o);
     SDL_SetRenderDrawBlendMode(GetRenderer(), SDL_BLENDMODE_NONE);
     
-    int tabW = 150, startX = GetWindowWidth()/2 - tabW;
-    SDL_Rect mapT = {startX, 20, tabW, 40};
-    SDL_Rect jrnT = {startX+tabW, 20, tabW, 40};
+    int w = 900, h = 650;
+    if (w > GetWindowWidth()) w = GetWindowWidth() - 40;
+    if (h > GetWindowHeight() - 100) h = GetWindowHeight() - 100;
     
-    SDL_SetRenderDrawColor(GetRenderer(), (m_MapTab==0)?100:50, (m_MapTab==0)?100:50, (m_MapTab==0)?150:50, 255);
+    // Ensure Top Padding for Tabs (40px height)
+    int py = (GetWindowHeight() - h) / 2;
+    if (py < 50) py = 50;
+    
+    SDL_Rect p = {(GetWindowWidth() - w) / 2, py, w, h};
+
+    SDL_SetRenderDrawColor(GetRenderer(), 45, 45, 55, 255);
+    SDL_RenderFillRect(GetRenderer(), &p);
+    SDL_SetRenderDrawColor(GetRenderer(), 100, 100, 100, 255);
+    SDL_RenderDrawRect(GetRenderer(), &p);
+    
+    int tabW = w / 2;
+    SDL_Rect mapT = {p.x, p.y - 40, tabW, 40};
+    SDL_Rect jrnT = {p.x + tabW, p.y - 40, tabW, 40};
+    
+    SDL_SetRenderDrawColor(GetRenderer(), (m_MapTab==0)?60:35, (m_MapTab==0)?60:35, (m_MapTab==0)?80:45, 255);
     SDL_RenderFillRect(GetRenderer(), &mapT);
     m_TextRenderer->RenderTextCentered("MAP", mapT.x+tabW/2, mapT.y+10, {255,255,255,255});
     
-    SDL_SetRenderDrawColor(GetRenderer(), (m_MapTab==1)?100:50, (m_MapTab==1)?100:50, (m_MapTab==1)?150:50, 255);
+    SDL_SetRenderDrawColor(GetRenderer(), (m_MapTab==1)?60:35, (m_MapTab==1)?60:35, (m_MapTab==1)?80:45, 255);
     SDL_RenderFillRect(GetRenderer(), &jrnT);
     m_TextRenderer->RenderTextCentered("JOURNAL", jrnT.x+tabW/2, jrnT.y+10, {255,255,255,255});
     
     if (m_MapTab == 1) { // Journal
         auto &quests = GetRegistry().View<PixelsEngine::QuestComponent>();
-        int qy = 100;
-        int winW = GetWindowWidth();
+        int qy = p.y + 30;
+        int winW = GetWindowWidth(); 
         for(auto &[e, q] : quests) {
             if(q.state > 0) {
                 std::string status = (q.state == 2) ? " (COMPLETED)" : " (ACTIVE)";
                 SDL_Color titleCol = (q.state == 2) ? SDL_Color{100, 255, 100, 255} : SDL_Color{255, 215, 0, 255};
                 
-                m_TextRenderer->RenderText(q.questId + status, 100, qy, titleCol);
+                m_TextRenderer->RenderText(q.questId + status, p.x + 30, qy, titleCol);
                 qy += 25;
                 
-                int th = m_TextRenderer->RenderTextWrapped(q.description, 120, qy, winW - 240, {200, 200, 200, 255});
+                int th = m_TextRenderer->RenderTextWrapped(q.description, p.x + 50, qy, w - 100, {200, 200, 200, 255});
                 qy += th + 30;
             }
         }
@@ -474,15 +489,26 @@ void PixelsGateGame::RenderMapScreen() {
         // --- Full Map Render ---
         auto *currentMap = (m_State == GameState::Camp) ? m_CampLevel.get() : m_Level.get();
         if (currentMap) {
-            int tileSize = 10;
-            int mapW = currentMap->GetWidth() * tileSize;
-            int mapH = currentMap->GetHeight() * tileSize;
-            int startX = (GetWindowWidth() - mapW) / 2;
-            int startY = (GetWindowHeight() - mapH) / 2 + 30;
+            SDL_RenderSetClipRect(GetRenderer(), &p); // Clip to panel
 
-            SDL_Rect mapRect = {startX - 5, startY - 5, mapW + 10, mapH + 10};
-            SDL_SetRenderDrawColor(GetRenderer(), 50, 50, 50, 255);
-            SDL_RenderFillRect(GetRenderer(), &mapRect);
+            int tileSize = 10;
+            // Center on Player
+            int startX = p.x + w/2;
+            int startY = p.y + h/2;
+            
+            auto *pTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
+            if (pTrans) {
+                startX -= (int)(pTrans->x * tileSize);
+                startY -= (int)(pTrans->y * tileSize);
+            } else {
+                // Fallback to center of map if no player
+                startX -= (currentMap->GetWidth() * tileSize) / 2;
+                startY -= (currentMap->GetHeight() * tileSize) / 2;
+            }
+
+            // Draw Background for map area
+            SDL_SetRenderDrawColor(GetRenderer(), 20, 20, 20, 255);
+            SDL_RenderFillRect(GetRenderer(), &p);
 
             // Draw Tiles
             for (int y = 0; y < currentMap->GetHeight(); ++y) {
@@ -514,12 +540,12 @@ void PixelsGateGame::RenderMapScreen() {
             }
 
             // Draw Player
-            auto *pTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
             if (pTrans) {
                 SDL_SetRenderDrawColor(GetRenderer(), 255, 255, 255, 255);
                 SDL_Rect pr = {startX + (int)pTrans->x * tileSize, startY + (int)pTrans->y * tileSize, tileSize, tileSize};
                 SDL_RenderFillRect(GetRenderer(), &pr);
             }
+            SDL_RenderSetClipRect(GetRenderer(), NULL); // Reset Clip
         }
     }
 }

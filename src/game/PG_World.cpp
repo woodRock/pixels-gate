@@ -507,12 +507,12 @@ void PixelsGateGame::SpawnWorldEntities() {
 
     // Son's Camp Spot
     auto sTent = GetRegistry().CreateEntity();
-    GetRegistry().AddComponent(sTent, PixelsEngine::TransformComponent{10.0f, 5.0f});
+    GetRegistry().AddComponent(sTent, PixelsEngine::TransformComponent{11.0f, 4.0f});
     GetRegistry().AddComponent(sTent, PixelsEngine::SpriteComponent{tentTex, {0, 0, 64, 64}, 32, 48});
     GetRegistry().AddComponent(sTent, PixelsEngine::TagComponent{PixelsEngine::EntityTag::CampProp});
 
     auto sBed = GetRegistry().CreateEntity();
-    GetRegistry().AddComponent(sBed, PixelsEngine::TransformComponent{10.0f, 6.0f});
+    GetRegistry().AddComponent(sBed, PixelsEngine::TransformComponent{11.0f, 5.0f});
     GetRegistry().AddComponent(sBed, PixelsEngine::SpriteComponent{bedrollTex, {0, 0, 32, 32}, 16, 16});
     GetRegistry().AddComponent(sBed, PixelsEngine::TagComponent{PixelsEngine::EntityTag::CampProp});
 }

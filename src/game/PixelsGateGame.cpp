@@ -198,7 +198,8 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
           if (pTransTarget) {
               auto *currentMap = GetCurrentMap();
               if (currentMap) {
-                  currentMap->UpdateVisibility((int)pTransTarget->x, (int)pTransTarget->y, 6); 
+                  int radius = (m_State == GameState::Camp) ? 15 : 6;
+                  currentMap->UpdateVisibility((int)pTransTarget->x, (int)pTransTarget->y, radius); 
 
                   int screenX, screenY;
                   currentMap->GridToScreen(pTransTarget->x, pTransTarget->y, screenX, screenY);
@@ -260,7 +261,7 @@ void PixelsGateGame::OnRender() {
 
             for (int y = startY; y < endY; ++y)
                 for (int x = startX; x < endX; ++x)
-                    renderQueue.push_back({(float)(x + y), PixelsEngine::INVALID_ENTITY, x, y, true});
+                    renderQueue.push_back({(float)(x + y) + (y * 0.01f), PixelsEngine::INVALID_ENTITY, x, y, true});
         }
 
         auto &sprites = GetRegistry().View<PixelsEngine::SpriteComponent>();
@@ -283,7 +284,7 @@ void PixelsGateGame::OnRender() {
                 bool isVisible = currentMap->IsVisible((int)transform->x, (int)transform->y);
                 if (entity != m_Player && !IsInTurnOrder(entity) && !isVisible) continue;
                 
-                renderQueue.push_back({transform->x + transform->y + 0.5f, entity, -1, -1, false});
+                renderQueue.push_back({transform->x + transform->y + (transform->y * 0.01f) + 0.5f, entity, -1, -1, false});
             }
         }
 

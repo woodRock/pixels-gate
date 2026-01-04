@@ -742,12 +742,21 @@ void PixelsGateGame::HandleCharacterMenuInput() {
 
 void PixelsGateGame::HandleMapInput() {
     int w = GetWindowWidth(); int h = GetWindowHeight();
+    
+    int panelW = 900; int panelH = 650;
+    if (panelW > w) panelW = w - 40;
+    if (panelH > h - 100) panelH = h - 100;
+    
+    int pX = (w - panelW) / 2;
+    int pY = (h - panelH) / 2;
+    if (pY < 50) pY = 50;
+
     if (PixelsEngine::Input::IsMouseButtonPressed(SDL_BUTTON_LEFT)) {
         int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
-        int tabW = 150;
-        int startX = w / 2 - tabW;
-        SDL_Rect mapT = {startX, 20, tabW, 40};
-        SDL_Rect jrnT = {startX+tabW, 20, tabW, 40};
+        int tabW = panelW / 2;
+        
+        SDL_Rect mapT = {pX, pY - 40, tabW, 40};
+        SDL_Rect jrnT = {pX + tabW, pY - 40, tabW, 40};
         
         if (mx >= mapT.x && mx <= mapT.x + mapT.w && my >= mapT.y && my <= mapT.y + mapT.h) m_MapTab = 0;
         if (mx >= jrnT.x && mx <= jrnT.x + jrnT.w && my >= jrnT.y && my <= jrnT.y + jrnT.h) m_MapTab = 1;
@@ -830,7 +839,7 @@ void PixelsGateGame::HandleRestMenuInput() {
                 if(t) { t->x = m_LastWorldPos.x; t->y = m_LastWorldPos.y; }
 
                 auto &view = GetRegistry().View<PixelsEngine::TransformComponent>();
-                for(auto [ent, trans] : view) {
+                for(auto &[ent, trans] : view) {
                     if (ent == m_Player) continue;
                     auto *tag = GetRegistry().GetComponent<PixelsEngine::TagComponent>(ent);
                     auto *interact = GetRegistry().GetComponent<PixelsEngine::InteractionComponent>(ent);
@@ -869,7 +878,7 @@ void PixelsGateGame::HandleRestMenuInput() {
                 }
 
                 auto &view = GetRegistry().View<PixelsEngine::TransformComponent>();
-                for(auto [ent, trans] : view) {
+                for(auto &[ent, trans] : view) {
                     if (ent == m_Player) continue;
                     auto *tag = GetRegistry().GetComponent<PixelsEngine::TagComponent>(ent);
                     auto *interact = GetRegistry().GetComponent<PixelsEngine::InteractionComponent>(ent);
@@ -966,9 +975,13 @@ PixelsEngine::Entity PixelsGateGame::GetEntityAtMouse() {
         float dy = (float)my - cy;
         float dist = std::sqrt(dx*dx + dy*dy);
 
+        float score = dist;
+        if (GetRegistry().HasComponent<PixelsEngine::DialogueComponent>(ent)) score -= 15.0f;
+        else if (GetRegistry().HasComponent<PixelsEngine::StatsComponent>(ent)) score -= 5.0f;
+
         // Within ~1 tile radius (increased for easier clicking)
-        if (dist < 32.0f && dist < bestDist) {
-            bestDist = dist;
+        if (dist < 32.0f && score < bestDist) {
+            bestDist = score;
             bestTarget = ent;
         }
     }
