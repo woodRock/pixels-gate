@@ -177,14 +177,16 @@ void PixelsGateGame::RenderHUD() {
     }
     DrawGrid("ITEMS", 320, hotbarItems, itemKeys, hIcons);
 
-    // Right-Side System Buttons (Map, Character, Rest, Inventory)
-    const char *sysLabels[] = {"Map", "Chr", "", "Inv"};
-    const char *sysKeys[] = {"M", "O", "ESC", "I"};
-    const char *sysIcons[] = {"", "", "assets/ui/action_rest.png", ""}; // Use Rest icon for ESC menu
+    // Right-Side System Buttons
+    const char *sysLabels[] = {"Map", "Jrn", "Chr", "Inv", "", "Menu"};
+    const char *sysKeys[] = {"M", "J", "O", "I", "R", "ESC"};
+    const char *sysIcons[] = {"", "", "", "", "assets/ui/action_rest.png", ""};
     
     int mx, my; PixelsEngine::Input::GetMousePosition(mx, my);
-    for (int i = 0; i < 4; ++i) {
-        SDL_Rect btn = {winW - 180 + (i % 2) * 85, winH - 100 + 15 + (i / 2) * 40, 75, 35};
+    for (int i = 0; i < 6; ++i) {
+        int row = i / 3;
+        int col = i % 3;
+        SDL_Rect btn = {winW - 270 + col * 85, winH - 100 + 12 + row * 40, 75, 35};
         
         bool hover = (mx >= btn.x && mx <= btn.x + btn.w && my >= btn.y && my <= btn.y + btn.h);
         SDL_SetRenderDrawColor(renderer, hover ? 120 : 100, 100, 100, 255);

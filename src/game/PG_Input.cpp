@@ -89,13 +89,17 @@ void PixelsGateGame::CheckUIInteraction(int mx, int my) {
     }
     
     // Check System Buttons (Far Right)
-    for (int i = 0; i < 4; ++i) {
-        SDL_Rect btn = {w - 180 + (i % 2) * 85, h - 100 + 15 + (i / 2) * 40, 75, 35};
+    for (int i = 0; i < 6; ++i) {
+        int row = i / 3;
+        int col = i % 3;
+        SDL_Rect btn = {w - 270 + col * 85, h - 100 + 12 + row * 40, 75, 35};
         if (mx >= btn.x && mx <= btn.x + btn.w && my >= btn.y && my <= btn.y + btn.h) {
-            if (i==0) { m_ReturnState = m_State; m_State = GameState::Map; m_MapTab = 0; }
-            if (i==1) { m_ReturnState = m_State; m_State = GameState::CharacterMenu; m_CharacterTab = 1; }
-            if (i==2) { m_ReturnState = m_State; m_State = GameState::RestMenu; }
-            if (i==3) { m_ReturnState = m_State; m_State = GameState::CharacterMenu; m_CharacterTab = 0; }
+            if (i==0) { m_ReturnState = m_State; m_State = GameState::Map; m_MapTab = 0; } // Map
+            if (i==1) { m_ReturnState = m_State; m_State = GameState::Map; m_MapTab = 1; } // Jrn
+            if (i==2) { m_ReturnState = m_State; m_State = GameState::CharacterMenu; m_CharacterTab = 1; } // Chr
+            if (i==3) { m_ReturnState = m_State; m_State = GameState::CharacterMenu; m_CharacterTab = 0; } // Inv
+            if (i==4) { m_ReturnState = m_State; m_State = GameState::RestMenu; } // Rest
+            if (i==5) { m_ReturnState = m_State; m_PauseOriginalState = m_State; m_State = GameState::Paused; } // Menu
             return;
         }
     }
@@ -949,7 +953,7 @@ void PixelsGateGame::HandlePauseMenuInput() {
             case 4: m_ReturnState = GameState::Paused; m_State = GameState::Options; break;
             case 5: m_State = GameState::MainMenu; break;
         }
-    }, [&](){ m_State = m_ReturnState; }, hovered); 
+    }, [&](){ m_State = m_PauseOriginalState; }, hovered); 
 }
 
 PixelsEngine::Entity PixelsGateGame::GetEntityAtMouse() {
