@@ -4,6 +4,10 @@
 #include <SDL2/SDL_ttf.h>
 #include <iostream>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 namespace PixelsEngine {
 
 Application::Application(const char *title, int width, int height)
@@ -75,21 +79,33 @@ void Application::ToggleFullScreen() {
 
 void Application::Run() {
   OnStart();
+  m_LastTime = SDL_GetTicks();
 
-  SDL_Event e;
-  Uint32 lastTime = SDL_GetTicks();
-
+#ifdef __EMSCRIPTEN__
+  emscripten_set_main_loop_arg([](void* arg){
+      static_cast<Application*>(arg)->Step();
+  }, this, 0, 1);
+#else
   while (m_IsRunning) {
-    // Update input state (copy current to previous)
+      Step();
+  }
+#endif
+}
+
+void Application::Step() {
     Input::Update(m_Renderer);
 
     Uint32 currentTime = SDL_GetTicks();
-    float deltaTime = (currentTime - lastTime) / 1000.0f;
-    lastTime = currentTime;
+    float deltaTime = (currentTime - m_LastTime) / 1000.0f;
+    m_LastTime = currentTime;
 
+    SDL_Event e;
     while (SDL_PollEvent(&e) != 0) {
       if (e.type == SDL_QUIT) {
         m_IsRunning = false;
+#ifdef __EMSCRIPTEN__
+        emscripten_cancel_main_loop();
+#endif
       } else if (e.type == SDL_WINDOWEVENT) {
         if (e.window.event == SDL_WINDOWEVENT_RESIZED ||
             e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
@@ -100,14 +116,12 @@ void Application::Run() {
 
     OnUpdate(deltaTime);
 
-    // Basic clear to black
     SDL_SetRenderDrawColor(m_Renderer, 0, 0, 0, 255);
     SDL_RenderClear(m_Renderer);
 
     OnRender();
 
     SDL_RenderPresent(m_Renderer);
-  }
 }
 
 } // namespace PixelsEngine

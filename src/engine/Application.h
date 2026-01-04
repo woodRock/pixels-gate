@@ -12,6 +12,7 @@ public:
   virtual ~Application();
 
   void Run();
+  void Step();
   void ToggleFullScreen();
 
   SDL_Renderer *GetRenderer() const { return m_Renderer; }
@@ -30,6 +31,7 @@ protected:
   SDL_Renderer *m_Renderer = nullptr;
   int m_Width;
   int m_Height;
+  Uint32 m_LastTime = 0;
   bool m_IsRunning = false;
   std::unique_ptr<Camera> m_Camera;
   Registry m_Registry;

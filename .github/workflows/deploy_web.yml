@@ -1,0 +1,49 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v12
+        with:
+          version: 3.1.44
+
+      - name: Verify Emscripten
+        run: emcc -v
+
+      - name: Create Build Directory
+        run: mkdir build_web
+
+      - name: Configure CMake
+        run: emcmake cmake -S . -B build_web
+
+      - name: Build
+        run: cmake --build build_web
+
+      - name: Prepare Artifacts
+        run: |
+          mkdir public
+          cp build_web/PixelsGate.html public/index.html
+          cp build_web/PixelsGate.js public/
+          cp build_web/PixelsGate.wasm public/
+          # Copy data file if it exists (it should with --preload-file)
+          if [ -f build_web/PixelsGate.data ]; then
+            cp build_web/PixelsGate.data public/
+          fi
+
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: public
