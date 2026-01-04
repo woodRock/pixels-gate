@@ -50,6 +50,35 @@ void PixelsGateGame::UpdateAI(float deltaTime) {
         auto *stats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(entity);
         if (stats && stats->isDead) continue; // Safety check
 
+        auto *tag = GetRegistry().GetComponent<PixelsEngine::TagComponent>(entity);
+        if (tag && tag->tag == PixelsEngine::EntityTag::Companion) {
+            float dist = std::sqrt(std::pow(pTrans->x - transform->x, 2) + std::pow(pTrans->y - transform->y, 2));
+            if (dist > 3.0f) {
+                float dx = pTrans->x - transform->x;
+                float dy = pTrans->y - transform->y;
+                float len = std::sqrt(dx*dx + dy*dy);
+                if (len > 0) {
+                    float speed = 3.8f;
+                    float moveX = (dx / len) * speed * deltaTime;
+                    float moveY = (dy / len) * speed * deltaTime;
+                    auto *map = GetCurrentMap();
+                    if (map) {
+                        if (map->IsWalkable(transform->x + moveX, transform->y + moveY)) {
+                            transform->x += moveX; transform->y += moveY;
+                        } else if (map->IsWalkable(transform->x + moveX, transform->y)) {
+                            transform->x += moveX;
+                        } else if (map->IsWalkable(transform->x, transform->y + moveY)) {
+                            transform->y += moveY;
+                        }
+                    } else {
+                        transform->x += moveX; transform->y += moveY;
+                    }
+                    ai.facingDir = std::atan2(dy, dx) * (180.0f / M_PI);
+                }
+            }
+            continue;
+        }
+
         if (ai.hostileTimer > 0.0f) {
             ai.hostileTimer -= deltaTime;
             if (ai.hostileTimer <= 0.0f) ai.isAggressive = false;

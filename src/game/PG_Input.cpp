@@ -600,6 +600,46 @@ void PixelsGateGame::HandleDialogueInput() {
             if(stats) stats->experience += 500;
             SpawnFloatingText(0, 0, "Quest Complete: +400G, +500 XP", {0, 255, 0, 255});
             d->tree->currentNodeId = opt.nextNodeId;
+        } else if (opt.action == PixelsEngine::DialogueAction::JoinParty) {
+            auto *tag = GetRegistry().GetComponent<PixelsEngine::TagComponent>(m_DialogueWith);
+            if(tag) tag->tag = PixelsEngine::EntityTag::Companion;
+            auto *ai = GetRegistry().GetComponent<PixelsEngine::AIComponent>(m_DialogueWith);
+            if(ai) { ai->isAggressive = false; ai->sightRange = 10.0f; } 
+            
+            // Set InParty flag
+            if (d) m_WorldFlags[d->tree->currentEntityName + "_InParty"] = true;
+
+            // Clear camp flag if re-joining
+            if (!opt.actionParam.empty()) m_WorldFlags[opt.actionParam] = false;
+            
+            SpawnFloatingText(0, 0, "Companion Joined!", {0, 255, 0, 255});
+            d->tree->currentNodeId = opt.nextNodeId;
+        } else if (opt.action == PixelsEngine::DialogueAction::Dismiss) {
+            auto *tag = GetRegistry().GetComponent<PixelsEngine::TagComponent>(m_DialogueWith);
+            
+            // Clear InParty flag
+            if (d) m_WorldFlags[d->tree->currentEntityName + "_InParty"] = false;
+
+            // Set flag (e.g. "camp")
+            if (!opt.actionParam.empty()) m_WorldFlags[opt.actionParam] = true;
+
+            // Move to Camp
+            auto *t = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_DialogueWith);
+            auto *interact = GetRegistry().GetComponent<PixelsEngine::InteractionComponent>(m_DialogueWith);
+            if(t) {
+                bool inCamp = (m_ReturnState == GameState::Camp);
+                if (inCamp) {
+                     if (interact && interact->uniqueId == "npc_son") { t->x = 10.0f; t->y = 5.0f; }
+                     else { t->x = 9.0f; t->y = 9.0f; }
+                } else {
+                     t->x = -1000.0f; t->y = -1000.0f;
+                }
+            } 
+            
+            if(tag) tag->tag = PixelsEngine::EntityTag::CampProp; 
+            
+            SpawnFloatingText(0, 0, "Companion returned to camp.", {200, 200, 200, 255});
+            d->tree->currentNodeId = opt.nextNodeId;
         } else {
             d->tree->currentNodeId = opt.nextNodeId;
         }
@@ -786,6 +826,23 @@ void PixelsGateGame::HandleRestMenuInput() {
             } else if (selection == 2) { // Leave Camp
                 auto *t = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
                 if(t) { t->x = m_LastWorldPos.x; t->y = m_LastWorldPos.y; }
+
+                auto &view = GetRegistry().View<PixelsEngine::TransformComponent>();
+                for(auto [ent, trans] : view) {
+                    if (ent == m_Player) continue;
+                    auto *tag = GetRegistry().GetComponent<PixelsEngine::TagComponent>(ent);
+                    auto *interact = GetRegistry().GetComponent<PixelsEngine::InteractionComponent>(ent);
+                    
+                    if (tag && tag->tag == PixelsEngine::EntityTag::Companion) {
+                        trans.x = m_LastWorldPos.x + 1.0f; 
+                        trans.y = m_LastWorldPos.y;
+                    } else if (tag && tag->tag == PixelsEngine::EntityTag::CampProp) {
+                        if (interact && interact->uniqueId == "npc_son") {
+                             trans.x = -1000.0f; trans.y = -1000.0f;
+                        }
+                    }
+                }
+
                 m_State = GameState::Playing;
                 m_ReturnState = GameState::Playing;
             } else { // Back
@@ -808,6 +865,26 @@ void PixelsGateGame::HandleRestMenuInput() {
                     m_LastWorldPos.x = t->x; m_LastWorldPos.y = t->y; 
                     t->x = 7.0f; t->y = 7.0f; // Camp Spawn
                 }
+
+                auto &view = GetRegistry().View<PixelsEngine::TransformComponent>();
+                for(auto [ent, trans] : view) {
+                    if (ent == m_Player) continue;
+                    auto *tag = GetRegistry().GetComponent<PixelsEngine::TagComponent>(ent);
+                    auto *interact = GetRegistry().GetComponent<PixelsEngine::InteractionComponent>(ent);
+                    
+                    if (tag && tag->tag == PixelsEngine::EntityTag::Companion) {
+                        if (interact && interact->uniqueId == "npc_son") {
+                            trans.x = 10.0f; trans.y = 5.0f;
+                        } else {
+                            trans.x = 8.0f; trans.y = 8.0f; 
+                        }
+                    } else if (tag && tag->tag == PixelsEngine::EntityTag::CampProp) {
+                        if (interact && interact->uniqueId == "npc_son") {
+                            trans.x = 10.0f; trans.y = 5.0f;
+                        }
+                    }
+                }
+
                 m_State = GameState::Camp;
             } else { // Back
                 m_State = m_ReturnState;
@@ -816,7 +893,7 @@ void PixelsGateGame::HandleRestMenuInput() {
     }, [&](){ m_State = m_ReturnState; }, hovered);
 }
 
-void PixelsGateGame::HandleCombatInput() {
+void PixelsGateGame::HandleCombatInput(PixelsEngine::Entity activeEntity) {
     if (PixelsEngine::Input::IsKeyPressed(PixelsEngine::Config::GetKeybind(PixelsEngine::GameAction::EndTurn))) {
         NextTurn(); return;
     }
@@ -829,9 +906,9 @@ void PixelsGateGame::HandleCombatInput() {
     if ((dx!=0 || dy!=0) && m_Combat.m_MovementLeft > 0) {
         float speed = 5.0f; float cost = speed * 0.016f;
         if (m_Combat.m_MovementLeft >= cost) {
-            auto *t = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
+            auto *t = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(activeEntity);
             auto *currentMap = GetCurrentMap();
-            if (currentMap->IsWalkable(t->x + dx*cost, t->y + dy*cost)) {
+            if (currentMap && t && currentMap->IsWalkable(t->x + dx*cost, t->y + dy*cost)) {
                 t->x += dx*cost; t->y += dy*cost;
                 m_Combat.m_MovementLeft -= cost;
             }

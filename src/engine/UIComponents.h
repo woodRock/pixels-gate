@@ -34,15 +34,16 @@ struct DiceRollAnimation {
   ContextActionType actionType = ContextActionType::Attack;
 };
 
-enum class DialogueAction {
-  None,
-  StartCombat,
-  GiveItem,
-  SetFlag,
-  EndConversation,
-  StartQuest,
-  CompleteQuest
-};
+    enum class DialogueAction {
+        None,
+        EndConversation,
+        StartCombat,
+        GiveItem,
+        StartQuest,
+        CompleteQuest,
+        JoinParty,
+        Dismiss
+    };
 
 struct DialogueOption {
   std::string text;

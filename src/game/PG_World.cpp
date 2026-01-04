@@ -157,20 +157,33 @@ void PixelsGateGame::CreateDeadManAndSon(float x, float y) {
     GetRegistry().AddComponent(son, PixelsEngine::InteractionComponent{"Grieving Son", "npc_son", false, 0.0f});
     GetRegistry().AddComponent(son, PixelsEngine::TagComponent{PixelsEngine::EntityTag::NPC});
     GetRegistry().AddComponent(son, PixelsEngine::StatsComponent{30, 30, 3, false});
+    GetRegistry().AddComponent(son, PixelsEngine::AIComponent{10.0f, 1.5f, 2.0f, 0.0f, false});
 
     PixelsEngine::DialogueTree tree;
     tree.currentEntityName = "Grieving Son";
     tree.currentNodeId = "start";
     
     PixelsEngine::DialogueNode start; start.id = "start"; start.npcText = "He's gone... The beast came out of nowhere. It... it tore him apart.";
-    start.options.push_back(PixelsEngine::DialogueOption("You should seek revenge. Hunt it down! [Persuasion DC 12]", "rev_check", "Charisma", 12, "rev_success", "rev_fail"));
-    start.options.push_back(PixelsEngine::DialogueOption("It's too dangerous. Go home and live. [Persuasion DC 10]", "home_check", "Charisma", 10, "home_success", "home_fail"));
-    start.options.push_back(PixelsEngine::DialogueOption("I will kill the wolf for you.", "hero", "None", 0, "", "", PixelsEngine::DialogueAction::StartQuest, "Quest_KillWolfBoss"));
-    start.options.push_back(PixelsEngine::DialogueOption("Tragic. Bye.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    start.options.push_back(PixelsEngine::DialogueOption("You should seek revenge. Hunt it down! [Persuasion DC 12]", "rev_check", "Charisma", 12, "rev_success", "rev_fail", PixelsEngine::DialogueAction::None, "", "Quest_KillWolfBoss_Done", false, "")); // Hide if already done
+    start.options.push_back(PixelsEngine::DialogueOption("It's too dangerous. Go home and live. [Persuasion DC 10]", "home_check", "Charisma", 10, "home_success", "home_fail", PixelsEngine::DialogueAction::None, "", "Quest_KillWolfBoss_Done", false, ""));
+    start.options.push_back(PixelsEngine::DialogueOption("I will kill the wolf for you.", "hero", "None", 0, "", "", PixelsEngine::DialogueAction::StartQuest, "Quest_KillWolfBoss", "Quest_KillWolfBoss_Active", false, ""));
+    start.options.push_back(PixelsEngine::DialogueOption("The wolf is dead. Justice is served.", "wolf_dead", "None", 0, "", "", PixelsEngine::DialogueAction::CompleteQuest, "Quest_KillWolfBoss_Done", "Quest_KillWolfBoss_Done", true, "Quest_KillWolfBoss_Active"));
+    start.options.push_back(PixelsEngine::DialogueOption("The deed is done. The wolf is dead.", "wolf_dead", "None", 0, "", "", PixelsEngine::DialogueAction::None, "", "Quest_KillWolfBoss_Done", true, "Quest_KillWolfBoss_Active")); 
+    
+    // Recruit (Initial) - Show if Quest Done, NOT At Camp, NOT In Party
+    start.options.push_back(PixelsEngine::DialogueOption("Come with me. We'll face the dangers together.", "join_party", "None", 0, "", "", PixelsEngine::DialogueAction::JoinParty, "", "Grieving Son_InParty", true, "Quest_KillWolfBoss_Done")); 
+    
+    // Recruit (Rejoin) - Show ONLY if At Camp
+    start.options.push_back(PixelsEngine::DialogueOption("Join me. I have need of your skills.", "join_party_camp", "None", 0, "", "", PixelsEngine::DialogueAction::JoinParty, "camp", "", true, "camp")); 
+    
+    // Dismiss - Show ONLY if In Party
+    start.options.push_back(PixelsEngine::DialogueOption("Wait at camp.", "dismiss", "None", 0, "", "", PixelsEngine::DialogueAction::Dismiss, "camp", "", true, "Grieving Son_InParty"));
+
+    start.options.push_back(PixelsEngine::DialogueOption("Leave.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
     tree.nodes["start"] = start;
 
-    PixelsEngine::DialogueNode rs; rs.id = "rev_success"; rs.npcText = "You're right. I can't let this stand. I'll sharpen my blade."; 
-    rs.options.push_back(PixelsEngine::DialogueOption("Good luck.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    PixelsEngine::DialogueNode rs; rs.id = "rev_success"; rs.npcText = "You're right. I can't let this stand. I'll join you. For father!"; 
+    rs.options.push_back(PixelsEngine::DialogueOption("Let's go.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::JoinParty));
     tree.nodes["rev_success"] = rs;
 
     PixelsEngine::DialogueNode rf; rf.id = "rev_fail"; rf.npcText = "I... I can't. I'm too scared."; 
@@ -188,6 +201,22 @@ void PixelsGateGame::CreateDeadManAndSon(float x, float y) {
     PixelsEngine::DialogueNode hero; hero.id = "hero"; hero.npcText = "You would do that? Thank you! It lives in the cave to the east."; 
     hero.options.push_back(PixelsEngine::DialogueOption("Consider it dead.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
     tree.nodes["hero"] = hero;
+
+    PixelsEngine::DialogueNode wd; wd.id = "wolf_dead"; wd.npcText = "You... you did it? Thank you. I found this coin purse on him. Please, take it.";
+    wd.options.push_back(PixelsEngine::DialogueOption("Thank you.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    tree.nodes["wolf_dead"] = wd;
+
+    PixelsEngine::DialogueNode jp; jp.id = "join_party"; jp.npcText = "I will follow your lead.";
+    jp.options.push_back(PixelsEngine::DialogueOption("Let's move.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    tree.nodes["join_party"] = jp;
+
+    PixelsEngine::DialogueNode jpc; jpc.id = "join_party_camp"; jpc.npcText = "I'm ready to fight again.";
+    jpc.options.push_back(PixelsEngine::DialogueOption("Let's go.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    tree.nodes["join_party_camp"] = jpc;
+
+    PixelsEngine::DialogueNode dis; dis.id = "dismiss"; dis.npcText = "I'll head to the camp then.";
+    dis.options.push_back(PixelsEngine::DialogueOption("See you there.", "end", "None", 0, "", "", PixelsEngine::DialogueAction::EndConversation));
+    tree.nodes["dismiss"] = dis;
 
     GetRegistry().AddComponent(son, PixelsEngine::DialogueComponent{std::make_shared<PixelsEngine::DialogueTree>(tree)});
 }
@@ -374,7 +403,7 @@ void PixelsGateGame::SpawnWorldEntities() {
     GetRegistry().AddComponent(comp, PixelsEngine::TransformComponent{21.0f, 21.0f});
     GetRegistry().AddComponent(comp, PixelsEngine::SpriteComponent{companionTex, {0, 0, 32, 32}, 16, 32});
     GetRegistry().AddComponent(comp, PixelsEngine::InteractionComponent{"Traveler", "npc_traveler", false, 0.0f});
-    GetRegistry().AddComponent(comp, PixelsEngine::TagComponent{PixelsEngine::EntityTag::Companion});
+    GetRegistry().AddComponent(comp, PixelsEngine::TagComponent{PixelsEngine::EntityTag::NPC});
     GetRegistry().AddComponent(comp, PixelsEngine::StatsComponent{80, 80, 8, false});
     GetRegistry().AddComponent(comp, PixelsEngine::AIComponent{10.0f, 1.5f, 2.0f, 0.0f, false});
     PixelsEngine::DialogueTree compTree; compTree.currentEntityName = "Traveler"; compTree.currentNodeId = "start";
@@ -464,4 +493,15 @@ void PixelsGateGame::SpawnWorldEntities() {
     GetRegistry().AddComponent(fire, PixelsEngine::LightComponent{5.0f, {255, 200, 100, 255}, true});
     GetRegistry().AddComponent(fire, PixelsEngine::TagComponent{PixelsEngine::EntityTag::CampProp});
     GetRegistry().AddComponent(fire, PixelsEngine::InteractionComponent{"Rest", "camp_fire", false, 0.0f});
+
+    // Son's Camp Spot
+    auto sTent = GetRegistry().CreateEntity();
+    GetRegistry().AddComponent(sTent, PixelsEngine::TransformComponent{10.0f, 5.0f});
+    GetRegistry().AddComponent(sTent, PixelsEngine::SpriteComponent{tentTex, {0, 0, 64, 64}, 32, 48});
+    GetRegistry().AddComponent(sTent, PixelsEngine::TagComponent{PixelsEngine::EntityTag::CampProp});
+
+    auto sBed = GetRegistry().CreateEntity();
+    GetRegistry().AddComponent(sBed, PixelsEngine::TransformComponent{10.0f, 6.0f});
+    GetRegistry().AddComponent(sBed, PixelsEngine::SpriteComponent{bedrollTex, {0, 0, 32, 32}, 16, 16});
+    GetRegistry().AddComponent(sBed, PixelsEngine::TagComponent{PixelsEngine::EntityTag::CampProp});
 }

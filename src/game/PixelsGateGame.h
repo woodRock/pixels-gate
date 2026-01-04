@@ -133,7 +133,7 @@ public:
     void HandleLootInput();
     void HandleDialogueInput();
     void HandleRestMenuInput();
-    void HandleCombatInput();
+    void HandleCombatInput(PixelsEngine::Entity activeEntity);
     void HandleInventoryInput();
     
     void CheckUIInteraction(int mx, int my);

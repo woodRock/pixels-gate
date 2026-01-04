@@ -105,6 +105,13 @@ void PixelsGateGame::PerformAttack(PixelsEngine::Entity forcedTarget) {
                     targetStats->currentHealth = 0;
                     targetStats->isDead = true;
                     
+                    // Quest Trigger
+                    auto *interact = GetRegistry().GetComponent<PixelsEngine::InteractionComponent>(target);
+                    if (interact && interact->uniqueId == "boss_wolf") {
+                        m_WorldFlags["Quest_KillWolfBoss_Done"] = true;
+                        SpawnFloatingText(0, 0, "Quest Updated: Return to Son", {255, 215, 0, 255});
+                    }
+
                     // Loot bag spawning
                     auto *tInv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(target);
                     auto *loot = GetRegistry().GetComponent<PixelsEngine::LootComponent>(target);
@@ -199,11 +206,27 @@ void PixelsGateGame::StartCombat(PixelsEngine::Entity enemy) {
         auto *t = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(ent);
         if (t && pTrans) {
             float dist = std::sqrt(std::pow(t->x - pTrans->x, 2) + std::pow(t->y - pTrans->y, 2));
+            
+            // Enemies
             if (dist < 15.0f && ai.isAggressive) {
                 auto *eStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(ent);
                 if (eStats && !eStats->isDead) {
                     m_Combat.m_TurnOrder.push_back({ent, PixelsEngine::Dice::Roll(20) + eStats->GetModifier(eStats->dexterity), false});
                     anyEnemy = true;
+                }
+            }
+            
+            // Companions
+            auto *tag = GetRegistry().GetComponent<PixelsEngine::TagComponent>(ent);
+            if (dist < 15.0f && tag && tag->tag == PixelsEngine::EntityTag::Companion) {
+                auto *cStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(ent);
+                if (cStats && !cStats->isDead) {
+                    // Treat as "Player" side for turn control? Or AI Ally?
+                    // Prompt asked for BG3 style, implying control.
+                    // For now, let's mark isPlayer = true to allow HandleCombatInput to drive them,
+                    // BUT HandleCombatInput needs to know WHICH entity.
+                    // If we mark isPlayer=true, RenderCombatUI shows "YOU".
+                    m_Combat.m_TurnOrder.push_back({ent, PixelsEngine::Dice::Roll(20) + cStats->GetModifier(cStats->dexterity), true});
                 }
             }
         }
@@ -272,7 +295,7 @@ void PixelsGateGame::UpdateCombat(float deltaTime) {
     if (m_Combat.m_CurrentTurnIndex < 0 || m_Combat.m_CurrentTurnIndex >= m_Combat.m_TurnOrder.size()) return;
     auto &turn = m_Combat.m_TurnOrder[m_Combat.m_CurrentTurnIndex];
 
-    if (turn.isPlayer) { HandleCombatInput(); }
+    if (turn.isPlayer) { HandleCombatInput(turn.entity); }
     else {
         auto *aiTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(turn.entity);
         auto *pTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
@@ -532,6 +555,15 @@ void PixelsGateGame::RenderCombatUI() {
         
         // Background
         SDL_SetRenderDrawColor(renderer, isCurrent ? 50 : 30, isCurrent ? 150 : 30, isCurrent ? 50 : 30, 255);
+        
+        // Color override based on faction
+        auto *tag = GetRegistry().GetComponent<PixelsEngine::TagComponent>(turn.entity);
+        if (tag && tag->tag == PixelsEngine::EntityTag::Hostile) {
+             SDL_SetRenderDrawColor(renderer, isCurrent ? 180 : 100, 30, 30, 255); // Red for Enemies
+        } else if (turn.isPlayer || (tag && tag->tag == PixelsEngine::EntityTag::Companion)) {
+             SDL_SetRenderDrawColor(renderer, isCurrent ? 30 : 20, isCurrent ? 180 : 100, 30, 255); // Green for Allies
+        }
+
         SDL_RenderFillRect(renderer, &slot);
         
         // HP Percentage
