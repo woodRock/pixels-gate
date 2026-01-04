@@ -93,7 +93,8 @@ void Application::Run() {
 }
 
 void Application::Step() {
-    Input::Update(m_Renderer);
+    Input::SetRenderer(m_Renderer);
+    Input::BeginFrame();
 
     Uint32 currentTime = SDL_GetTicks();
     float deltaTime = (currentTime - m_LastTime) / 1000.0f;
@@ -101,6 +102,8 @@ void Application::Step() {
 
     SDL_Event e;
     while (SDL_PollEvent(&e) != 0) {
+      Input::ProcessEvent(e);
+
       if (e.type == SDL_QUIT) {
         m_IsRunning = false;
 #ifdef __EMSCRIPTEN__
