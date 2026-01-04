@@ -108,7 +108,7 @@ void PixelsGateGame::PerformAttack(PixelsEngine::Entity forcedTarget) {
                     // Quest Trigger
                     auto *interact = GetRegistry().GetComponent<PixelsEngine::InteractionComponent>(target);
                     if (interact && interact->uniqueId == "boss_wolf") {
-                        m_WorldFlags["Quest_KillWolfBoss_Done"] = true;
+                        m_WorldFlags["WolfBoss_Dead"] = true;
                         SpawnFloatingText(0, 0, "Quest Updated: Return to Son", {255, 215, 0, 255});
                     }
 

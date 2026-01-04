@@ -588,12 +588,14 @@ void PixelsGateGame::HandleDialogueInput() {
             auto *stats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
             if(invComp) {
                 invComp->AddItem("Coins", 400); // Reward
-                // Remove the quest item
-                for (auto it = invComp->items.begin(); it != invComp->items.end(); ++it) {
-                    if (it->name == q->targetItem) {
-                        it->quantity--;
-                        if (it->quantity <= 0) invComp->items.erase(it);
-                        break;
+                // Remove the quest item if applicable
+                if (q && !q->targetItem.empty()) {
+                    for (auto it = invComp->items.begin(); it != invComp->items.end(); ++it) {
+                        if (it->name == q->targetItem) {
+                            it->quantity--;
+                            if (it->quantity <= 0) invComp->items.erase(it);
+                            break;
+                        }
                     }
                 }
             }

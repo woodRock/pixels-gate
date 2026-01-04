@@ -97,7 +97,10 @@ void PixelsGateGame::CreateWolf(float x, float y) {
     GetRegistry().AddComponent(wolf, PixelsEngine::AIComponent{10.0f, 1.5f, 2.0f, 0.0f, true});
     auto tex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/critters/wolf/wolf-run.png");
     GetRegistry().AddComponent(wolf, PixelsEngine::SpriteComponent{tex, {0, 0, 64, 32}, 32, 24});
-    // Assuming spritesheet or static for now, reusing what exists or generic
+    
+    std::vector<PixelsEngine::Item> drops;
+    drops.push_back({"Wolf Pelt", "assets/wolf_pelt.png", 1, PixelsEngine::ItemType::Misc, 0, 50});
+    GetRegistry().AddComponent(wolf, PixelsEngine::LootComponent{drops});
 }
 
 void PixelsGateGame::CreateStag(float x, float y) {
@@ -108,6 +111,10 @@ void PixelsGateGame::CreateStag(float x, float y) {
     GetRegistry().AddComponent(stag, PixelsEngine::AIComponent{8.0f, 1.5f, 2.0f, 0.0f, false}); // Not aggressive
     auto tex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/critters/stag/critter_stag_SE_idle.png");
     GetRegistry().AddComponent(stag, PixelsEngine::SpriteComponent{tex, {0, 0, 41, 43}, 20, 32});
+
+    std::vector<PixelsEngine::Item> drops;
+    drops.push_back({"Stag Meat", "assets/stag_meat.png", 1, PixelsEngine::ItemType::Consumable, 0, 30});
+    GetRegistry().AddComponent(stag, PixelsEngine::LootComponent{drops});
 }
 
 void PixelsGateGame::CreateBadger(float x, float y) {
@@ -118,6 +125,10 @@ void PixelsGateGame::CreateBadger(float x, float y) {
     GetRegistry().AddComponent(badger, PixelsEngine::AIComponent{6.0f, 1.2f, 2.0f, 0.0f, true});
     auto tex = PixelsEngine::TextureManager::LoadTexture(GetRenderer(), "assets/critters/badger/critter_badger_SE_idle.png");
     GetRegistry().AddComponent(badger, PixelsEngine::SpriteComponent{tex, {0, 0, 32, 22}, 16, 16});
+
+    std::vector<PixelsEngine::Item> drops;
+    drops.push_back({"Badger Pelt", "assets/badger_pelt.png", 1, PixelsEngine::ItemType::Misc, 0, 40});
+    GetRegistry().AddComponent(badger, PixelsEngine::LootComponent{drops});
 }
 
 void PixelsGateGame::CreateWolfBoss(float x, float y) {
@@ -132,8 +143,8 @@ void PixelsGateGame::CreateWolfBoss(float x, float y) {
     GetRegistry().AddComponent(boss, PixelsEngine::SpriteComponent{tex, {0, 0, 64, 46}, 32, 32, SDL_FLIP_NONE, 2.0f});
     
     std::vector<PixelsEngine::Item> drops;
-    drops.push_back({"Wolf Pelt", "", 1, PixelsEngine::ItemType::Misc, 0, 200});
-    drops.push_back({"Magic Ring", "assets/ui/item_raregem.png", 1, PixelsEngine::ItemType::Misc, 0, 500});
+    drops.push_back({"Wolf Pelt", "assets/wolf_pelt.png", 1, PixelsEngine::ItemType::Misc, 0, 200});
+    drops.push_back({"Magic Ring", "assets/magic_ring.png", 1, PixelsEngine::ItemType::Misc, 0, 500});
     GetRegistry().AddComponent(boss, PixelsEngine::LootComponent{drops});
 }
 
@@ -146,7 +157,7 @@ void PixelsGateGame::CreateDeadManAndSon(float x, float y) {
     GetRegistry().AddComponent(father, PixelsEngine::StatsComponent{0, 0, 0, true}); // Dead
     GetRegistry().AddComponent(father, PixelsEngine::InteractionComponent{"Dead Body", "dead_body", false, 0.0f});
     std::vector<PixelsEngine::Item> loot;
-    loot.push_back({"Letter to Son", "", 1, PixelsEngine::ItemType::Misc, 0, 0});
+    loot.push_back({"Letter to Son", "assets/letter.png", 1, PixelsEngine::ItemType::Misc, 0, 0});
     GetRegistry().AddComponent(father, PixelsEngine::LootComponent{loot});
 
     // Son
@@ -167,8 +178,8 @@ void PixelsGateGame::CreateDeadManAndSon(float x, float y) {
     start.options.push_back(PixelsEngine::DialogueOption("You should seek revenge. Hunt it down! [Persuasion DC 12]", "rev_check", "Charisma", 12, "rev_success", "rev_fail", PixelsEngine::DialogueAction::None, "", "Quest_KillWolfBoss_Done", false, "")); // Hide if already done
     start.options.push_back(PixelsEngine::DialogueOption("It's too dangerous. Go home and live. [Persuasion DC 10]", "home_check", "Charisma", 10, "home_success", "home_fail", PixelsEngine::DialogueAction::None, "", "Quest_KillWolfBoss_Done", false, ""));
     start.options.push_back(PixelsEngine::DialogueOption("I will kill the wolf for you.", "hero", "None", 0, "", "", PixelsEngine::DialogueAction::StartQuest, "Quest_KillWolfBoss", "Quest_KillWolfBoss_Active", false, ""));
-    start.options.push_back(PixelsEngine::DialogueOption("The wolf is dead. Justice is served.", "wolf_dead", "None", 0, "", "", PixelsEngine::DialogueAction::CompleteQuest, "Quest_KillWolfBoss_Done", "Quest_KillWolfBoss_Done", true, "Quest_KillWolfBoss_Active"));
-    start.options.push_back(PixelsEngine::DialogueOption("The deed is done. The wolf is dead.", "wolf_dead", "None", 0, "", "", PixelsEngine::DialogueAction::None, "", "Quest_KillWolfBoss_Done", true, "Quest_KillWolfBoss_Active")); 
+    start.options.push_back(PixelsEngine::DialogueOption("The wolf is dead. Justice is served.", "wolf_dead", "None", 0, "", "", PixelsEngine::DialogueAction::CompleteQuest, "Quest_KillWolfBoss_Done", "Quest_KillWolfBoss_Done", true, "WolfBoss_Dead"));
+    start.options.push_back(PixelsEngine::DialogueOption("The deed is done. The wolf is dead.", "wolf_dead", "None", 0, "", "", PixelsEngine::DialogueAction::None, "", "Quest_KillWolfBoss_Done", true, "WolfBoss_Dead")); 
     
     // Recruit (Initial) - Show if Quest Done, NOT At Camp, NOT In Party
     start.options.push_back(PixelsEngine::DialogueOption("Come with me. We'll face the dangers together.", "join_party", "None", 0, "", "", PixelsEngine::DialogueAction::JoinParty, "", "Grieving Son_InParty", true, "Quest_KillWolfBoss_Done")); 

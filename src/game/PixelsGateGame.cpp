@@ -283,7 +283,7 @@ void PixelsGateGame::OnRender() {
                 bool isVisible = currentMap->IsVisible((int)transform->x, (int)transform->y);
                 if (entity != m_Player && !IsInTurnOrder(entity) && !isVisible) continue;
                 
-                renderQueue.push_back({transform->x + transform->y + 0.1f, entity, -1, -1, false});
+                renderQueue.push_back({transform->x + transform->y + 0.5f, entity, -1, -1, false});
             }
         }
 
@@ -316,6 +316,17 @@ void PixelsGateGame::OnRender() {
                         SDL_Rect fg = {screenX, screenY - 8, (int)(32 * ((float)entStats->currentHealth / entStats->maxHealth)), 4};
                         SDL_SetRenderDrawColor(GetRenderer(), 255, 0, 0, 255);
                         SDL_RenderFillRect(GetRenderer(), &fg);
+                    }
+
+                    // Exclamation Mark Logic
+                    auto *interact = GetRegistry().GetComponent<PixelsEngine::InteractionComponent>(item.entity);
+                    if (interact && interact->uniqueId == "npc_son" && m_WorldFlags["WolfBoss_Dead"] && !m_WorldFlags["Quest_KillWolfBoss_Done"]) {
+                         SDL_Rect bubble = {screenX + 16 - 12, screenY - 54, 24, 24};
+                         SDL_SetRenderDrawColor(GetRenderer(), 255, 255, 255, 255);
+                         SDL_RenderFillRect(GetRenderer(), &bubble);
+                         SDL_SetRenderDrawColor(GetRenderer(), 0, 0, 0, 255);
+                         SDL_RenderDrawRect(GetRenderer(), &bubble);
+                         m_TextRenderer->RenderTextCentered("!", screenX + 16, screenY - 50, {0, 0, 0, 255});
                     }
                 }
             }
