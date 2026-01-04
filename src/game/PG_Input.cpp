@@ -208,7 +208,7 @@ void PixelsGateGame::HandleInput() {
     bool ctrl = PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_LCTRL) || PixelsEngine::Input::IsKeyDown(SDL_SCANCODE_RCTRL);
 
     // Key Toggles
-    if (PixelsEngine::Input::IsKeyPressed(escKey)) { m_ReturnState = m_State; m_State = GameState::Paused; m_MenuSelection = 0; return; }
+    if (PixelsEngine::Input::IsKeyPressed(escKey)) { m_ReturnState = m_State; m_PauseOriginalState = m_State; m_State = GameState::Paused; m_MenuSelection = 0; return; }
     if (PixelsEngine::Input::IsKeyPressed(invKey)) { m_ReturnState = m_State; m_State = GameState::CharacterMenu; m_CharacterTab = 0; return; }
     if (PixelsEngine::Input::IsKeyPressed(charKey)) { m_ReturnState = m_State; m_State = GameState::CharacterMenu; m_CharacterTab = 1; return; }
     if (PixelsEngine::Input::IsKeyPressed(spellKey)) { m_ReturnState = m_State; m_State = GameState::CharacterMenu; m_CharacterTab = 2; return; }
@@ -942,7 +942,7 @@ void PixelsGateGame::HandlePauseMenuInput() {
     }
     HandleMenuNavigation(6, [&](int i){ 
         switch(i) {
-            case 0: m_State = m_ReturnState; break;
+            case 0: m_State = m_PauseOriginalState; break;
             case 1: PixelsEngine::SaveSystem::SaveGame("savegame.dat", GetRegistry(), m_Player, *m_Level, m_State == GameState::Camp, m_LastWorldPos.x, m_LastWorldPos.y); ShowSaveMessage(); break;
             case 2: TriggerLoadTransition("savegame.dat"); break;
             case 3: m_ReturnState = GameState::Paused; m_State = GameState::KeybindSettings; break;

@@ -40,44 +40,15 @@ void Input::ProcessEvent(const SDL_Event& e) {
         m_KeyboardState[e.key.keysym.scancode] = 0;
     } else if (e.type == SDL_MOUSEBUTTONDOWN) {
         m_MouseState |= SDL_BUTTON(e.button.button);
-        // Update pos on click too
-        int rawX = e.button.x;
-        int rawY = e.button.y;
-        if (m_Renderer) {
-            float logX, logY;
-            SDL_RenderWindowToLogical(m_Renderer, rawX, rawY, &logX, &logY);
-            m_MouseX = (int)logX;
-            m_MouseY = (int)logY;
-        } else {
-            m_MouseX = rawX;
-            m_MouseY = rawY;
-        }
+        m_MouseX = e.button.x;
+        m_MouseY = e.button.y;
     } else if (e.type == SDL_MOUSEBUTTONUP) {
         m_MouseState &= ~SDL_BUTTON(e.button.button);
-        // Update pos on click release too
-        int rawX = e.button.x;
-        int rawY = e.button.y;
-        if (m_Renderer) {
-            float logX, logY;
-            SDL_RenderWindowToLogical(m_Renderer, rawX, rawY, &logX, &logY);
-            m_MouseX = (int)logX;
-            m_MouseY = (int)logY;
-        } else {
-            m_MouseX = rawX;
-            m_MouseY = rawY;
-        }
+        m_MouseX = e.button.x;
+        m_MouseY = e.button.y;
     } else if (e.type == SDL_MOUSEMOTION) {
-        int rawX = e.motion.x;
-        int rawY = e.motion.y;
-        if (m_Renderer) {
-            float logX, logY;
-            SDL_RenderWindowToLogical(m_Renderer, rawX, rawY, &logX, &logY);
-            m_MouseX = (int)logX;
-            m_MouseY = (int)logY;
-        } else {
-            m_MouseX = rawX;
-            m_MouseY = rawY;
-        }
+        m_MouseX = e.motion.x;
+        m_MouseY = e.motion.y;
     }
 }
 

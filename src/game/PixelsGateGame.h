@@ -195,6 +195,7 @@ private:
 
     GameState m_State = GameState::MainMenu;
     GameState m_ReturnState = GameState::Playing;
+    GameState m_PauseOriginalState = GameState::Playing;
 
     PixelsEngine::TransformComponent m_LastWorldPos;
     int m_CharacterTab = 0; 
