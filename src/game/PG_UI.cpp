@@ -954,7 +954,7 @@ void PixelsGateGame::RenderRestMenu() {
     
     std::vector<std::string> opts;
     if (m_ReturnState == GameState::Camp) {
-        opts = {"Long Rest (40 Supplies)", "Partial Rest", "Leave Camp", "Back"};
+        opts = {"Long Rest (1 Supply)", "Partial Rest", "Leave Camp", "Back"};
     } else {
         opts = {"Short Rest", "Go to Camp", "", "Back"};
     }

@@ -814,27 +814,21 @@ void PixelsGateGame::HandleRestMenuInput() {
         
         if (inCamp) {
             // CAMP MENU: 0=Long Rest, 1=Partial Rest, 2=Leave Camp, 3=Back
-            if (selection == 0) { // Long Rest (Cost 40)
+            if (selection == 0) { // Long Rest (Cost 1)
                 int totalSupplies = 0;
                 if (inv) {
-                    for(auto &item : inv->items) totalSupplies += item.quantity * item.supplyValue;
+                    for(auto &item : inv->items) totalSupplies += item.quantity * (item.supplyValue > 0 ? 1 : 0);
                 }
                 
-                if (totalSupplies >= 40) {
-                    int remainingCost = 40;
+                if (totalSupplies >= 1) {
+                    int remainingCost = 1;
                     if (inv) {
                         for (auto it = inv->items.begin(); it != inv->items.end(); ) {
                             if (it->supplyValue > 0) {
-                                int needed = (remainingCost + it->supplyValue - 1) / it->supplyValue;
-                                int take = std::min(it->quantity, needed);
-                                int valueTaken = take * it->supplyValue;
-                                
-                                it->quantity -= take;
-                                remainingCost -= valueTaken;
+                                it->quantity--;
                                 if (it->quantity <= 0) it = inv->items.erase(it);
                                 else ++it;
-                                
-                                if (remainingCost <= 0) break;
+                                break;
                             } else {
                                 ++it;
                             }
@@ -847,9 +841,11 @@ void PixelsGateGame::HandleRestMenuInput() {
                         // Reset cooldowns/status could go here
                     }
                     SpawnFloatingText(0, 0, "Long Rest: Fully Restored!", {0, 255, 0, 255});
-                    m_State = m_ReturnState;
+                    m_IsRestFade = true;
+                    m_FadeState = FadeState::FadingOut;
+                    m_FadeTimer = m_FadeDuration;
                 } else {
-                    SpawnFloatingText(0, 0, "Not enough supplies (Need 40)!", {255, 0, 0, 255});
+                    SpawnFloatingText(0, 0, "Not enough supplies!", {255, 0, 0, 255});
                 }
             } else if (selection == 1) { // Partial Rest
                 if (s) {
@@ -857,7 +853,9 @@ void PixelsGateGame::HandleRestMenuInput() {
                     s->currentSpellSlots = std::min(s->maxSpellSlots, s->currentSpellSlots + s->maxSpellSlots / 2);
                 }
                 SpawnFloatingText(0, 0, "Partial Rest: Half Restored.", {255, 255, 0, 255});
-                m_State = m_ReturnState;
+                m_IsRestFade = true;
+                m_FadeState = FadeState::FadingOut;
+                m_FadeTimer = m_FadeDuration;
             } else if (selection == 2) { // Leave Camp
                 auto *t = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
                 if(t) { t->x = m_LastWorldPos.x; t->y = m_LastWorldPos.y; }
@@ -890,7 +888,9 @@ void PixelsGateGame::HandleRestMenuInput() {
                     s->shortRestsAvailable--;
                     s->currentHealth = std::min(s->maxHealth, s->currentHealth + (s->maxHealth/2));
                     SpawnFloatingText(0, 0, "Short Rest Taken", {0, 255, 0, 255});
-                    m_State = m_ReturnState;
+                    m_IsRestFade = true;
+                    m_FadeState = FadeState::FadingOut;
+                    m_FadeTimer = m_FadeDuration;
                 } else {
                     SpawnFloatingText(0, 0, "No Short Rests left!", {255, 0, 0, 255});
                 }

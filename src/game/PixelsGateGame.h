@@ -241,6 +241,7 @@ private:
     FadeState m_FadeState = FadeState::None;
     std::string m_PendingLoadFile;
     bool m_LoadedIsCamp = false;
+    bool m_IsRestFade = false;
     std::future<void> m_LoadFuture;
     float m_EnvironmentDamageTimer = 0.0f;
 

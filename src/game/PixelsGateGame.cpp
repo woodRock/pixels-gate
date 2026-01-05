@@ -146,13 +146,20 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
   if (m_FadeState != FadeState::None) {
       m_FadeTimer -= deltaTime;
       if (m_FadeState == FadeState::FadingOut && m_FadeTimer <= 0.0f) {
-          m_State = GameState::Loading;
-          m_LoadFuture = std::async(std::launch::async, [this]() {
-              float lx = 0.0f, ly = 0.0f;
-              PixelsEngine::SaveSystem::LoadGame(m_PendingLoadFile, GetRegistry(), m_Player, *m_Level, m_LoadedIsCamp, lx, ly);
-              m_LastWorldPos.x = lx; m_LastWorldPos.y = ly;
-              PixelsEngine::SaveSystem::LoadWorldFlags(m_PendingLoadFile, m_WorldFlags);
-          });
+          if (m_IsRestFade) {
+              m_IsRestFade = false;
+              m_FadeState = FadeState::FadingIn;
+              m_FadeTimer = m_FadeDuration;
+              m_State = m_ReturnState;
+          } else {
+              m_State = GameState::Loading;
+              m_LoadFuture = std::async(std::launch::async, [this]() {
+                  float lx = 0.0f, ly = 0.0f;
+                  PixelsEngine::SaveSystem::LoadGame(m_PendingLoadFile, GetRegistry(), m_Player, *m_Level, m_LoadedIsCamp, lx, ly);
+                  m_LastWorldPos.x = lx; m_LastWorldPos.y = ly;
+                  PixelsEngine::SaveSystem::LoadWorldFlags(m_PendingLoadFile, m_WorldFlags);
+              });
+          }
           return;
       } else if (m_FadeState == FadeState::FadingIn && m_FadeTimer <= 0.0f) {
           m_FadeState = FadeState::None;
