@@ -5,6 +5,7 @@
 // --- Added Missing Headers ---
 #include "../engine/Input.h"
 #include "../engine/AnimationSystem.h"
+#include "../engine/AudioManager.h"
 // -----------------------------
 #include <cmath>
 #include <algorithm>
@@ -76,7 +77,12 @@ void PixelsGateGame::PerformAttack(PixelsEngine::Entity forcedTarget) {
                 return;
             }
 
+            if (m_SelectedWeaponSlot == 1) { // Ranged
+                PixelsEngine::AudioManager::PlaySound("assets/bow_shoot.wav");
+            }
+
             int targetAC = 10 + targetStats->GetModifier(targetStats->dexterity);
+            PixelsEngine::AudioManager::PlaySound("assets/dice.wav");
             int roll = PixelsEngine::Dice::Roll(20);
             if (playerStats->hasAdvantage) {
                 int secondRoll = PixelsEngine::Dice::Roll(20);
@@ -97,6 +103,8 @@ void PixelsGateGame::PerformAttack(PixelsEngine::Entity forcedTarget) {
                 targetStats->currentHealth -= dmg;
                 
                 if (targetTrans) {
+                    if (m_SelectedWeaponSlot == 0) PixelsEngine::AudioManager::PlaySound("assets/sword_hit.wav");
+                    else PixelsEngine::AudioManager::PlaySound("assets/bow_hit.wav");
                     SpawnFloatingText(targetTrans->x, targetTrans->y, std::to_string(dmg) + (isCrit ? "!" : ""), isCrit ? SDL_Color{255,0,0,255} : SDL_Color{255,255,255,255});
                     SpawnFloatingText(playerTrans->x, playerTrans->y, "Hit: " + std::to_string(roll) + "+" + std::to_string(attackBonus) + " vs " + std::to_string(targetAC), {0, 255, 0, 255});
                 }
@@ -150,6 +158,7 @@ void PixelsGateGame::PerformAttack(PixelsEngine::Entity forcedTarget) {
                 }
             } else {
                 if (targetTrans) {
+                    if (m_SelectedWeaponSlot == 0) PixelsEngine::AudioManager::PlaySound("assets/sword_miss.wav");
                     SpawnFloatingText(targetTrans->x, targetTrans->y, "Miss", {200, 200, 200, 255});
                     SpawnFloatingText(playerTrans->x, playerTrans->y, "Roll: " + std::to_string(roll) + "+" + std::to_string(attackBonus) + " vs " + std::to_string(targetAC), {200, 200, 200, 255});
                 }
@@ -188,6 +197,7 @@ void PixelsGateGame::StartCombat(PixelsEngine::Entity enemy) {
     m_Combat.m_TurnOrder.clear();
     bool anyEnemy = false;
     auto *pStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
+    PixelsEngine::AudioManager::PlaySound("assets/dice.wav");
     m_Combat.m_TurnOrder.push_back({m_Player, PixelsEngine::Dice::Roll(20) + (pStats ? pStats->GetModifier(pStats->dexterity) : 0), true});
     SpawnFloatingText(20, 20, "Initiative!", {0, 255, 255, 255});
 
@@ -341,11 +351,13 @@ void PixelsGateGame::UpdateCombat(float deltaTime) {
         if (finalDist <= aiComp->attackRange && m_Combat.m_ActionsLeft > 0) {
             auto *pTargetStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_Player);
             if (pTargetStats) {
+                PixelsEngine::AudioManager::PlaySound("assets/dice.wav");
                 int roll = PixelsEngine::Dice::Roll(20);
                 // Simplified AC check
                 if (roll + aiStats->GetModifier(aiStats->strength) >= 10 + pTargetStats->GetModifier(pTargetStats->dexterity)) {
                     int dmg = aiStats->damage;
                     pTargetStats->currentHealth -= dmg;
+                    PixelsEngine::AudioManager::PlaySound("assets/sword_hit.wav");
                     SpawnFloatingText(pTrans->x, pTrans->y, std::to_string(dmg), {255, 0, 0, 255});
                 } else {
                     SpawnFloatingText(pTrans->x, pTrans->y, "Miss", {200, 200, 200, 255});
@@ -373,7 +385,10 @@ void PixelsGateGame::CastSpell(const std::string &spellName, PixelsEngine::Entit
             int healing = PixelsEngine::Dice::Roll(8) + 4;
             s->currentHealth = std::min(s->maxHealth, s->currentHealth + healing); 
             auto *tTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(t);
-            if(tTrans) SpawnFloatingText(tTrans->x, tTrans->y, "+" + std::to_string(healing), {0, 255, 0, 255});
+            if(tTrans) {
+                PixelsEngine::AudioManager::PlaySound("assets/healing.wav");
+                SpawnFloatingText(tTrans->x, tTrans->y, "+" + std::to_string(healing), {0, 255, 0, 255});
+            }
             success = true; 
         }
     } else if ((spellName == "Fireball" || spellName == "Fir")) {
@@ -394,6 +409,7 @@ void PixelsGateGame::CastSpell(const std::string &spellName, PixelsEngine::Entit
         auto hazard = GetRegistry().CreateEntity();
         GetRegistry().AddComponent(hazard, PixelsEngine::TransformComponent{tx, ty});
         GetRegistry().AddComponent(hazard, PixelsEngine::HazardComponent{PixelsEngine::HazardComponent::Type::Fire, 8, 5.0f});
+        PixelsEngine::AudioManager::PlaySound("assets/fireball.wav");
         SpawnFloatingText(tx, ty, "BOOM!", {255, 100, 0, 255});
         success = true;
     } else if ((spellName == "Magic Missile" || spellName == "Mis") && target != PixelsEngine::INVALID_ENTITY) {
@@ -402,10 +418,15 @@ void PixelsGateGame::CastSpell(const std::string &spellName, PixelsEngine::Entit
             int dmg = PixelsEngine::Dice::Roll(4) + 1;
             s->currentHealth -= dmg; 
             auto *tTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(target);
-            if(tTrans) SpawnFloatingText(tTrans->x, tTrans->y, std::to_string(dmg), {200, 100, 255, 255});
+            if(tTrans) {
+                PixelsEngine::AudioManager::PlaySound("assets/bow_shoot.wav"); // Reuse bow shoot for magic missile start
+                PixelsEngine::AudioManager::PlaySound("assets/bow_hit.wav");   // Reuse bow hit for magic missile impact
+                SpawnFloatingText(tTrans->x, tTrans->y, std::to_string(dmg), {200, 100, 255, 255});
+            }
             success = true; 
         }
     } else if (spellName == "Shield" || spellName == "Shd") {
+        PixelsEngine::AudioManager::PlaySound("assets/shield.wav");
         SpawnFloatingText(pTrans->x, pTrans->y, "Shielded!", {100, 200, 255, 255});
         success = true;
     }
@@ -444,6 +465,7 @@ void PixelsGateGame::PerformJump(int targetX, int targetY) {
 
     pTrans->x = (float)targetX;
     pTrans->y = (float)targetY;
+    PixelsEngine::AudioManager::PlaySound("assets/shoot.wav");
     SpawnFloatingText(pTrans->x, pTrans->y, "Jump!", {200, 255, 200, 255});
     m_State = m_ReturnState;
 }
@@ -479,6 +501,7 @@ void PixelsGateGame::PerformDash(int targetX, int targetY) {
 
     pTrans->x = (float)targetX;
     pTrans->y = (float)targetY;
+    PixelsEngine::AudioManager::PlaySound("assets/shoot.wav");
     SpawnFloatingText(pTrans->x, pTrans->y, "Dash!", {255, 255, 255, 255});
     m_State = m_ReturnState;
 }
@@ -524,6 +547,7 @@ void PixelsGateGame::PerformShove(PixelsEngine::Entity target) {
         if (currentMap->IsWalkable(nx, ny)) {
             tTrans->x = (float)nx;
             tTrans->y = (float)ny;
+            PixelsEngine::AudioManager::PlaySound("assets/hit.wav");
             SpawnFloatingText(tTrans->x, tTrans->y, "Shoved!", {255, 150, 0, 255});
         }
     }

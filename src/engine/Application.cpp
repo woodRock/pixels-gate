@@ -1,5 +1,6 @@
 #include "Application.h"
 #include "Input.h"
+#include "AudioManager.h"
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
 #include <iostream>
@@ -15,10 +16,15 @@ Application::Application(const char *title, int width, int height)
   // Initialize Camera
   m_Camera = std::make_unique<Camera>(width, height);
 
-  if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
     std::cerr << "SDL could not initialize! SDL_Error: " << SDL_GetError()
               << std::endl;
     return;
+  }
+
+  // Initialize SDL_mixer
+  if (!AudioManager::Init()) {
+    std::cerr << "AudioManager could not initialize!" << std::endl;
   }
 
   // Initialize PNG and JPG loading
@@ -65,6 +71,7 @@ Application::~Application() {
     SDL_DestroyRenderer(m_Renderer);
   if (m_Window)
     SDL_DestroyWindow(m_Window);
+  AudioManager::Quit();
   TTF_Quit();
   IMG_Quit();
   SDL_Quit();

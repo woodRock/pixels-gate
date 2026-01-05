@@ -2,6 +2,7 @@
 #include "../engine/Dice.h"
 #include "../engine/SaveSystem.h"
 #include "../engine/Input.h"
+#include "../engine/AudioManager.h"
 #include <iostream>
 
 PixelsGateGame::PixelsGateGame()
@@ -13,6 +14,10 @@ void PixelsGateGame::OnStart() {
   PixelsEngine::Config::Init();
   m_TextRenderer = std::make_unique<PixelsEngine::TextRenderer>(
       GetRenderer(), "assets/font.ttf", 16);
+
+  // Start Ambience
+  PixelsEngine::AudioManager::PlayMusic("assets/ambience.mp3");
+  PixelsEngine::AudioManager::SetMusicVolume(64); // Half volume
 
   // Initialize Tooltips
   m_Tooltips["Atk"] = {"Attack", "Launch a calculated strike against your foe. Precision meets power.", "Action", "Weapon Range", "Weapon Dmg", "None"};

@@ -3,6 +3,7 @@
 #include "../engine/Input.h"
 #include "../engine/TextureManager.h"
 #include "../engine/AnimationSystem.h"
+#include "../engine/AudioManager.h"
 #include <cmath>
 #include <algorithm> 
 
@@ -254,6 +255,7 @@ void PixelsGateGame::StartDiceRoll(int modifier, int dc, const std::string &skil
     int roll = PixelsEngine::Dice::Roll(20);
     m_DiceRoll.finalValue = roll;
     m_DiceRoll.success = (roll + modifier >= dc) || (roll == 20);
+    PixelsEngine::AudioManager::PlaySound("assets/dice.wav");
 }
 
 void PixelsGateGame::ResolveDiceRoll() {
@@ -384,6 +386,7 @@ void PixelsGateGame::UseItem(const std::string &itemName) {
                 if (s) {
                     int heal = PixelsEngine::Dice::Roll(4) + PixelsEngine::Dice::Roll(4) + 2;
                     s->currentHealth = std::min(s->maxHealth, s->currentHealth + heal);
+                    PixelsEngine::AudioManager::PlaySound("assets/potion.wav");
                     if (t) SpawnFloatingText(t->x, t->y, "+" + std::to_string(heal) + " HP", {0,255,0,255});
                     used = true;
                 }
