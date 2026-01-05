@@ -312,11 +312,19 @@ void PixelsGateGame::HandleInput() {
                     auto action = m_ContextMenu.actions[index];
                     if (action.type == PixelsEngine::ContextActionType::Attack) PerformAttack(m_ContextMenu.targetEntity);
                     else if (action.type == PixelsEngine::ContextActionType::Talk) {
-                        m_DialogueWith = m_ContextMenu.targetEntity;
-                        m_ReturnState = m_State; m_State = GameState::Dialogue;
-                        m_DialogueSelection = 0;
-                        auto *d = GetRegistry().GetComponent<PixelsEngine::DialogueComponent>(m_DialogueWith);
-                        if (d) d->tree->currentNodeId = "start";
+                        auto *targetStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_ContextMenu.targetEntity);
+                        if (targetStats && targetStats->isDead) {
+                            // Loot
+                            m_LootingEntity = m_ContextMenu.targetEntity;
+                            PixelsEngine::AudioManager::PlaySound("assets/loot_body.wav");
+                            m_ReturnState = m_State; m_State = GameState::Looting;
+                        } else {
+                            m_DialogueWith = m_ContextMenu.targetEntity;
+                            m_ReturnState = m_State; m_State = GameState::Dialogue;
+                            m_DialogueSelection = 0;
+                            auto *d = GetRegistry().GetComponent<PixelsEngine::DialogueComponent>(m_DialogueWith);
+                            if (d) d->tree->currentNodeId = "start";
+                        }
                     }
                     else if (action.type == PixelsEngine::ContextActionType::Pickpocket) {
                         StartDiceRoll(0, 15, "Sleight of Hand", m_ContextMenu.targetEntity, PixelsEngine::ContextActionType::Pickpocket);
@@ -350,15 +358,23 @@ void PixelsGateGame::HandleInput() {
                 m_ContextMenu.isOpen = true; m_ContextMenu.x = mx; m_ContextMenu.y = my;
                 m_ContextMenu.targetEntity = GetEntityAtMouse();
                 if (m_ContextMenu.targetEntity != PixelsEngine::INVALID_ENTITY) {
+                    auto *targetStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_ContextMenu.targetEntity);
+                    bool isDead = (targetStats && targetStats->isDead);
+
                     m_ContextMenu.actions.clear();
-                    m_ContextMenu.actions.push_back({"Attack", PixelsEngine::ContextActionType::Attack});
-                    if(GetRegistry().HasComponent<PixelsEngine::DialogueComponent>(m_ContextMenu.targetEntity)) 
-                        m_ContextMenu.actions.push_back({"Talk", PixelsEngine::ContextActionType::Talk});
-                    if(GetRegistry().HasComponent<PixelsEngine::InventoryComponent>(m_ContextMenu.targetEntity))
-                        m_ContextMenu.actions.push_back({"Pickpocket", PixelsEngine::ContextActionType::Pickpocket});
+                    if (!isDead) {
+                        m_ContextMenu.actions.push_back({"Attack", PixelsEngine::ContextActionType::Attack});
+                        if(GetRegistry().HasComponent<PixelsEngine::DialogueComponent>(m_ContextMenu.targetEntity)) 
+                            m_ContextMenu.actions.push_back({"Talk", PixelsEngine::ContextActionType::Talk});
+                        if(GetRegistry().HasComponent<PixelsEngine::InventoryComponent>(m_ContextMenu.targetEntity))
+                            m_ContextMenu.actions.push_back({"Pickpocket", PixelsEngine::ContextActionType::Pickpocket});
+                    } else {
+                        if(GetRegistry().HasComponent<PixelsEngine::LootComponent>(m_ContextMenu.targetEntity))
+                            m_ContextMenu.actions.push_back({"Loot", PixelsEngine::ContextActionType::Talk});
+                    }
                     
                     auto *lock = GetRegistry().GetComponent<PixelsEngine::LockComponent>(m_ContextMenu.targetEntity);
-                    if (lock && lock->isLocked) {
+                    if (lock && lock->isLocked && !isDead) {
                         m_ContextMenu.actions.push_back({"Lockpick", PixelsEngine::ContextActionType::Lockpick});
                     }
                 } else {
@@ -382,15 +398,23 @@ void PixelsGateGame::HandleInput() {
         m_ContextMenu.isOpen = true; m_ContextMenu.x = mx; m_ContextMenu.y = my;
         m_ContextMenu.targetEntity = GetEntityAtMouse();
         if (m_ContextMenu.targetEntity != PixelsEngine::INVALID_ENTITY) {
+            auto *targetStats = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(m_ContextMenu.targetEntity);
+            bool isDead = (targetStats && targetStats->isDead);
+
             m_ContextMenu.actions.clear();
-            m_ContextMenu.actions.push_back({"Attack", PixelsEngine::ContextActionType::Attack});
-            if(GetRegistry().HasComponent<PixelsEngine::DialogueComponent>(m_ContextMenu.targetEntity)) 
-                m_ContextMenu.actions.push_back({"Talk", PixelsEngine::ContextActionType::Talk});
-            if(GetRegistry().HasComponent<PixelsEngine::InventoryComponent>(m_ContextMenu.targetEntity))
-                m_ContextMenu.actions.push_back({"Pickpocket", PixelsEngine::ContextActionType::Pickpocket});
+            if (!isDead) {
+                m_ContextMenu.actions.push_back({"Attack", PixelsEngine::ContextActionType::Attack});
+                if(GetRegistry().HasComponent<PixelsEngine::DialogueComponent>(m_ContextMenu.targetEntity)) 
+                    m_ContextMenu.actions.push_back({"Talk", PixelsEngine::ContextActionType::Talk});
+                if(GetRegistry().HasComponent<PixelsEngine::InventoryComponent>(m_ContextMenu.targetEntity))
+                    m_ContextMenu.actions.push_back({"Pickpocket", PixelsEngine::ContextActionType::Pickpocket});
+            } else {
+                if(GetRegistry().HasComponent<PixelsEngine::LootComponent>(m_ContextMenu.targetEntity))
+                    m_ContextMenu.actions.push_back({"Loot", PixelsEngine::ContextActionType::Talk});
+            }
             
             auto *lock = GetRegistry().GetComponent<PixelsEngine::LockComponent>(m_ContextMenu.targetEntity);
-            if (lock && lock->isLocked) {
+            if (lock && lock->isLocked && !isDead) {
                 m_ContextMenu.actions.push_back({"Lockpick", PixelsEngine::ContextActionType::Lockpick});
             }
         } else {
