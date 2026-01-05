@@ -472,7 +472,7 @@ void PixelsGateGame::PerformJump(int targetX, int targetY) {
 
     pTrans->x = (float)targetX;
     pTrans->y = (float)targetY;
-    PixelsEngine::AudioManager::PlaySound("assets/shoot.wav");
+    PixelsEngine::AudioManager::PlaySound("assets/jump.wav");
     SpawnFloatingText(pTrans->x, pTrans->y, "Jump!", {200, 255, 200, 255});
     m_State = m_ReturnState;
 }
@@ -508,7 +508,7 @@ void PixelsGateGame::PerformDash(int targetX, int targetY) {
 
     pTrans->x = (float)targetX;
     pTrans->y = (float)targetY;
-    PixelsEngine::AudioManager::PlaySound("assets/shoot.wav");
+    PixelsEngine::AudioManager::PlaySound("assets/jump.wav");
     SpawnFloatingText(pTrans->x, pTrans->y, "Dash!", {255, 255, 255, 255});
     m_State = m_ReturnState;
 }
@@ -554,7 +554,7 @@ void PixelsGateGame::PerformShove(PixelsEngine::Entity target) {
         if (currentMap->IsWalkable(nx, ny)) {
             tTrans->x = (float)nx;
             tTrans->y = (float)ny;
-            PixelsEngine::AudioManager::PlaySound("assets/hit.wav");
+            PixelsEngine::AudioManager::PlaySound("assets/jump.wav");
             SpawnFloatingText(tTrans->x, tTrans->y, "Shoved!", {255, 150, 0, 255});
         }
     }

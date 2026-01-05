@@ -2,6 +2,7 @@
 #include "../engine/Input.h"
 #include "../engine/Pathfinding.h"
 #include "../engine/SaveSystem.h"
+#include "../engine/AudioManager.h"
 #include <filesystem>
 
 // --- Helper Functions ---
@@ -180,6 +181,11 @@ void PixelsGateGame::CheckWorldInteraction(int mx, int my) {
         bool isUnlocked = (lock == nullptr || !lock->isLocked);
         if (loot && (stats == nullptr || stats->isDead || isUnlocked)) {
              m_LootingEntity = clickedEnt;
+             if (stats && stats->isDead) {
+                 PixelsEngine::AudioManager::PlaySound("assets/loot_body.wav");
+             } else {
+                 PixelsEngine::AudioManager::PlaySound("assets/chest_open.wav");
+             }
              m_ReturnState = m_State; m_State = GameState::Looting;
              return;
         }
@@ -1109,10 +1115,10 @@ void PixelsGateGame::HandleTradeInput() {
             if (mx >= 50 && mx <= 300) {
                 int y = 140;
                 for (size_t i = 0; i < pInv->items.size(); ++i) {
-                    if (my >= y && my <= y + 32) {
-                        auto &item = pInv->items[i];
-                        if (item.name == "Coins") continue; // Can't sell gold
+                    auto &item = pInv->items[i];
+                    if (item.name == "Coins") continue; // Can't sell gold
 
+                    if (my >= y && my <= y + 32) {
                         int price = item.value;
                         if (tInv->GetGoldCount() >= price) {
                             tInv->RemoveGold(price);
@@ -1121,6 +1127,7 @@ void PixelsGateGame::HandleTradeInput() {
                             tInv->items.back().quantity = 1; // Only move one
                             item.quantity--;
                             if (item.quantity <= 0) pInv->items.erase(pInv->items.begin() + i);
+                            PixelsEngine::AudioManager::PlaySound("assets/gold.wav");
                             SpawnFloatingText(0, 0, "Sold " + item.name, {255, 255, 0, 255});
                         } else {
                             SpawnFloatingText(0, 0, "Trader too poor!", {255, 0, 0, 255});
@@ -1134,10 +1141,10 @@ void PixelsGateGame::HandleTradeInput() {
             else if (mx >= w / 2 + 50 && mx <= w / 2 + 300) {
                 int y = 140;
                 for (size_t i = 0; i < tInv->items.size(); ++i) {
-                    if (my >= y && my <= y + 32) {
-                        auto &item = tInv->items[i];
-                        if (item.name == "Coins") continue;
+                    auto &item = tInv->items[i];
+                    if (item.name == "Coins") continue;
 
+                    if (my >= y && my <= y + 32) {
                         int price = item.value;
                         if (pInv->GetGoldCount() >= price) {
                             if (pInv->items.size() < pInv->capacity) {
@@ -1147,6 +1154,7 @@ void PixelsGateGame::HandleTradeInput() {
                                 pInv->items.back().quantity = 1;
                                 item.quantity--;
                                 if (item.quantity <= 0) tInv->items.erase(tInv->items.begin() + i);
+                                PixelsEngine::AudioManager::PlaySound("assets/gold.wav");
                                 SpawnFloatingText(0, 0, "Bought " + item.name, {0, 255, 0, 255});
                             } else {
                                 SpawnFloatingText(0, 0, "Inventory Full!", {255, 0, 0, 255});
@@ -1210,7 +1218,10 @@ void PixelsGateGame::HandleLootInput() {
                         ++it;
                     }
                 }
-                if (collectedAny) SpawnFloatingText(0, 0, "Looted All", {200, 255, 200, 255});
+                if (collectedAny) {
+                    PixelsEngine::AudioManager::PlaySound("assets/equip.wav");
+                    SpawnFloatingText(0, 0, "Looted All", {200, 255, 200, 255});
+                }
                 if (loot->drops.empty()) m_State = m_ReturnState;
             }
             return;
@@ -1228,6 +1239,7 @@ void PixelsGateGame::HandleLootInput() {
                     auto *pInv = GetRegistry().GetComponent<PixelsEngine::InventoryComponent>(m_Player);
                     if (pInv && pInv->items.size() < pInv->capacity) {
                         pInv->AddItemObject(loot->drops[i]);
+                        PixelsEngine::AudioManager::PlaySound("assets/equip.wav");
                         SpawnFloatingText(0, 0, "Looted " + loot->drops[i].name, {200, 255, 200, 255});
                         loot->drops.erase(loot->drops.begin() + i);
                         if (loot->drops.empty()) m_State = m_ReturnState;

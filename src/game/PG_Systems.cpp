@@ -256,6 +256,9 @@ void PixelsGateGame::StartDiceRoll(int modifier, int dc, const std::string &skil
     m_DiceRoll.finalValue = roll;
     m_DiceRoll.success = (roll + modifier >= dc) || (roll == 20);
     PixelsEngine::AudioManager::PlaySound("assets/dice.wav");
+    if (type == PixelsEngine::ContextActionType::Lockpick) {
+        PixelsEngine::AudioManager::PlaySound("assets/lockpicking.wav");
+    }
 }
 
 void PixelsGateGame::ResolveDiceRoll() {
@@ -263,6 +266,7 @@ void PixelsGateGame::ResolveDiceRoll() {
         if (m_DiceRoll.success) {
             auto *lock = GetRegistry().GetComponent<PixelsEngine::LockComponent>(m_DiceRoll.target);
             if (lock) lock->isLocked = false;
+            PixelsEngine::AudioManager::PlaySound("assets/chest_open.wav");
             SpawnFloatingText(0, 0, "Unlocked!", {0, 255, 0, 255});
         } else {
             // Consume Thieves' Tools on failure
