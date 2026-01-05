@@ -216,6 +216,76 @@ void PixelsGateGame::RenderHUD() {
             RenderTooltip(it->second, m_TooltipPinned ? m_PinnedTooltipX : mx + 15, m_TooltipPinned ? m_PinnedTooltipY : my - 150);
         }
     }
+
+    RenderMinimap();
+}
+
+void PixelsGateGame::RenderMinimap() {
+    auto *currentMap = GetCurrentMap();
+    if (!currentMap) return;
+
+    int minimapSize = 120;
+    int padding = 20;
+    int winW = GetWindowWidth();
+    SDL_Rect bg = {winW - minimapSize - padding, padding, minimapSize, minimapSize};
+
+    SDL_Renderer *renderer = GetRenderer();
+    SDL_SetRenderDrawColor(renderer, 20, 20, 20, 200);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_RenderFillRect(renderer, &bg);
+    SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
+    SDL_RenderDrawRect(renderer, &bg);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+
+    // Render discovered tiles
+    auto *pTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(m_Player);
+    if (!pTrans) return;
+
+    int viewRadius = 25; // Tiles to show around player
+    float tilePixelSize = (float)minimapSize / (viewRadius * 2);
+
+    SDL_RenderSetClipRect(renderer, &bg);
+
+    for (int y = (int)pTrans->y - viewRadius; y <= (int)pTrans->y + viewRadius; ++y) {
+        for (int x = (int)pTrans->x - viewRadius; x <= (int)pTrans->x + viewRadius; ++x) {
+            if (x < 0 || y < 0 || x >= currentMap->GetWidth() || y >= currentMap->GetHeight()) continue;
+            if (!currentMap->IsExplored(x, y)) continue;
+
+            int tile = currentMap->GetTile(x, y);
+            SDL_Color c = {0,0,0,255}; 
+            
+            using namespace PixelsEngine::Tiles;
+            if (tile >= DIRT && tile <= DIRT_VARIANT_18) c = {139, 69, 19, 255};
+            else if (tile == DIRT_VARIANT_19 || tile == DIRT_WITH_PARTIAL_GRASS) c = {120, 80, 30, 255};
+            else if (tile >= GRASS && tile <= GRASS_BLOCK_FULL_VARIANT_01) c = {34, 139, 34, 255};
+            else if (tile >= GRASS_WITH_BUSH && tile <= GRASS_VARIANT_06) c = {30, 120, 30, 255};
+            else if (tile >= FLOWER && tile <= FLOWERS_WITHOUT_LEAVES) c = {200, 100, 200, 255};
+            else if (tile >= BUSH && tile <= BUSH_VARIANT_01) c = {20, 100, 20, 255};
+            else if (tile >= LOG && tile <= LOG_WITH_LEAVES_VARIANT_02) c = {100, 70, 20, 255};
+            else if (tile >= COBBLESTONE && tile <= SMOOTH_STONE) c = {150, 150, 150, 255};
+            else if (tile >= ROCK && tile <= ROCK_VARIANT_03) c = {105, 105, 105, 255};
+            else if (tile >= WATER_DROPLETS && tile <= WATER_VARIANT_01) c = {100, 149, 237, 255};
+            else if (tile >= DEEP_WATER && tile <= DEEP_WATER_VARIANT_07) c = {0, 0, 139, 255};
+            else if (tile >= OCEAN && tile <= OCEAN_ROUGH) c = {0, 0, 128, 255};
+            else if (tile >= STONES_ON_WATER && tile <= STONES_ON_WATER_VARIANT_11) c = {100, 149, 237, 255};
+            else if (tile == ROCK_ON_WATER || tile == SMOOTH_STONE_ON_WATER) c = {100, 149, 237, 255};
+
+            SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
+            SDL_Rect r = {
+                bg.x + minimapSize / 2 + (int)((x - pTrans->x) * tilePixelSize),
+                bg.y + minimapSize / 2 + (int)((y - pTrans->y) * tilePixelSize),
+                (int)tilePixelSize + 1, (int)tilePixelSize + 1
+            };
+            SDL_RenderFillRect(renderer, &r);
+        }
+    }
+
+    // Draw Player
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_Rect pr = { bg.x + minimapSize / 2 - 2, bg.y + minimapSize / 2 - 2, 4, 4 };
+    SDL_RenderFillRect(renderer, &pr);
+
+    SDL_RenderSetClipRect(renderer, NULL);
 }
 
 void PixelsGateGame::RenderInventory() {

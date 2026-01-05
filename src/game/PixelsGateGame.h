@@ -110,6 +110,7 @@ public:
     void RenderRestMenu();
     void RenderCharacterCreation();
     void InitCharacterCreation();
+    void RenderMinimap();
 
     struct TooltipData { std::string name, description, cost, range, effect, save; };
     void RenderTooltip(const TooltipData &data, int x, int y);
