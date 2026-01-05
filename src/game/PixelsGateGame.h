@@ -247,6 +247,12 @@ private:
     float m_LastClickTime = 0.0f;
     int m_LastClickedItemIndex = -1;
 
+    struct DelayedSound {
+        std::string path;
+        float delay;
+    };
+    std::vector<DelayedSound> m_DelayedSounds;
+
     std::unordered_map<std::string, TooltipData> m_Tooltips;
     std::string m_HoveredItemName = "";
     bool m_TooltipPinned = false;

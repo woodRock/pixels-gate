@@ -82,7 +82,11 @@ void PixelsGateGame::PerformAttack(PixelsEngine::Entity forcedTarget) {
             }
 
             int targetAC = 10 + targetStats->GetModifier(targetStats->dexterity);
-            PixelsEngine::AudioManager::PlaySound("assets/dice.wav");
+            if (m_SelectedWeaponSlot == 1) {
+                m_DelayedSounds.push_back({"assets/dice.wav", 0.1f});
+            } else {
+                PixelsEngine::AudioManager::PlaySound("assets/dice.wav");
+            }
             int roll = PixelsEngine::Dice::Roll(20);
             if (playerStats->hasAdvantage) {
                 int secondRoll = PixelsEngine::Dice::Roll(20);
@@ -103,8 +107,11 @@ void PixelsGateGame::PerformAttack(PixelsEngine::Entity forcedTarget) {
                 targetStats->currentHealth -= dmg;
                 
                 if (targetTrans) {
-                    if (m_SelectedWeaponSlot == 0) PixelsEngine::AudioManager::PlaySound("assets/sword_hit.wav");
-                    else PixelsEngine::AudioManager::PlaySound("assets/bow_hit.wav");
+                    if (m_SelectedWeaponSlot == 0) {
+                        PixelsEngine::AudioManager::PlaySound("assets/sword_hit.wav");
+                    } else {
+                        m_DelayedSounds.push_back({"assets/bow_hit.wav", 0.2f});
+                    }
                     SpawnFloatingText(targetTrans->x, targetTrans->y, std::to_string(dmg) + (isCrit ? "!" : ""), isCrit ? SDL_Color{255,0,0,255} : SDL_Color{255,255,255,255});
                     SpawnFloatingText(playerTrans->x, playerTrans->y, "Hit: " + std::to_string(roll) + "+" + std::to_string(attackBonus) + " vs " + std::to_string(targetAC), {0, 255, 0, 255});
                 }
@@ -419,8 +426,8 @@ void PixelsGateGame::CastSpell(const std::string &spellName, PixelsEngine::Entit
             s->currentHealth -= dmg; 
             auto *tTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(target);
             if(tTrans) {
-                PixelsEngine::AudioManager::PlaySound("assets/bow_shoot.wav"); // Reuse bow shoot for magic missile start
-                PixelsEngine::AudioManager::PlaySound("assets/bow_hit.wav");   // Reuse bow hit for magic missile impact
+                PixelsEngine::AudioManager::PlaySound("assets/bow_shoot.wav"); // Reuse bow shoot
+                m_DelayedSounds.push_back({"assets/bow_hit.wav", 0.2f});      // Delayed impact
                 SpawnFloatingText(tTrans->x, tTrans->y, std::to_string(dmg), {200, 100, 255, 255});
             }
             success = true; 

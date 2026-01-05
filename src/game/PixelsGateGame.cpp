@@ -132,6 +132,17 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
   UpdateDayNight(deltaTime);
   m_FloatingText.Update(deltaTime);
 
+  // Process delayed sounds
+  for (auto it = m_DelayedSounds.begin(); it != m_DelayedSounds.end(); ) {
+      it->delay -= deltaTime;
+      if (it->delay <= 0.0f) {
+          PixelsEngine::AudioManager::PlaySound(it->path);
+          it = m_DelayedSounds.erase(it);
+      } else {
+          ++it;
+      }
+  }
+
   if (m_FadeState != FadeState::None) {
       m_FadeTimer -= deltaTime;
       if (m_FadeState == FadeState::FadingOut && m_FadeTimer <= 0.0f) {
