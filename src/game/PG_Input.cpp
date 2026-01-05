@@ -179,7 +179,20 @@ void PixelsGateGame::CheckWorldInteraction(int mx, int my) {
         }
 
         bool isUnlocked = (lock == nullptr || !lock->isLocked);
-        if (loot && (stats == nullptr || stats->isDead || isUnlocked)) {
+        bool canLoot = false;
+        
+        // If it's a container (has lock or no stats), it just needs to be unlocked.
+        // If it's a creature (has stats and is not a container), it must be dead.
+        if (lock) {
+            if (isUnlocked) canLoot = true;
+        } else if (stats) {
+            if (stats->isDead) canLoot = true;
+        } else {
+            // No stats and no lock (like a loot bag)
+            canLoot = true;
+        }
+
+        if (loot && canLoot) {
              m_LootingEntity = clickedEnt;
              if (stats && stats->isDead) {
                  PixelsEngine::AudioManager::PlaySound("assets/loot_body.wav");
@@ -713,6 +726,7 @@ void PixelsGateGame::HandleCharacterMenuInput() {
                                 item.quantity--;
                                 if (item.quantity <= 0) inv->items.erase(inv->items.begin() + i);
                                 if (!oldItem.IsEmpty()) inv->AddItemObject(oldItem);
+                                PixelsEngine::AudioManager::PlaySound("assets/equip.wav");
                                 SpawnFloatingText(0, 0, "Equipped " + slot->name, {0, 255, 255, 255});
                             }
                             return;
