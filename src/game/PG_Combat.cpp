@@ -106,6 +106,10 @@ void PixelsGateGame::PerformAttack(PixelsEngine::Entity forcedTarget) {
                 
                 targetStats->currentHealth -= dmg;
                 
+                // Make target aggressive
+                auto *ai = GetRegistry().GetComponent<PixelsEngine::AIComponent>(target);
+                if (ai) ai->isAggressive = true;
+
                 if (targetTrans) {
                     if (m_SelectedWeaponSlot == 0) {
                         PixelsEngine::AudioManager::PlaySound("assets/sword_hit.wav");
@@ -399,6 +403,9 @@ void PixelsGateGame::CastSpell(const std::string &spellName, PixelsEngine::Entit
             success = true; 
         }
     } else if ((spellName == "Fireball" || spellName == "Fir")) {
+        if (m_State == GameState::Playing || m_State == GameState::Camp) {
+            StartCombat(target); // Trigger combat even if target is INVALID_ENTITY (it will look for nearby)
+        }
         // Area effect or direct target
         PixelsEngine::Entity t = target;
         float tx, ty;
@@ -416,14 +423,29 @@ void PixelsGateGame::CastSpell(const std::string &spellName, PixelsEngine::Entit
         auto hazard = GetRegistry().CreateEntity();
         GetRegistry().AddComponent(hazard, PixelsEngine::TransformComponent{tx, ty});
         GetRegistry().AddComponent(hazard, PixelsEngine::HazardComponent{PixelsEngine::HazardComponent::Type::Fire, 8, 5.0f});
+        
+        // If we hit a specific target, make them aggressive
+        if (target != PixelsEngine::INVALID_ENTITY) {
+            auto *ai = GetRegistry().GetComponent<PixelsEngine::AIComponent>(target);
+            if (ai) ai->isAggressive = true;
+        }
+
         PixelsEngine::AudioManager::PlaySound("assets/fireball.wav");
         SpawnFloatingText(tx, ty, "BOOM!", {255, 100, 0, 255});
         success = true;
     } else if ((spellName == "Magic Missile" || spellName == "Mis") && target != PixelsEngine::INVALID_ENTITY) {
+        if (m_State == GameState::Playing || m_State == GameState::Camp) {
+            StartCombat(target);
+        }
         auto *s = GetRegistry().GetComponent<PixelsEngine::StatsComponent>(target);
         if (s) { 
             int dmg = PixelsEngine::Dice::Roll(4) + 1;
             s->currentHealth -= dmg; 
+            
+            // Make target aggressive
+            auto *ai = GetRegistry().GetComponent<PixelsEngine::AIComponent>(target);
+            if (ai) ai->isAggressive = true;
+
             auto *tTrans = GetRegistry().GetComponent<PixelsEngine::TransformComponent>(target);
             if(tTrans) {
                 PixelsEngine::AudioManager::PlaySound("assets/bow_shoot.wav"); // Reuse bow shoot
@@ -439,7 +461,11 @@ void PixelsGateGame::CastSpell(const std::string &spellName, PixelsEngine::Entit
     }
 
     if (success && m_State == GameState::Combat) m_Combat.m_ActionsLeft--;
-    m_State = m_ReturnState;
+    
+    // Only return to previous state if we didn't just enter combat
+    if (m_State != GameState::Combat) {
+        m_State = m_ReturnState;
+    }
 }
 
 void PixelsGateGame::PerformJump(int targetX, int targetY) {

@@ -121,6 +121,10 @@ void PixelsGateGame::OnUpdate(float deltaTime) {
                           vStats.currentHealth -= haz.damage;
                           SpawnFloatingText(vTrans->x, vTrans->y, "-" + std::to_string(haz.damage) + " (Fire)", {255, 100, 0, 255});
                           if (vStats.currentHealth <= 0) vStats.isDead = true;
+                          
+                          if (m_State == GameState::Playing || m_State == GameState::Camp) {
+                              StartCombat(vEnt);
+                          }
                       }
                   }
               }
