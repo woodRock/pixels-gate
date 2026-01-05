@@ -239,7 +239,6 @@ void PixelsGateGame::RenderDayNightCycle() {
             SDL_SetRenderDrawBlendMode(GetRenderer(), SDL_BLENDMODE_NONE);
         }
     }
-    m_TextRenderer->RenderText("Time: " + std::to_string((int)m_Time.m_TimeOfDay) + ":00", GetWindowWidth()-100, 10, {255,255,255,255});
 }
 
 void PixelsGateGame::StartDiceRoll(int modifier, int dc, const std::string &skill, PixelsEngine::Entity target, PixelsEngine::ContextActionType type) {
